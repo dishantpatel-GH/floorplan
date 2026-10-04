@@ -22,7 +22,7 @@ class MoGeRunner:
         from floorplan.photo.recon import wait_for_gpu
         if device == "cuda" and not torch.cuda.is_available():
             device = "cpu"                           # I-012: no CUDA -> slow but working, never a crash
-        else:
+        if device != "cpu":                          # a cpu run must not wait for (or even query) the GPU
             wait_for_gpu(need_gb=2.0)
         self.model = MoGeModel.from_pretrained(hf_hub_download(MOGE_REPO, MOGE_FILE)).to(device).eval()
         self.device = device

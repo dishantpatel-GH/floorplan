@@ -6,6 +6,7 @@ Expected layout (docs/HOUSE_CAPTURE_GUIDE.md, step 0; the simulator writes the s
   <root>/video/take1.* take2.* [lowlight.*]
   <root>/lidar/<take>/              Stray Scanner folders (optional; LiDAR tier)
   <root>/gt/ground_truth.csv
+  <root>/gt/gt_polygons.json             (optional; room outlines from scripts/house_gt.py, for wall pairing)
   <root>/app_export/app_dimensions.csv   (optional; consumer-app dimensions transcribed, same ids as the GT)
 
 Runs (each through the one command, scripts/run_capture.py):
@@ -141,6 +142,8 @@ def main():
     scored = False
     if gt.exists() and have:
         cmd = [PY, "scripts/eval_own_capture.py", "--gt", str(gt), "--out", str(out / "eval")]
+        if gt.with_name("gt_polygons.json").exists():          # D-072: pair walls on the outlines, not by order
+            cmd += ["--gt-json", str(gt.with_name("gt_polygons.json"))]
         labels = []
         for k, p in have.items():
             tier = "photo" if k.startswith("photo") else ("lidar" if k.startswith("lidar") else "video")

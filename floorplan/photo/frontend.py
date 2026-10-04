@@ -376,12 +376,15 @@ def _protocol_edges(photos, views, feat_edges, p, log) -> dict:
     pairs = PR.doorway_pairs(photos, p.doorway_pair_max_dt_s, p.doorway_pair_rhythm) \
         if p.doorway_pair_max_dt_s > 0 else []
     groups = PR.spin_groups(photos, pairs)
-    # protocol v2 (D-052): a photo tilted UP is the room's ceiling photo, not part of the turning spin
+    # protocol v2 (D-052): a photo tilted UP is the room's ceiling photo, not part of the turning spin. The protocol
+    # takes it last, and a real phone's ceiling shot can be tilted up only 16-17 deg (own home), so the last photo of
+    # the series counts from 10 deg; photos mid-series keep 18 deg (turning frames reached 16.9 deg)
     ceiling = {}
     for room, g in list(groups.items()):
         if g is None:
             continue
-        up = [n for n in g if n in views and PR.photo_pitch_deg(views[n]) > p.ceiling_photo_min_pitch_deg]
+        up = [n for n in g if n in views and (PR.photo_pitch_deg(views[n]) > p.ceiling_photo_min_pitch_deg or (
+            n == g[-1] and PR.photo_pitch_deg(views[n]) > p.ceiling_photo_last_min_pitch_deg))]
         if up:
             ceiling[room] = up
             groups[room] = [n for n in g if n not in up]
@@ -423,7 +426,8 @@ def _protocol_edges(photos, views, feat_edges, p, log) -> dict:
         f"{sum(1 for v in spin_info.values() if 'direction' in v)} room(s); "
         f"{sum(m is not None for m in manh.values())}/{len(manh)} photos with a Manhattan yaw")
     if ceiling:
-        log(f"[photo/v2] ceiling photos (tilted up > {p.ceiling_photo_min_pitch_deg:.0f} deg, kept out of the spins): "
+        log(f"[photo/v2] ceiling photos (tilted up > {p.ceiling_photo_min_pitch_deg:.0f} deg, or > "
+            f"{p.ceiling_photo_last_min_pitch_deg:.0f} deg as the last photo of a series; kept out of the spins): "
             + ", ".join(f"{r}: {len(v)}" for r, v in sorted(ceiling.items())))
     if extras:
         log("[photo/v2] photos after the ceiling photo (other spots, kept out of the spins): "

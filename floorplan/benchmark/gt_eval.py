@@ -6,8 +6,10 @@ docs/HOUSE_CAPTURE_GUIDE.md step 8.
 
 Matching (rooms -> walls -> openings) is done by geometry only, never by hand:
   * rooms: Hungarian assignment on a cost built from the sorted wall-length profile and perimeter, unless the plan
-    room label equals the GT room id (photo tier: folder names). With GT polygons and a whole-plan fit of IoU >= 0.5,
-    unlabelled rooms are paired by polygon overlap instead (a length profile can swap two similar rooms);
+    room label equals the GT room id (photo tier: folder names). A label that several plan rooms carry (the video
+    tier calls most rooms "room") is decided by geometry among them: best overlap with the GT outline when GT
+    polygons exist, else lowest profile cost. With GT polygons and a whole-plan fit of IoU >= 0.5, unlabelled rooms
+    are paired by polygon overlap instead (a length profile can swap two similar rooms);
   * walls (floorplan/benchmark/wall_match.py): by GEOMETRY when GT polygons exist (sim GT: sim_gt.json next to the
     CSV): the predicted room is put in the GT room's frame by a rigid transform and each GT wall takes the predicted
     wall(s) on its line (same direction +-10 deg, offset <= 0.30 m; collinear pieces merge into one end-to-end
@@ -183,31 +185,73 @@ def _door_width_cost(gt_w: list[float], pred_w: list[float], cap=0.5) -> float:
     return float(C[ra, cb].sum())
 
 
-def match_rooms(plan, gt_rooms: dict[str, list[float]], gt_doors: dict[str, list[float]] | None = None):
+def _profile_cost(plan, walls, room, gt_len, gt_door_w=None) -> float:
+    """Room-pairing cost from size and shape: the sorted wall-length profiles, the wall count and the perimeter, plus
+    door widths when gt_door_w is given (a profile alone can swap two rooms of similar size)."""
+    pg = room_profile(gt_len)
+    pl = room_profile([(_m(walls[w]["length"])[0] or 0) for w in room.get("wall_ids", []) if w in walls])
+    k = min(len(pg), len(pl))
+    c = np.abs(pg[:k] - pl[:k]).sum() + 0.5 * abs(len(pg) - len(pl)) + abs(pg.sum() - pl.sum()) * 0.5
+    if gt_door_w is not None:
+        c += _door_width_cost(gt_door_w, [
+            _m(o.get("width"))[0] for o in plan.get("openings", [])
+            if room["id"] in o.get("room_ids", []) and o.get("kind") in ("door", "passage")
+            and _m(o.get("width"))[0] is not None])
+    return float(c)
+
+
+def match_rooms(plan, gt_rooms: dict[str, list[float]], gt_doors: dict[str, list[float]] | None = None,
+                gt_geom: dict | None = None, glob: dict | None = None, mirror: bool = True,
+                notes: dict | None = None):
     """GT room -> plan room index: exact label, else Hungarian on the wall-length profile (+ door widths when
-    gt_doors is given: {GT room: [door widths]}; a profile alone can swap two rooms of similar size)."""
+    gt_doors is given: {GT room: [door widths]}; a profile alone can swap two rooms of similar size).
+
+    A label that several plan rooms carry (the video tier calls most rooms "room") does not say which one is the GT
+    room: of those rooms it takes the one that overlaps its outline best (gt_geom: GT polygons, with glob the
+    whole-plan fit; wall_match.room_overlap), else the one of lowest profile cost. notes (a dict) gets one line per
+    such choice, with a WARNING when the chosen room fits a GT room paired without a label better."""
     pred = plan["rooms"]
-    labels = {r.get("label", ""): i for i, r in enumerate(pred)}
-    pairs, used_p, used_g = {}, set(), set()
+    walls = {w["id"]: w for w in plan["walls"]}
+
+    def cost(g, i):
+        return _profile_cost(plan, walls, pred[i], gt_rooms[g], None if gt_doors is None else gt_doors.get(g, []))
+
+    by_label: dict[str, list[int]] = {}
+    for i, r in enumerate(pred):
+        by_label.setdefault(r.get("label", ""), []).append(i)
+    pairs = {}
     for g in gt_rooms:                                         # exact label match first (photo-tier folder names)
-        if g in labels:
-            pairs[g] = labels[g]; used_p.add(labels[g]); used_g.add(g)
-    rest_g = [g for g in gt_rooms if g not in used_g]
-    rest_p = [i for i in range(len(pred)) if i not in used_p]
+        cands = by_label.get(g, [])
+        if len(cands) == 1:
+            pairs[g] = cands[0]
+        elif cands:
+            others = [h for h in gt_rooms if h != g and not by_label.get(h)]     # GT rooms paired without a label
+            ov = {i: wm.room_overlap(plan, pred[i], gt_geom[g], mirror, glob) for i in cands} \
+                if gt_geom and g in gt_geom else {}
+            if ov and max(ov.values()) > 0:                    # IoU: higher is better
+                fit = lambda h, i: wm.room_overlap(plan, pred[i], gt_geom[h], mirror, glob)    # noqa: E731
+                score, sign, how = ov, -1, "overlap with the GT outline (IoU"
+                others = [h for h in others if h in gt_geom]
+            else:                                              # profile cost: lower is better
+                fit, sign, how = cost, 1, "wall-length profile (cost"
+                score = {i: cost(g, i) for i in cands}
+            order = sorted(cands, key=lambda i: sign * score[i])
+            best = order[0]
+            pairs[g] = best
+            if notes is not None:
+                note = (f"label '{g}' is on {len(cands)} plan rooms ({', '.join(pred[i]['id'] for i in cands)}); "
+                        f"paired with {pred[best]['id']} by {how} {score[best]:.2f}, next {pred[order[1]]['id']} "
+                        f"{score[order[1]]:.2f})")
+                rival = {h: fit(h, best) for h in others}
+                rival = {h: v for h, v in rival.items() if sign * v < sign * score[best]}
+                if rival:                                      # the chosen room looks more like another GT room
+                    h = min(rival, key=lambda x: sign * rival[x])
+                    note += f"; WARNING: {pred[best]['id']} fits {h} better ({rival[h]:.2f}), so this pair may be wrong"
+                notes[g] = note
+    rest_g = [g for g in gt_rooms if g not in pairs]
+    rest_p = [i for i in range(len(pred)) if i not in pairs.values()]
     if rest_g and rest_p:
-        walls = {w["id"]: w for w in plan["walls"]}
-        C = np.zeros((len(rest_g), len(rest_p)))
-        for a, g in enumerate(rest_g):
-            pg = room_profile(gt_rooms[g])
-            for b, i in enumerate(rest_p):
-                pl = room_profile([(_m(walls[w]["length"])[0] or 0) for w in pred[i]["wall_ids"] if w in walls])
-                k = min(len(pg), len(pl))
-                C[a, b] = np.abs(pg[:k] - pl[:k]).sum() + 0.5 * abs(len(pg) - len(pl)) + abs(pg.sum() - pl.sum()) * 0.5
-                if gt_doors is not None:
-                    C[a, b] += _door_width_cost(gt_doors.get(g, []), [
-                        _m(o.get("width"))[0] for o in plan.get("openings", [])
-                        if pred[i]["id"] in o.get("room_ids", []) and o.get("kind") in ("door", "passage")
-                        and _m(o.get("width"))[0] is not None])
+        C = np.array([[cost(g, i) for i in rest_p] for g in rest_g])
         ra, cb = linear_sum_assignment(C)
         for a, b in zip(ra, cb):
             pairs[rest_g[a]] = rest_p[b]
@@ -408,22 +452,24 @@ def evaluate(plan: dict, gt: list[GTItem], tier: str, gt_geom: dict | None = Non
     for it in gt:
         if it.kind == "door_width":
             gt_doors.setdefault(it.room, []).append(it.value)
-    room_pairs = match_rooms(plan, gt_rooms, gt_doors)
     openings = {o["id"]: o for o in plan.get("openings", [])}
     mirror = wm.plan_mirrored(plan)
     glob = wm.global_alignment(plan, gt_geom, mirror) if gt_geom else None
-    room_pairing, profile_pairs = "label, else wall-length profile + door widths (Hungarian)", None
+    shared_labels: dict[str, str] = {}
+    room_pairs = match_rooms(plan, gt_rooms, gt_doors, gt_geom, glob, mirror, shared_labels)
+    room_pairing, profile_pairs = ("label (a label on several plan rooms: by geometry), else wall-length profile + "
+                                   "door widths (Hungarian)"), None
     if glob is not None and glob["score"] >= wm.PARAMS["global_min_iou"]:
         # the whole plan sits on the whole GT: pair rooms by overlap (a length profile can swap similar rooms)
-        labels = {r.get("label", ""): i for i, r in enumerate(plan["rooms"])}
-        fixed = {g: labels[g] for g in gt_rooms if g in labels}
+        fixed = {g: i for g, i in room_pairs.items() if plan["rooms"][i].get("label", "") == g}     # label pairs
         geo = wm.pair_rooms_by_overlap(plan, {g: gt_geom[g] for g in gt_rooms if g in gt_geom}, glob, mirror, fixed)
         for g, i in room_pairs.items():                      # GT rooms without a polygon keep the profile pair
             if g not in gt_geom and i not in geo.values():
                 geo[g] = i
         if geo != room_pairs:
             profile_pairs = {g: plan["rooms"][i]["id"] for g, i in room_pairs.items()}
-        room_pairs, room_pairing = geo, "label, else polygon IoU under the global plan->GT transform (Hungarian)"
+        room_pairs, room_pairing = geo, ("label (a label on several plan rooms: by geometry), else polygon IoU under "
+                                         "the global plan->GT transform (Hungarian)")
     # the old scorer in full (profile room pairs + pure cyclic order), for comparability only
     legacy = [r for g, i in match_rooms(plan, gt_rooms).items()
               for r in _legacy_order_rows(plan, plan["rooms"][i], g, gt_rooms[g], openings)]
@@ -495,7 +541,8 @@ def evaluate(plan: dict, gt: list[GTItem], tier: str, gt_geom: dict | None = Non
         gates["stitch"] = st
     return dict(tier=tier, rows=rows, room_pairs=pairs_ids, room_pairing=room_pairing, tape_method=tape_method,
                 tape_outlines={g: _outline_summary(o) for g, o in outlines.items()},
-                room_pairs_by_profile_if_different=profile_pairs, gates=gates, wall_pairing=pairing,
+                room_pairs_by_profile_if_different=profile_pairs, room_shared_labels=shared_labels, gates=gates,
+                wall_pairing=pairing,
                 wall_order_based=dict(note="OLD pure cyclic-order wall pairing (shifts after any extra short wall); "
                                            "for comparability only, not gated",
                                       summary=_wall_stats(legacy, tol), rows=legacy),
@@ -706,6 +753,8 @@ def to_markdown(res: dict) -> str:
         rel = "—" if r["rel"] is None else f"{100 * r['rel']:.1f}%"
         lines.append(f"| {r['room']} | {r['item']} ({r['kind']}) | {f(r['value'])} | {ci} | {f(r['gt'])} | {f(r['err'])} | "
                      f"{rel} | {'—' if r['inside'] is None else ('yes' if r['inside'] else 'NO')} | {r['note']} |")
+    if res.get("room_shared_labels"):
+        lines += [""] + [f"Room pairing, {g}: {note}" for g, note in res["room_shared_labels"].items()]
     gs = res.get("gates", {})
     if gs.get("walls_gt"):
         gate = gs.get("wall_gate")

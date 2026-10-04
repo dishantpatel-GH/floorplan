@@ -961,7 +961,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   ceiling photo (tilted up, arbitrary yaw) would have been forced into the spin.
 - **Decision.**
   - A photo whose levelled optical axis points up by more than `ceiling_photo_min_pitch_deg` (18°) is that room's
-    ceiling photo (`protocol.photo_pitch_deg`). It is excluded from the spin prior.
+    ceiling photo (`protocol.photo_pitch_deg`); the last photo of a series from 10° (D-074). It is excluded from the
+    spin prior.
   - Room height = the spin photos' camera height above their floor plane + the median height of the downward-facing
     points of the ceiling photo above the camera (`layout.ceiling_above_camera`), if inside 2–4 m. Else the D-049
     fallback (whole-scene ceiling, inferred).
@@ -1373,10 +1374,16 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 - **Own house.** `scripts/house_gt.py` writes `gt_polygons.json` next to `ground_truth.csv`: room outlines from the
   hand sketch's layout and the tape lengths. The sketch is not to scale, so the outlines only decide the pairing;
   every scored length comes from the tape.
+- **Repeated room labels (5 Oct).** The scorer kept the last plan room whose label is the GT room's id. The video
+  tier calls most rooms "room", so on my video plan the bedroom was scored against R8, a 1.6 m² slice of the hall.
+  Now a label that several plan rooms carry does not decide. The GT room takes the one that overlaps its outline
+  best (without outlines: the lowest wall-length profile cost), and the report warns when that room fits another
+  GT room better. On that plan it picks R1 (IoU 0.69) and warns that R1 fits the hall better (0.77). The video
+  diagnosis shows why: the bedroom is split into R3 and R5, so no single plan room is the bedroom.
 - **Not yet consistent.** `scripts/eval_own_capture.py --tape-pairing` offers only `anchored` (its default) and
-  `order-merged`, and `scripts/process_own_capture.py` passes no `--gt-json`. So a tape-only GT scored from the
-  command line is paired by the anchored order. For the own house, run
-  `scripts/eval_own_capture.py --gt-json <gt>/gt_polygons.json`.
+  `order-merged`. So a tape-only GT scored from the command line without `--gt-json` is paired by the anchored
+  order. For the own house, run `scripts/eval_own_capture.py --gt-json <gt>/gt_polygons.json`.
+  `scripts/process_own_capture.py` passes it when `gt/gt_polygons.json` exists (5 Oct).
 - **Evidence.** `tests/benchmark/test_gt_eval.py` runs the default outline path: it finds the door wall as W1 and
   recovers an injected 12 mm wall error exactly.
 
@@ -1398,3 +1405,30 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 - **Deviation from the brief.** Part 3 asks for our LiDAR tier against the app. I have no LiDAR device, so the
   head-to-head compares our camera tiers (video, photo) with these apps on the same rooms and the same tape; the
   LiDAR tier's accuracy is shown on ARKitScenes laser data instead. Say this in the report.
+
+## D-074 Photo tier: the last photo of a room's series is its ceiling photo from 10° up
+
+- **Context.** On my phone the ceiling photo came out tilted up only 16.6° (lit take) and 16.7° (dim take), under the
+  18° cut-off of D-052. So it joined the turning photos with a yaw about 90° off. On the lit take it alone set the
+  window-wall side at 1.01 m from the spin centre; the other photos see that wall at 2.29 m.
+- **Decision.** `ceiling_photo_last_min_pitch_deg` = 10°. The last photo of a room's series, where the protocol puts
+  the ceiling photo, is a ceiling photo when tilted up more than 10°. Photos mid-series keep 18°.
+- **Why not 10° for every photo.** On the sample's with_ceiling/rotate set (video frames), three turning frames are
+  tilted up 11.9–16.9°. With 10° for every photo they left the spin, and 3 runs gave 3 different plans. With the
+  last-photo rule the set gave the same plan as at 18°, within 4 cm (`outputs/own_house/diag/fix_refute/`).
+- **Evidence.** Same photos and cached depth, before and after (`outputs/fixes/`):
+
+  | Run | Before | After |
+  |---|---|---|
+  | Own lit: walls median / within 8% / ceiling (tape 2.629 m) | 44.0%, 0 of 6, 2.314 m | 9.1%, 1 of 6, 2.514 m |
+  | Own dim: the same | 28.6%, 0 of 6, 2.305 m | 22.5%, 0 of 6, 2.562 m |
+  | k65 (sheet cue on): walls median / within 8% / footprint | 5.6%, 15 of 26, −9.0% | the same (rows within 0.2 mm) |
+
+- **Limits.**
+  - The simulator cannot test this cut-off: no simulated photo is tilted up between 10° and 18°.
+  - Most of the ceiling gain comes from the 2.70 m prior. The ceiling photo shares no features with the room's other
+    photos, so its own scale gets a 25% sigma. Its measured part is 2.345 m (lit) and 2.429 m (dim).
+  - The one lit wall within 8% (W4, −3.0%) comes from two side errors that cancel: the window side about 34 cm too
+    far, the wardrobe side 70 cm too near.
+  - A weakly tilted ceiling photo that is not the last one is still missed (small-room protocol: a doorway photo
+    follows it).

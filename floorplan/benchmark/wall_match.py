@@ -360,6 +360,28 @@ def pair_rooms_by_overlap(plan: dict, gt_geom: dict, glob: dict, mirror: bool, f
     return out
 
 
+def room_overlap(plan: dict, room: dict, gtg: dict, mirror: bool, glob: dict | None = None, p=PARAMS) -> float:
+    """IoU of a plan room with a GT room outline, to choose among plan rooms that carry the GT room's label. Under the
+    whole-plan transform when the whole plan fits the GT (glob score >= global_min_iou); else the room alone at its
+    best fit (4 rotations in 90 deg steps from the dominant edge directions, translation of highest IoU), so only size
+    and shape count."""
+    if len(room.get("polygon") or []) < 3:
+        return 0.0
+    M = np.diag([1.0, -1.0]) if mirror else np.eye(2)
+    Q, G = np.asarray(room["polygon"], float) @ M.T, np.asarray(gtg["poly"], float)
+    if _polygon(Q).area <= 0:
+        return 0.0
+    if glob is not None and glob["score"] >= p["global_min_iou"]:
+        return iou(Q @ glob["R"].T + glob["t"], G)
+    edges = lambda X: Segs(X, np.roll(X, -1, axis=0), 1.0)     # noqa: E731
+    base = _dominant_angle(edges(G)) - _dominant_angle(edges(Q))
+    best = 0.0
+    for k in range(4):
+        Qk = Q @ _rot(base + k * np.pi / 2).T
+        best = max(best, iou_translation(Qk, G, _centroid(G) - _centroid(Qk), p["raster_m"])[1])
+    return best
+
+
 def _door_agreement(assign, ws, openings, gt_doors: list[bool]) -> float:
     """Fraction of GT door walls whose matched predicted pieces include a wall with a door or passage."""
     n = sum(gt_doors)

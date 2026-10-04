@@ -122,6 +122,10 @@ class PhotoParams:
     layout_unseen_default_m: float = 1.5   # nothing seen on either side of an axis (never seen in tests)
     layout_min_level_pts: int = 200      # ceiling / floor points needed for a room height
     ceiling_photo_min_pitch_deg: float = 18.0  # protocol v2 (D-052): a photo tilted up more than this is a ceiling photo
+    ceiling_photo_last_min_pitch_deg: float = 10.0  # ... from 10 deg for the LAST photo of a room's series (where the
+                                         # protocol puts it): own-home ceiling shots were 16.6 and 16.7 deg. Mid-series
+                                         # stays 18: turning video frames reached 11.9-16.9 deg (with_ceiling/rotate),
+                                         # where 10 for every photo gave 3 different plans in 3 runs
     small_room_from_doorway: bool = True # protocol v2 (D-053): a room without a spin is boxed from its threshold photo
     layout_use_door_shots: bool = True   # D-054: hub rooms add their doorway-pair photos (placed) to the box fit
     door_threshold_inset_m: float = 0.10 # the door wall's room-side face lies ~half a wall thickness ahead of the camera
