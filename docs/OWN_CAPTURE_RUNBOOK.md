@@ -1,0 +1,187 @@
+# Own-capture runbook (one page)
+
+What to do as soon as the home capture arrives (OnePlus Nord photos and video, tape ground truth). It was rehearsed
+on 4 Oct on a mock capture made from the simulated k65 flat (`outputs/own_mock/`, results in `outputs/own_mock_out/`).
+All times below were measured.
+
+**Rule: one heavy job at a time.** The machine crashed under parallel load. Before each run, check that the GPU is
+free. The checker and scoring (`--skip-runs`) are light and can run at any time.
+
+```bash
+cd floorplan-capture
+export HF_HUB_OFFLINE=1; unset PYTHONPATH
+PY=../.venv/bin/python
+O=../TakeHome/OwnCaptures/2026-10-05        # the capture's date folder
+nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader   # empty = GPU free
+```
+
+## 0. Where the capture goes
+
+Copy the files by **USB cable**. Put the phone in "File transfer" mode; the photos and videos are in `DCIM/Camera`.
+Never use WhatsApp, Telegram, email or a cloud share: they strip the EXIF (capture time, focal length) and recompress.
+Use the layout from step 0 of `TakeHome/HOUSE_CAPTURE_GUIDE.md`, one folder per capture date:
+
+```text
+TakeHome/OwnCaptures/<date>/
+  photos/01_<room>/ ...      2-8 photos per room. Sort them by the slate photos, then move the slates to gt/slates/
+  photos/02_<room>_take2/    the repeat take = the first take's folder name + "_take2"
+  video/take1.mp4  take2.mp4  [lowlight.mp4]   nothing else: every clip in video/ is run
+  gt/ground_truth.csv  gt/sketch_<room>.jpg  gt/slates/  gt/damage_closeups/
+  app_export/app_dimensions.csv  app_export/app_version.txt  (and the app's PDF or screenshots)
+```
+
+There is no `lidar/` folder because the OnePlus Nord has no LiDAR.
+
+## Step 1. Check the folder (about 5 s)
+
+```bash
+$PY scripts/check_own_capture.py $O          # writes $O/capture_check.md; exit 1 = at least one FAIL
+```
+
+It took 2.6 s on the mock (37 photos, 1 clip) and 3-8 s on 46-photo phone-format test folders. It reads only file
+headers and one video frame. It needs no GPU and never changes the capture. Fix every FAIL and decide on each WARN.
+Then run it again until it reports 0 fail. INFO rows need no action. The runs do not read `gt/` or `app_export/`, so
+L-GT, G-* and A-* can wait: fill them in while the runs go. `capture_check.md` ends with a "What to do" table for
+the codes it found. Here is every code it can print (F = FAIL, W = WARN, I = INFO):
+
+| Fix | Codes |
+|---|---|
+| **Copy the original again by USB.** Cause: a messenger, cloud, screenshot or editor copy, or a broken copy | P-UNREADABLE F, P-EXIF-NONE F, P-TIME-MISSING F, P-F35-MISSING F (if the originals lack it too: see Focal), P-RES-LOW W, P-EDITED W, V-PROBE F/W, V-BITRATE W |
+| **Rename, move or delete files** | L-ROOT F (give the folder that holds photos/ video/ gt/), L-PHOTOS F, L-VIDEO F, L-TAKE-NAMES F/W (the clips must be named take1, take2, lowlight), L-TAKE2-PARTNER F (rename the repeat folder to `<first-take folder>_take2`), L-LOOSE W (files outside a room folder), L-HIDDEN F (delete `.trashed-*` and `._*`), L-STEM F (IMG_1.jpg and IMG_1.heic: keep one), P-DUP-FILE F (keep a doorway photo only in the room it shows), P-COUNT F/W (an empty folder, or not 2-8 photos: are slates left in?) |
+| **Re-shoot the photo with the 1x lens, 4:3, landscape, or drop it** (D-068) | P-ULTRAWIDE F, P-ZOOM F/W, P-LENS-MIX F/W (the photo table shows the odd ones), P-ASPECT F, P-MIRROR W, P-PORTRAIT W, P-MIXED-SIZE W, P-RES-HIGH W (48/50 MP: it runs, but slowly) |
+| **Re-shoot part of a room, or accept it and say so** | P-CEILING W (no ceiling photo, so the ceiling height is "not observed"), P-PAIRS W (no doorway pair joins the room: shoot two photos from the threshold within 5 s, guide 5.5) |
+| **Check the photo order** | P-TIME-DUP F/W (photos share a capture time, so the file names must be in shooting order), P-TIME-ORDER W (was the clock changed?) |
+| **Convert or re-record the video** | V-DECODE F/W: `ffmpeg -i in.mp4 -c:v libx264 -crf 14 -preset slow -pix_fmt yuv420p -map_metadata 0 video/take1.mp4` (keep the original outside video/); V-HDR W (re-record with HDR off, or convert as above); V-FPS W (re-record at 30 or 60 fps; as I it means a variable frame rate, which is fine); V-RES W; V-DUR W (under 20 s or over 15 min); V-PORTRAIT W (it runs) |
+| **Read after the run** | V-ROT I/W, V-FOCAL I, R-RUN F/W (Step 3) |
+| **Fix gt/ground_truth.csv** | L-GT F, G-HEADER F (the header, or a byte-order mark: save as plain CSV, not "CSV UTF-8"), G-VALUE F (metres with a decimal point, no units), G-UNITS F (cm or mm), G-DUP F, G-IDS F/W (W1..Wn without gaps, clockwise from the wall with the main door), G-ROOMS W (room_id = the photo folder name), G-TEMPLATE W, G-RANGE W, G-DIAG W (the walls and the diagonal do not close: measure again), G-INCOMPLETE W |
+| **Fix app_export/** | L-APP W (no file means no head-to-head), A-HEADER F, A-VALUE F/W (W: more than 50% off the tape; wrong id or units?), A-IDS F/W (ids that are not in the ground truth), A-KIND W (only walls, ceiling heights, door and window widths and areas are compared), A-VERSION W (write app_version.txt) |
+| **Say it in the report** | L-ROOMS W (fewer than 3 rooms + the hallway), L-TAKE2 W (no photo repeat room) |
+| **Machine or checker** | E-DISK W (under 5 GB free; a video run writes 1-3 GB), E-FFPROBE W (install ffmpeg), E-SEG W (no envs/seg, so no wall masks), X-CHECKER F/W (a bug in the checker: check that part by hand) |
+
+`--ceiling` also looks for each room's ceiling photo. It runs the ADE20K segmenter on the CPU, a few seconds per
+photo. Do not run it during a heavy job. Step 3 reports the same thing after the run.
+
+**Focal (P-F35-MISSING).** The scale follows the focal length 1:1. Without FocalLengthIn35mmFilm, the photo tier
+assumes a 70° field of view. Phone cameras normally write this tag, so a missing tag usually means the file is a
+copy: copy it again first. Only if the originals lack it too, do this. Take the 1x lens's 35 mm equivalent f35
+from a photo that has the tag, or from the spec sheet. The field of view across the long side of a 4:3 photo is
+2·atan(17.31 / f35) (26 mm gives 67.3°). Then run the photo sets by hand with that value:
+
+```bash
+mkdir -p outputs/own/_photo_inputs_main
+for d in $O/photos/*/; do [[ $d == *_take2/ ]] || cp -r "$d" outputs/own/_photo_inputs_main/; done
+$PY scripts/run_capture.py outputs/own/_photo_inputs_main --tier photo --out outputs/own/photo \
+    --photo-param default_hfov_deg=67.3 > outputs/own/photo.log 2>&1
+```
+
+Do the same for the repeat room. Copy each of its two takes as `<room>/` into a folder of its own, and set the output
+to `outputs/own/photo_repeat_take1` and `photo_repeat_take2`.
+
+## Step 2. Process (one heavy job at a time)
+
+The results go to `outputs/own/`, which `bench_final.py` reads. Before you process a second capture, move the old
+results aside: `mv outputs/own outputs/own_<old date>`.
+
+**Photo tier.** This makes three runs: all rooms, then the repeat room's take 1 and take 2. Scoring follows if
+`gt/ground_truth.csv` exists.
+
+```bash
+$PY scripts/process_own_capture.py $O --out outputs/own --tiers photo
+```
+
+It takes about 5 min and needs the GPU (learned depth). The three runs took 3.5 min on the GPU for the k65 photo set
+(31 + 7 + 6 photos: 139, 34 and 37 s). The CPU rehearsal with cached depth took 4.3 min (127, 72 and 55 s). Five
+single runs of the 31-photo set took 75-371 s.
+
+**Video tier.** Run one take at a time, `take1` first: it is the scored "video" tier and the default head-to-head
+tier. Then run `take2` (repeatability), then `lowlight`.
+
+```bash
+$PY scripts/run_capture.py $O/video/take1.mp4 --tier video --out outputs/own/video_take1 > outputs/own/video_take1.log 2>&1
+```
+
+Measured times were 270-334 s for a 37 s clip, 794-1130 s for a 115 s clip and 1737-1996 s for a 215 s clip (the
+sample captures, `outputs/benchmark/final/REPORT.md` §4). The 7-min simulated k65 walk took 2674-3693 s. That is
+6-10 s of compute per second of video, so **a 5-min walkthrough takes 30-50 min per take**. The samples are 60 fps
+and DPVO keeps every 2nd frame; at 30 fps it keeps every frame, so the work per second is the same.
+`--tiers video` runs every clip one after another without supervision, but it also re-runs the clips that are already
+done.
+
+If a run fails, it prints ERR. Read the last lines of `outputs/own/<run>.log`, fix the cause, and re-run only that
+run.
+
+## Step 3. After the run
+
+```bash
+$PY scripts/check_own_capture.py $O --runs outputs/own --report outputs/own/run_check.md
+```
+
+Run it after the photo runs and again after each video take. It reads each run's `scene/scene_info.json` and
+reports what the pipeline decided:
+- **Photo runs.** Every photo's focal source must be `exif_f35`. `default_hfov` is a FAIL (P-F35-MISSING; see
+  Focal). The check also shows the scale and its 1-sigma, the doorway pairs used (P-PAIRS) and the rooms with a
+  ceiling photo (P-CEILING). The other rooms get no ceiling height. The rehearsal gave 31/31 `exif_f35`, scale ×0.995
+  ± 3.8%, 4 doorway pairs and ceiling photos in all 5 rooms.
+- **Video runs.** The rotation source must be `container metadata`. If it is not (V-ROT), open one frame in
+  `outputs/own/video_<take>/work/frames_r*/sfm/` and check that it is upright. The check also compares the video's
+  focal with the photos' EXIF focal: a ratio of 0.95-1.08 is fine. Outside that range (V-FOCAL), there is a
+  stabilisation crop or a calibration error. The video scale follows the focal 1:1, so say so next to the video
+  numbers.
+- **R-RUN.** FAIL means there is no plan.json, so read the run's log. WARN means the segments were not joined by
+  verified geometry, so the relative sigma is floored at 20% (D-034).
+
+Then open each `outputs/own/<run>/plan.png` next to your sketches: photo, photo_repeat_take1, photo_repeat_take2,
+video_take1, video_take2, video_lowlight. Check that every room is there and that the rooms join into one plan
+without overlaps. Check that the long walls are long and the doors are in the right walls. Write down what is wrong
+before you look at the scores. README §7.1 step 5 lists the flags in each `plan.json` meta.
+
+## Step 4. Score against the tape
+
+- `gt/ground_truth.csv` starts from the template `benchmark/ground_truth.csv`. The scorer needs
+  `room_id,item_type,item_id,value_m`. room_id is the photo folder name (`02_bedroom`). Walls are W1, W2, … clockwise
+  from the wall with the main door. Values are in metres with a decimal point (3.412).
+- `app_export/app_dimensions.csv` needs `room_id,item_type,item_id,value_m`, with one row per dimension the app
+  shows, for example `02_bedroom,wall,W2,4.250`. Use the same ids as the ground truth: match the app's walls to
+  W1..Wn with your sketch. Lines that start with `#` are comments. Also write `app_version.txt`.
+
+```bash
+$PY scripts/process_own_capture.py $O --out outputs/own --skip-runs      # scores every plan in outputs/own; no runs
+```
+
+It scores the photo, photo_repeat_take1|2, video (= take1), video_take2 and video_lowlight plans. It writes
+`outputs/own/eval/own_eval.md` and `own_eval.json`. If the exit code is 1 but the report is written, a plan is
+missing (for example, lowlight was not run). The head-to-head compares one tier (`--h2h-tier`) with the app. The
+default is `video` (take1) if it was scored, else `photo`. Keep the default unless take1 failed, and never switch
+after you see the numbers. The rule (case study Part 3): for each dimension in both the app file and our plan,
+compare |ours − tape| with |app − tape|. Ours beats the app if its error is smaller, and it is a tie within 5 mm.
+The gate passes at beat-or-tie ≥ 70%. App dimensions that our plan did not measure are listed but not gated.
+
+**State the deviation in the report.** The brief asks for our LiDAR tier against the app. The OnePlus Nord has no
+LiDAR, so the head-to-head uses our video tier (or photo tier) on the same rooms and the same tape. The LiDAR tier's
+absolute accuracy is reported against a laser scan on ARKitScenes instead.
+
+## Step 5. Results and the benchmark report
+
+- Plans: `outputs/own/<run>/` (plan.json, plan.png, plan.svg, plan.dxf, run_report.json, scene/). Logs:
+  `outputs/own/<run>.log`.
+- Checks: `$O/capture_check.md` (before the runs) and `outputs/own/run_check.md` (after).
+- Scores: `outputs/own/eval/own_eval.md` (per item, gates, head-to-head) and `own_eval.json`.
+
+When no heavy job is running, refresh the benchmark report. This only scores, from `outputs/own/`:
+
+```bash
+$PY scripts/bench_final.py --skip-lidar        # -> outputs/benchmark/final/REPORT.md
+```
+
+These numbers go into the report, all against the tape:
+- **§6, per run** (photo; video = take1; video_take2; video_lowlight = the low-light condition): the wall gate (photo
+  ±8%, video ±3%), the median wall error in % and cm, opening widths within 2 cm (n, missed, phantom), ceilings within
+  1.5 cm and the 95% interval coverage (also in §5). Missed walls and rooms count as misses: report them, never drop
+  them.
+- **§2, repeatability:** the photo repeat room (take1 vs take2) and video take1 vs take2, walls within max(1 cm, 0.5%).
+- **§3, head-to-head:** the table and the beat-or-tie fraction, with the deviation above.
+- **§4:** the run time of each own run.
+
+Photo-tier numbers come from the simulated k65 flat and from this capture only. REPORT.md §1 still lists photo rows
+for the recruiters' sample captures because `bench_final.py` scores them; leave those rows out. The fix loop starts
+from `own_eval.json` (`docs/FIX_LOOP.md` Part 3).
