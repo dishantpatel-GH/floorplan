@@ -42,11 +42,18 @@ class VideoParams:
     # --- metric depth and scale ---
     depth_model: str = "moge2"           # "moge2" or "da3metric"; chosen by evidence (video_tier.md, decision V-5)
     scale_max_gap: int = 4               # scale cost curves from keyframe pairs up to 4 keyframes apart
-    scale_sigma_kf: float = 15.0         # Gaussian time window (keyframes) for the local, drift-following scale
     scale_jump: float = 2.0              # a >2x step in the running-median scale = VO scale restart (segment cut)
     scale_min_contrast: float = 0.015    # D-066: a pair votes on scale only if +-20% changes its cost by this much
                                          # (was 0.005: near-rotation pairs at turns and doorway pauses voted with
                                          # arbitrary minima, local scale 0.002-45, fake jumps -> 15-36 segments)
+    # fix loop (docs/FIX_LOOP.md): the local scale is the running median of PnP votes, pairs 2, 4, 6 keyframes apart.
+    # Numbers in brackets are from my own video take1 (436 pairs solved).
+    scale_vote_min_step_m: float = 0.08  # a pair votes only if PnP moved the camera >= 8 cm; shorter steps are mostly
+                                         # turning (236 of 436 pairs are longer)
+    scale_vote_max_dir_deg: float = 35.0 # ... DPVO's step points the same way within 35 deg (median 13.8, p75 31.1)
+    scale_vote_max_rot_deg: float = 4.0  # ... and the two rotations agree within 4 deg (median 1.7, p90 3.9)
+    scale_vote_half_kf: int = 8          # local scale = median of the >= 3 votes within +-8 keyframes (177 votes
+                                         # measure 179 of 228 keyframes)
     bootstrap: int = 2000                # bootstrap resamples for the statistical part of the scale interval
     bootstrap_block: int = 10            # resample blocks of 10 consecutive pairs (neighbours are correlated)
     scale_model_sigma: float = 0.04      # systematic 1-sigma scale bias of the depth model (measured, decision V-7)

@@ -8,7 +8,7 @@ Pipeline (each step is explained in docs/modules/video_tier.md):
   5. camera path for every 2nd frame with DPVO (up to scale)        (vo.py)
   6. gravity from GeoCalib up vectors; flip check from camera pitch  (orientation.py, here)
   7. metric depth per keyframe with MoGe-2                           (depth.py)
-  8. metric scale and scale-drift correction from depth agreement   (scale.py)
+  8. metric scale: segment cuts from depth agreement, local scale from PnP votes   (scale.py)
   9. TSDF fusion of the predicted depth with the shared LiDAR-tier code (floorplan.recon.fusion)
  10. floor refinement + Manhattan alignment with the shared code     (floorplan.plan.align)
 v2 (docs/modules/video_tier.md, "Video tier v2"):
@@ -623,10 +623,13 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     D = np.stack([depth_mod.clean_depth(d, params.depth_max_m, params.depth_edge_rel) for d in D])
     tick("depth")
 
-    # 8. metric scale with drift correction; segments = stretches between VO scale restarts
-    sc = estimate_scales(D, K_d, T_kf, params.scale_max_gap, params.scale_sigma_kf, jump=params.scale_jump,
-                         min_contrast=params.scale_min_contrast,
-                         n_boot=params.bootstrap, block=params.bootstrap_block, seed=params.seed)
+    # 8. metric scale with drift correction; segments = stretches between VO scale restarts; the local scale comes
+    #    from PnP votes on the keyframe images and their metric depth
+    scale_args = dict(jump=params.scale_jump, min_contrast=params.scale_min_contrast, n_boot=params.bootstrap,
+                      block=params.bootstrap_block, seed=params.seed, min_step_m=params.scale_vote_min_step_m,
+                      max_dir_deg=params.scale_vote_max_dir_deg, max_rot_deg=params.scale_vote_max_rot_deg,
+                      half_kf=params.scale_vote_half_kf)
+    sc = estimate_scales(D, K_d, T_kf, files, params.scale_max_gap, **scale_args)
     seg = np.asarray(sc["segment"])
     vo_reruns = []
     if params.vo_rerun_segments and len(sc["segments"]) > 1:
@@ -639,10 +642,7 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
         ups = np.einsum("nij,nj->ni", T_kf[ups_kf, :3, :3], uc)
         up, up_spread = _robust_mean_direction(ups)
         pitch = np.degrees(np.arcsin(np.clip(T_kf[:, :3, 2] @ up, -1, 1)))
-        sc = estimate_scales(D, K_d, T_kf, params.scale_max_gap, params.scale_sigma_kf, jump=params.scale_jump,
-                         min_contrast=params.scale_min_contrast,
-                             n_boot=params.bootstrap, block=params.bootstrap_block, seed=params.seed,
-                             forced_cuts=forced)
+        sc = estimate_scales(D, K_d, T_kf, files, params.scale_max_gap, forced_cuts=forced, **scale_args)
         seg = np.asarray(sc["segment"])
         log(f"[scale] after fresh VO runs: {len(sc['segments'])} segment(s), starts "
             f"{[s['keyframes'][0] for s in sc['segments']]}")
@@ -653,7 +653,8 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                                                + (params.focal_scale_sensitivity * sig_f) ** 2))
         sig_learned[s["id"]] = s["sigma_rel_learned"]
     log(f"[scale] {len(sc['segments'])} scale segment(s); local scale {sc['s_local'].min():.3f}-"
-        f"{sc['s_local'].max():.3f}; statistical 1-sigma {100 * sc['sigma_rel_stat']:.1f}%")
+        f"{sc['s_local'].max():.3f}; statistical 1-sigma {100 * sc['sigma_rel_stat']:.1f}%; {sc['votes']} PnP votes, "
+        f"{sc['measured_keyframes']}/{len(kf)} keyframes measured")
     tick("scale")
 
     # quality self-check per segment; untrusted segments are reported and (by default) left out of the scene
@@ -742,7 +743,8 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                            sigma_rel_total=sig_tot, sigma_rel=sig_tot, ci95_rel_total=1.96 * sig_tot,
                            sheets_found=len(sheets), status=status,
                            trusted_keyframes=int(trusted.sum()),
-                           pairs=sc["pairs"], informative_pairs=sc["informative_pairs"]),
+                           pairs=sc["pairs"], informative_pairs=sc["informative_pairs"], votes=sc["votes"],
+                           measured_keyframes=sc["measured_keyframes"]),
                 scale_sigma_rel=sig_tot, whole_scene_consistent=consistent,
                 levelling=geo_out["levelling"], pose_graph=graph,
                 dpvo=dict(frames=int(len(vo["frames"])), runtime_s=vo["runtime_s"], peak_gb=vo["peak_gb"],
