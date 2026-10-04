@@ -2,8 +2,9 @@
 #
 # WHY this file looks the way it does:
 #   * Versions are copied from the environment every number in this repo was produced with
-#     (env/freeze/main_venv.txt, 2026-10-03). Only packages the code in floorplan/, scripts/ and tests/ actually imports,
-#     plus their runtime dependencies, are listed (the dev env also holds evaluation-only and exploration tools).
+#     (a freeze of the dev env, 2026-10-03, kept outside the repo). Only packages the code in floorplan/, scripts/ and
+#     tests/ actually imports, plus their runtime dependencies, are listed (the dev env also holds evaluation-only and
+#     exploration tools).
 #   * It is a COMPLETE closure, installed with --no-deps. MoGe declares dependencies we do not use (gradio,
 #     flex-gemm = a CUDA build, a training data pipeline) and hloc pulls an unpinned LightGlue; --no-deps keeps
 #     those out and keeps the install identical to what was tested.
@@ -141,6 +142,6 @@ pygments==2.21.0
 # --- OPTIONAL, not installed by default (option comparisons only, never on the default path) --------------------
 # depth-anything-3 @ git+https://github.com/ByteDance-Seed/Depth-Anything-3.git@3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
 # mapanything     @ git+https://github.com/facebookresearch/map-anything.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9
-# (both need extra deps, e.g. einops, timm, safetensors, omegaconf, hydra-core, uniception; see env/freeze/main_venv.txt)
+# (both need extra deps, e.g. einops, timm, safetensors, omegaconf, hydra-core, uniception)
 #
-# DPVO (video-tier camera trajectory) lives in its OWN env with compiled CUDA ops: see README.md "Video tier: DPVO env".
+# DPVO (video-tier camera trajectory) lives in its OWN env with compiled CUDA ops: see README.md "Setup".
