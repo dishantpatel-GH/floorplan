@@ -1,29 +1,95 @@
 # Fix loop (Part 4): declaration, shipped fix, before/after
 
-Status, 4 Oct 06:45 IST. **No fix is declared yet.** Part 1 is the one-page declaration template. It gets filled in
-after the own capture has been scored, and is committed **before** any fix code.
-Part 2 lists the strongest current candidates with their evidence. Part 3 is the exact morning procedure. Every
-number here is quoted from the file named next to it. Numbers in `<angle brackets>` do not exist yet.
+Status, 5 Oct 02:31 IST. **Declared: the video wall gate.** Part 1 is filled in from the scored before runs and
+committed **before** any fix code (tag `before-fix`). The fix and the after runs are not in yet.
+Part 2 lists the candidates as they stood on 4 Oct. Part 3 is the procedure; its ranking rule (step 3) is word for
+word the one committed in `e042ca5`. Every number here is quoted from the file named next to it. Numbers in
+`<angle brackets>` do not exist yet.
 
 ---
 
 ## Part 1. Fix declaration (one page; fill in, commit, then fix)
 
+Filled in on 5 Oct at 02:31 IST, before any fix code. The ranking behind it is in `fixloop_ranking.md`.
+
 > **1. Worst gate and its failing number.**
-> Gate: `<gate>` at tier `<tier>`, on `<capture>`. Measured: `<number>` against the threshold `<threshold>`
-> (`outputs/own/eval/own_eval.md`, run at `<time>`). It is the worst gate under the ranking rule of Part 3, step 3,
-> which was committed before the own capture was scored (commit `e042ca5`).
+> Gate: walls within ±3% at tier video, on my own capture (`take1.mp4`, 117 s, 14 tape walls in the bedroom, hall
+> and kitchen). Measured: **0 of 14 walls within 3%** in both before runs, against 14 of 14 needed. The better run,
+> r1, finds 9 of 14 walls with a median error of 20.1%. r2 finds 9 with 28.6%
+> (`outputs/fixloop/before/eval/own_eval.md`, scored at 02:24 on 5 Oct, code `7b1a40f`). It is the worst gate under
+> the ranking rule of Part 3, step 3, which was committed before the own capture was scored (commit `e042ca5`). Its
+> shortfall is 1.00, and its median error / tolerance (6.7) is the largest of the eight rows at 1.00. Caveat: the
+> committed snippet computes that tie-break for wall gates only. Applied to every row, as the text reads, it would put
+> the photo repeat room (40.4) and the video ceilings (20.7) first. I follow the snippet; `fixloop_ranking.md` says
+> why.
 >
 > **2. Root-cause hypothesis and the evidence for it.**
-> Hypothesis: `<one sentence>`. Evidence: `<the measurement that shows it; file and row>`. Rejected alternatives:
-> `<each with the number that rejects it>`.
+> Hypothesis: the scale step cannot follow DPVO's scale on this walk. Its depth-agreement votes are too few to see
+> DPVO's scale change, so stretches of the walk get a scale that is far off.
+> Evidence:
+> - Part 3, step 4 on the before runs: 7 of the 9 found walls are short in both runs (78%), with a median signed error
+>   of −19.7% (r1) and −17.7% (r2). The rule calls that scale
+>   (`outputs/fixloop/before/eval/step4_scale_check.json`).
+> - Only 31 (r1) and 25 (r2) of 902 keyframe pairs vote on scale. r1 cuts a segment at kf 51 (t = 34.8 s). Its first
+>   segment (kf 0–50, the hall's first pass) has 1 vote and a 268 m path, fails the self-check and is dropped.
+> - The 23:28 run of the same video (`outputs/own_house/diag/video/workflow_result.json`): DPVO's scale drops about
+>   13× at t = 34.5 s. 30 pairs vote, none between t 12 and 37 s, so the drop is not seen. The ±1.5× clamp hides it:
+>   the local scale 24.742–55.670 is exactly 37.114 / 1.5 to 37.114 × 1.5, with 133 of 228 keyframes on the clamp.
+> - In that run, PnP on MoGe-2 depth over 177 keyframe pairs gives the scale each stretch needs. The run's scale is
+>   1.1× to 14.7× too large between t 8 and 101 s. kf1 and kf42 are 0.50 m apart; the scene puts them 9.96 m apart.
+> - One global scale does not repair it: dividing out the median scale leaves 2 of 14 (r1) and 1 of 14 (r2) within 3%.
+>
+> Rejected alternatives, measured on the 23:28 run (the last four are replays with one step changed):
+> - Depth model: MoGe-2 sizes inside one frame are within 6% of the tape (five sizes, −5.8% to +0.9%).
+> - Plan step: on the PnP-scaled scene the same plan step gives 3 rooms, not 8.
+> - D-066 gate back to 0.005: the hall's first pass fails the self-check and is dropped (6 rooms, 31.7 m²).
+> - No ±1.5× clamp: 3 rooms but 16.5 m², with the camera at a median 3.8 m above the floor.
+> - PnP votes plus a segment cut at the jump: the spread test drops kf 53–227, which leaves 1 room.
 >
 > **3. The fix and the predicted number.**
-> Fix: `<one change, one root cause; the files it touches>`. Predicted after the fix: `<gate number with a range>`.
-> How the prediction was made: `<counterfactual computed on the before run, e.g. "remove the common scale and
-> recount">`. What else is expected to change: `<e.g. "LiDAR sample plans bit-identical">`.
+> Fix: scale votes from PnP on MoGe-2 depth. It is one change for one root cause, the scale signal.
+> - `floorplan/video/scale.py`: for keyframe pairs 2, 4 and 6 apart, SIFT matches, the MoGe-2 depth of the first
+>   frame, `solvePnPRansac` and an LM refine. A pair votes when its metric step is at least 8 cm and it agrees with
+>   DPVO within 35° in direction and 4° in rotation. The vote is metric step / DPVO step. In `estimate_scales` the
+>   segment cut stays. The local scale and its ±1.5× clamp become a running median of the votes within ±8 keyframes
+>   (at least 3 votes, log-interpolated in between), and the bootstrap resamples the votes.
+> - `floorplan/video/frontend.py`, step 8: the keyframe images go to both `estimate_scales` calls.
+> - `floorplan/video/params.py`: the four thresholds.
+> - Unchanged: segment cuts, DPVO re-runs, the self-check, the pose graph and the plan step.
 >
-> **4. Regeneration.** Before = tag `before-fix`, after = tag `after-fix`. Commands: `<copied from Part 3, step 6>`.
+> Predicted after the fix: **0 of 14 walls within 3%, range 0–2. The gate still fails.**
+> How: I replayed the 23:28 run from its cached DPVO, MoGe-2, GeoCalib and SfM arrays, with only the scale step
+> swapped for the 177 PnP votes the fix computes. Four more replays resample the votes. All five were scored with the
+> scorer at `7b1a40f` (`outputs/fixloop/before/predict/summary.json`). The step 4 counterfactual above agrees:
+> 1–2 of 14.
+> What else should change. These are replay numbers, the 23:28 run as scored now → the fix, with the range over 5:
+> - Walls within 10%: 2 → 6 of 14 (3–6). Found: 8 → 13 of 14 (all 5). Median error of the found walls:
+>   23.0% → 10.5% (10.5–40.0%).
+> - Rooms: 8 → 3 (3–4). Footprint: 35.4 → 29.5 m² (29.5–31.4); the house is about 29–31 m².
+> - 95% interval coverage: 0.75 → 0.82 (0.65–0.82). kf1/kf42: 9.96 → 0.47 m (truly 0.50 m).
+> - Not fixed: the ceilings stay 0 of 3 in all 5 (bedroom 3.54–3.99 m against 2.629 m; tracking is lost while the
+>   ceiling is filmed at the end). Door widths stay 0 of 3–4. The self-check still fails (spread 7.9 > 2.0), so the
+>   plan keeps its low-reliability flag.
+> - Photo and LiDAR plans: no change expected (bit-identical); only the video front end uses `scale.py`. The three
+>   sample videos must not get worse.
+> - The two before runs disagree (I-007), and the after runs will too. Expected verdict: meaningful movement short of
+>   the gate.
+>
+> **4. Regeneration.** Before = tag `before-fix`, after = tag `after-fix`. Each state runs the video twice (I-007):
+>
+> ```bash
+> S=before   # S=after at tag after-fix
+> for r in r1 r2; do
+>   flock outputs/.gpu.lock env -u PYTHONPATH python scripts/run_capture.py outputs/own_house/capture/video/take1.mp4 \
+>       --tier video --no-damage --out outputs/fixloop/$S/video_take1_$r
+> done
+> env -u PYTHONPATH python scripts/eval_own_capture.py --gt outputs/own_house/capture/gt/ground_truth.csv \
+>     --gt-json outputs/own_house/capture/gt/gt_polygons.json \
+>     --plan photo_lit=outputs/fixes/photo_lit/plan.json --plan photo_dim=outputs/fixes/photo_dim/plan.json \
+>     --plan video_take1_r1=outputs/fixloop/$S/video_take1_r1/plan.json \
+>     --plan video_take1_r2=outputs/fixloop/$S/video_take1_r2/plan.json --out outputs/fixloop/$S/eval
+> git diff before-fix after-fix -- floorplan scripts/run_capture.py > docs/fixloop.diff
+> ```
 
 After the fix, appended under the declaration and never edited into it:
 
