@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "notes": "Concealed-damage rules. Each rule fires on a detected region whose class, surface and position match; the flag carries the rule id, the evidence (measured numbers) and a probability that the geometric condition holds given the measurement interval. Thresholds are restoration rules of thumb, not engineering limits; every flag is a prompt to inspect, never a diagnosis.",
+  "rules": [
+    {
+      "id": "CEILING_STAIN_LEAK_ABOVE",
+      "applies_to": {"cls": "water_stain", "surface_kind": "ceiling"},
+      "condition": {},
+      "flag": "possible leak above the ceiling (plumbing, roof or upstairs wet room); the ceiling cavity may be wet beyond the visible stain",
+      "severity": "high",
+      "actions": ["moisture-map the ceiling around the stain (non-invasive meter, then pin meter)", "trace and stop the water source before any repair"],
+      "rationale": "Water travels along joists and boards before it shows; a ceiling stain is the visible end of a wet path above. Restoration practice is to find and stop the source and measure moisture beyond the visible boundary before deciding what to remove.",
+      "reference": "IICRC S500 Standard for Professional Water Damage Restoration (source control, moisture mapping beyond visible damage)"
+    },
+    {
+      "id": "WALL_BASE_WICKING",
+      "applies_to": {"cls": "water_stain", "surface_kind": "wall"},
+      "condition": {"bottom_t_max_m": 0.30},
+      "flag": "stain reaches the base of the wall: possible water on the floor wicking up the board, or a leak inside the wall cavity at floor level (insulation, bottom plate and the back of the board may be wet)",
+      "severity": "high",
+      "actions": ["moisture-map the wall base and the floor next to it", "flood cut if wet: remove board to a horizontal line above the wet line (commonly 0.6 m / 2 ft)"],
+      "rationale": "Gypsum board wicks water by capillary action well above the water line, and the cavity behind dries slowly. Restorers remove board to a line above the highest wet reading (a 'flood cut', usually 2 ft or 4 ft) so the cavity can be dried and inspected.",
+      "reference": "IICRC S500 (wicking, removal of affected wallboard); FEMA guidance on flood cuts after flooding"
+    },
+    {
+      "id": "BELOW_WINDOW_SEAL_LEAK",
+      "applies_to": {"cls": "water_stain", "surface_kind": "wall"},
+      "condition": {"below_opening_kind": "window", "max_gap_below_sill_m": 0.6},
+      "flag": "stain directly below a window: possible window seal / sill flashing leak",
+      "severity": "medium",
+      "actions": ["inspect the window perimeter seal and sill; water test (hose test) of the window-wall interface"],
+      "rationale": "The window-to-wall interface is the most frequent water entry point in exterior walls; water entering at the sill runs down inside the wall and shows below the window.",
+      "reference": "ASTM E2128 Standard Guide for Evaluating Water Leakage of Building Walls"
+    },
+    {
+      "id": "CRACK_FROM_OPENING_CORNER",
+      "applies_to": {"cls": "crack", "surface_kind": "wall"},
+      "condition": {"max_dist_to_opening_corner_m": 0.20, "diagonal_deg": [20, 70]},
+      "flag": "diagonal crack radiating from a door/window corner: possible structural movement (settlement, lintel deflection)",
+      "severity": "high",
+      "actions": ["measure and monitor crack width (tell-tale) over weeks", "structural engineer assessment if width > 5 mm or growing"],
+      "rationale": "Opening corners concentrate stress; differential movement shows first as diagonal cracks from those corners. Severity is graded by crack width (BRE categories 0-5: <0.1 mm hairline to >25 mm).",
+      "reference": "BRE Digest 251 Assessment of damage in low-rise buildings"
+    },
+    {
+      "id": "LARGE_STAIN_HIDDEN_MOULD",
+      "applies_to": {"cls": "water_stain"},
+      "condition": {"min_area_m2": 0.5},
+      "flag": "large stained area: material was wet for long enough that hidden mould growth behind the surface is likely",
+      "severity": "medium",
+      "actions": ["inspect the cavity behind the stain (borescope / small inspection hole)", "follow mould remediation practice if growth is found"],
+      "rationale": "Mould can grow on wet cellulose-faced materials within 24-48 h; a large stain indicates prolonged wetting.",
+      "reference": "IICRC S520 Standard for Professional Mold Remediation"
+    },
+    {
+      "id": "STAIN_NEAR_WET_ROOM",
+      "applies_to": {"cls": "water_stain", "surface_kind": "wall"},
+      "condition": {"room_label_any": ["bath", "shower", "wc", "toilet", "kitchen", "laundry", "utility"]},
+      "flag": "stain on a wall of a wet room: possible plumbing or waterproofing (tanking) failure; mould risk",
+      "severity": "medium",
+      "actions": ["check supply/waste pipes and shower/bath sealant on the other side of the wall"],
+      "rationale": "Wet rooms are the most frequent internal water source; leaks in them often surface on the shared wall.",
+      "reference": "IICRC S500 (identifying the water source); IICRC S520"
+    }
+  ]
+}

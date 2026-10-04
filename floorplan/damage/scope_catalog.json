@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "notes": "Line-item templates. 'per' says how the quantity is derived: surface_area (whole surface, painted to the nearest break so the repair does not show), region_area_margin (region bounding box grown by margin_m on every side), wall_length_x_height (a horizontal band along the whole wall), length (crack length), each (one per trigger). Items are de-duplicated per surface (one repaint per wall).",
+  "items": [
+    {"id": "WALL_STAINBLOCK_PAINT", "trigger": {"cls": "water_stain", "surface_kind": "wall"}, "per": "surface_area",
+     "unit": "m2", "text": "stain-block primer + 2 coats paint, whole wall", "why": "water stains bleed through ordinary paint; repaint to the corners so the patch does not show"},
+    {"id": "CEILING_STAINBLOCK_PAINT", "trigger": {"cls": "water_stain", "surface_kind": "ceiling"}, "per": "surface_area",
+     "unit": "m2", "text": "stain-block primer + paint ceiling", "why": "same as walls; ceilings are repainted whole"},
+    {"id": "CEILING_BOARD_REPLACE", "trigger": {"rule": "CEILING_STAIN_LEAK_ABOVE"}, "per": "region_area_margin", "margin_m": 0.30,
+     "unit": "m2", "text": "cut out and replace ceiling board (stain + 0.3 m margin), if moisture survey confirms wet", "why": "wet board loses strength and the margin covers wetness beyond the visible edge"},
+    {"id": "LEAK_INVESTIGATION", "trigger": {"rule": "CEILING_STAIN_LEAK_ABOVE"}, "per": "each",
+     "unit": "ea", "text": "leak investigation + moisture mapping above the ceiling", "why": "fix the source before the finish"},
+    {"id": "FLOOD_CUT", "trigger": {"rule": "WALL_BASE_WICKING"}, "per": "wall_length_x_height", "height_m": 0.60,
+     "unit": "m2", "text": "flood cut: remove and replace drywall to 0.6 m along the wall, dry cavity", "why": "wicking wets the board and cavity above the visible line; standard 2 ft cut"},
+    {"id": "SKIRTING_REMOVE_REFIT", "trigger": {"rule": "WALL_BASE_WICKING"}, "per": "wall_length",
+     "unit": "m", "text": "remove and refit skirting board", "why": "needed for the flood cut"},
+    {"id": "WINDOW_RESEAL", "trigger": {"rule": "BELOW_WINDOW_SEAL_LEAK"}, "per": "each",
+     "unit": "ea", "text": "inspect, water-test and reseal window perimeter", "why": "stop the entry point"},
+    {"id": "CRACK_FILL", "trigger": {"cls": "crack"}, "per": "length",
+     "unit": "m", "text": "rake out, tape and fill crack, sand", "why": "standard cosmetic crack repair"},
+    {"id": "WALL_PAINT_AFTER_CRACK", "trigger": {"cls": "crack", "surface_kind": "wall"}, "per": "surface_area",
+     "unit": "m2", "text": "prime + paint wall after crack repair", "why": "repaint to the corners"},
+    {"id": "STRUCTURAL_ASSESSMENT", "trigger": {"rule": "CRACK_FROM_OPENING_CORNER"}, "per": "each",
+     "unit": "ea", "text": "crack monitoring (tell-tale) + structural engineer assessment", "why": "diagonal cracks from opening corners can indicate movement"},
+    {"id": "CAVITY_INSPECTION", "trigger": {"rule": "LARGE_STAIN_HIDDEN_MOULD"}, "per": "each",
+     "unit": "ea", "text": "inspection hole / borescope of the cavity behind the stain for mould", "why": "prolonged wetting"}
+  ]
+}
