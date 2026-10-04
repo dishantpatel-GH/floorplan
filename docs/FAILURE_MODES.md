@@ -14,7 +14,7 @@ from two sources:
 - the RGB frames of the same captures;
 - MoGe-2 single-image metric depth, the learned depth that the photo and video front-ends rely on, compared with LiDAR.
 
-The candidate's own home capture (OwnCaptures/) will replace this proxy with native phone photos and video.
+My own home capture (OwnCaptures/) will replace this proxy with native phone photos and video.
 
 ## Summary table
 

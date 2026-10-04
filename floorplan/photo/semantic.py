@@ -37,6 +37,16 @@ def _seg_python() -> Path | None:
     return None
 
 
+def seg_hf_home(py: Path | None = None) -> Path:
+    """HF_HOME the segmenter runs with: $HF_HOME if set, else weights/hf_seg in the folder that holds envs/ (the repo's
+    parent by default, where setup/seg_env.sh builds the env). scripts/fetch_weights.py puts the model there."""
+    if "HF_HOME" in os.environ:
+        return Path(os.environ["HF_HOME"])
+    py = py or _seg_python()
+    root = py.parents[3] if py is not None else Path(__file__).resolve().parents[3]
+    return root / "weights" / "hf_seg"
+
+
 def _resize_nearest(m: np.ndarray, h: int, w: int) -> np.ndarray:
     yi = np.minimum((np.arange(h) * m.shape[0] / h).astype(int), m.shape[0] - 1)
     xi = np.minimum((np.arange(w) * m.shape[1] / w).astype(int), m.shape[1] - 1)
@@ -62,20 +72,21 @@ def attach_semantics(photos, views: dict, work: Path, p, log=print) -> dict:
         py = _seg_python()
         script = Path(__file__).resolve().parents[2] / "scripts" / "seg_walls.py"
         if py is None or not script.exists():
-            log("[photo/sem] no segmentation env (envs/seg): wall points from geometry only")
+            log("[photo/sem] WARNING: no segmentation env (envs/seg; build it with setup/seg_env.sh): wall points "
+                "from geometry only")
             return dict(status="no segmentation env")
         lst = Path(work) / "semantic_list.txt"
         lst.write_text("".join(f"{ph.name}\t{Path(ph.path).resolve()}\n" for ph in photos if ph.name in views))
         env = dict(os.environ)
-        env.setdefault("HF_HOME", str(py.parents[3] / "weights" / "hf_seg"))
+        env["HF_HOME"] = str(seg_hf_home(py))
         try:
             r = subprocess.run([str(py), str(script), "--list", str(lst), "--out", str(raw)], env=env,
                                capture_output=True, text=True, timeout=getattr(p, "semantic_timeout_s", 900))
         except subprocess.TimeoutExpired:
-            log("[photo/sem] segmentation timed out: wall points from geometry only")
+            log("[photo/sem] WARNING: segmentation timed out: wall points from geometry only")
             return dict(status="timed out")
         if r.returncode != 0 or not raw.exists():
-            log(f"[photo/sem] segmentation failed (rc {r.returncode}): wall points from geometry only")
+            log(f"[photo/sem] WARNING: segmentation failed (rc {r.returncode}): wall points from geometry only")
             return dict(status="failed", stderr=r.stderr[-500:])
         z = np.load(raw)
     labels = [str(x).strip() for x in z["names"]]

@@ -1,4 +1,4 @@
-"""Scripted capture person v2: the protocol designed ONCE from published practice + the user's review (D-051).
+"""Scripted capture person v2: the protocol designed ONCE from published practice + my review (D-051).
 
 Sources (docs/CAPTURE_PRACTICES_RESEARCH.md): photo spins from one open spot (Matterport, ZInD, magicplan, HorizonNet);
 small rooms shot from the doorway (CubiCasa, Hover, ZInD); every corner incl. ceiling corners in view (DocuSketch,

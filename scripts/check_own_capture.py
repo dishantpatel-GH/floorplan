@@ -9,7 +9,7 @@ the missing part becomes a row of the report.
 
   FAIL  the pipeline would crash, or silently measure wrong, or a tier cannot be scored. Fix before running.
   WARN  it runs, but accuracy drops or a deliverable (repeatability, head-to-head) is missing. Decide, then run.
-  PASS  as the capture guide asks (TakeHome/HOUSE_CAPTURE_GUIDE.md: layout step 0, settings 2, photos 5, video 6,
+  PASS  as the capture guide asks (docs/HOUSE_CAPTURE_GUIDE.md: layout step 0, settings 2, photos 5, video 6,
         ground truth 8).
 
 What is checked, and against which code:
@@ -150,7 +150,8 @@ ACTIONS = {
     "A-VERSION": "Write the app name and version into app_export/app_version.txt (guide step 7).",
     "E-FFPROBE": "Install ffmpeg (ffprobe). Without it the video checks and the video tier's metadata are blind.",
     "E-DISK": "Free disk space. A whole-house video run writes 1-3 GB of work files.",
-    "E-SEG": "envs/seg is missing: the photo tier runs without semantic wall masks (D-060) and --ceiling cannot run.",
+    "E-SEG": "envs/seg is missing (build it with setup/seg_env.sh): the photo tier runs without semantic wall masks "
+             "(D-060) and --ceiling cannot run.",
     "X-CHECKER": "The checker itself failed on this part (a bug in scripts/check_own_capture.py). The capture may be "
                  "fine; look at the part by hand.",
     "R-RUN": "Read the named scene_info.json / log; see the runbook section 'After the run'.",

@@ -481,7 +481,7 @@ def main():
     ap.add_argument("--session", type=Path, required=True)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--photo-protocol", default="v2", choices=["v2", "spin", "spin_even", "corners"],
-                    help="v2 = walk + photos designed from published practice and the user's review (D-051)")
+                    help="v2 = walk + photos designed from published practice and my review (D-051)")
     ap.add_argument("--takes", default="take1,take2")
     ap.add_argument("--no-photos", action="store_true")
     ap.add_argument("--repeat-room", default=None)

@@ -21,7 +21,7 @@ Evidence is in `outputs/lidar_bias/`:
 Data: ARKitScenes rooms, each recorded by an iPad Pro (LiDAR + ARKit poses) and scanned by a Faro laser.
 
 - 47895909 is the room from the validation module.
-- The other four rooms were fetched for this module with `data/arkitscenes/fetch_parallel.sh` and the official `download_data.py`:
+- The other four rooms were fetched for this module with `../data/arkitscenes/fetch_parallel.sh` (with the data, outside the repo) and the official `download_data.py`:
   - 42445884 (visit 422009);
   - 47331133 (visit 470348);
   - 47430003 (visit 470537, *Validation* split);
@@ -320,53 +320,6 @@ The estimator (trimmed LS), the height band and near-range weighting change resu
 - **The plane-tilt term (Issue 4)** is real and random (±0.5–1 cm on partly seen surfaces). It should be fixed in the plan extractors with parallel-plane
   fits, then re-measured here.
 - Wall thickness (−2b) and area or perimeter (polygon offset) corrections follow from geometry but were not checked against the laser.
-- `bias.py` is not wired into `scripts/run_capture.py` (not my file). Proposed: call `apply_to_plan(plan, LidarBiasConfig.load())` on LiDAR-tier plans
-  just before `widen_plan`, and add `lidar_bias_correction: bool = True` to `floorplan/config.py`.
-
-## 7. Proposed commits (in order)
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 1 | `chore(data): fetch 4 more single-scan ARKitScenes rooms (visits 422009, 470348, 470537, 469650)` | `scripts/fetch_arkitscenes.sh` (the loop used here; strip `\r` from the mapping CSV) | More rooms, so a correction is not fitted on one room |
-| 2 | `feat(eval): lidar-bias investigation (H1-H5) reusing the validation pipeline` | `scripts/investigate_lidar_bias.py` (arkit mode) | Evidence for each hypothesis, with translation-free statistics |
-| 3 | `fix(eval): internal near-vs-far slope used absolute coordinates` | same file | Issue 2 (+41 → −7 mm/m) |
-| 4 | `feat(eval): stray mode (internal tests on sample captures) and pooled summary with LORO` | same file | Generalisation evidence |
-| 5 | `docs(eval): pre-register LiDAR bias correction before hold-out rooms` | `outputs/lidar_bias/preregistration.json` (or copy into the doc) | Makes the hold-out test credible |
-| 6 | `fix(eval): pad KDE-mode grid` | same script | Issue 6 |
-| 7 | `feat(uncertainty): LiDAR inward-bias correction + systematic sigma (switchable)` | `floorplan/uncertainty/bias.py` | The fix |
-| 8 | `feat(pipeline): apply LiDAR bias correction before tier widening` | `scripts/run_capture.py`, `floorplan/config.py` (owners) | Wire it in |
-| 9 | `docs: lidar_bias module + decision D-0xx; amend arkitscenes_validation Issue 3` | `docs/modules/lidar_bias.md`, `docs/DECISIONS.md`, `docs/modules/arkitscenes_validation.md` | Explain the decision |
-
-Suggested decision entry:
-
-> **D-0xx LiDAR surfaces sit about 0.7 cm into the room. Correct it, and carry ±1.6 cm (95%) systematic per interior distance.**
->
-> - Evidence: 5 ARKitScenes rooms with laser ground truth. Not scale, not registration, not the estimator.
-> - Fix pre-registered on 3 rooms, tested on 2 hold-out rooms: mean room-box error −1.25 → +0.11 cm.
-> - Ceiling heights 5/5 within 0.7 cm after correction.
-
-## 8. Concepts to explain in the defense
-
-- **Bias vs noise.**
-  - Noise averages down with more points; bias does not.
-  - Here the plane-fit standard error is 0.05 mm, while the bias is 7 mm.
-  - Only a reference instrument (the laser) reveals a bias.
-- **Scale error vs offset error.**
-  - A scale error grows with distance (slope).
-  - An offset per surface costs every interior distance the same amount, 2b (intercept).
-  - Test: regress error on distance, and check whether the bias grows with range.
-- **Why a similarity registration "finds" a scale.**
-  - In a small room, moving every wall inward by b is almost the same as shrinking by b/half-size.
-  - The per-axis fit exposes it: x ≠ z inside one room is impossible for a true VIO scale.
-- **Translation-free statistics.** A registration shift moves opposite walls in opposite inward directions, so averaging the + and − sides cancels it.
-- **Pseudo-replication and the cluster bootstrap.**
-  - 43 pairs built from 22 surfaces are not 43 independent samples.
-  - Resample the surfaces, not the pairs, to get honest intervals.
-- **Fixed effects.** Comparing observations *within* the same 10 cm patch removes everything about the patch (its true position, registration error),
-  leaving only how the measurement depends on range or incidence.
-- **Leave-one-out and pre-registration.**
-  - Write down the correction and its predicted effect *before* looking at the test rooms.
-  - The hold-out confirmed the prediction (−1.25 → +0.11 cm). That is the difference between a calibration and curve fitting.
-- **Black-box calibration.** Like the hook offset of a tape measure: you do not need to know *why* it is offset to correct it, but you need to know
-  that it is stable (five homes) and how much it scatters (σ 0.8 cm). That scatter goes into every interval.
-- **Why the correction moves planes, not points.** The bias does not grow with range and is not along the ray, so the right object to shift is the fitted surface, along its normal.
+- `bias.py` is wired in: `scripts/run_capture.py` calls `apply_to_plan` on every LiDAR-tier plan, just before `widen_plan`, and it is on by
+  default. `--no-bias-correction` (or `FLOORPLAN_LIDAR_BIAS=off`) keeps the raw values and widens the interval one-sided instead. Wall
+  lengths get the corner-aware shift of D-027.

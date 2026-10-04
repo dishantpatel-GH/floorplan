@@ -53,7 +53,7 @@ With 2–8 stills per room, (a) has to be primary and (b) a weak add-on. Getting
 - Shoot from corners or with your back to a wall toward the opposite corner, moving at least one step between shots, with adjacent shots overlapping at least 60 % [27][28].
 - Add a spot for every ~9 m² beyond the first and every ~3 m of hallway; keep spots no more than 2–2.5 m apart [17][18][19].
 - **Bathrooms and closets**: shoot from the doorway with the whole door frame in view [8][16][20].
-- **Linking rooms**: open doors and take one shot each side, 30–60 cm from the threshold, with both rooms' walls visible [12](U)[28].
+- **Linking rooms**: open doors and take one shot each side, 30–60 cm from the threshold, with both rooms' walls visible [12] (U) [28].
 - Lights on, blinds open, and don't expose against windows [1][27].
 
 **2. Walkthrough video**

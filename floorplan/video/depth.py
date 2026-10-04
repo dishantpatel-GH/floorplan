@@ -7,7 +7,7 @@ Two Apache/MIT-licensed models are supported and compared on this data (decision
 
 Why pass the focal length: monocular depth is ambiguous between "small room seen with a wide lens" and "large room
 with a narrow lens". Giving the model the focal length removes that ambiguity; the environment smoke tests showed
-MoGe-2's error halving with the true FOV (SETUP.md section 3).
+MoGe-2's error halving with the true FOV.
 """
 from __future__ import annotations
 

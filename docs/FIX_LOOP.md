@@ -1,7 +1,7 @@
 # Fix loop (Part 4): declaration, shipped fix, before/after
 
 Status, 4 Oct 06:45 IST. **No fix is declared yet.** Part 1 is the one-page declaration template. It gets filled in
-after the own capture has been scored, and is committed **before** any fix code (commit J1 in `COMMIT_PLAN.md`).
+after the own capture has been scored, and is committed **before** any fix code.
 Part 2 lists the strongest current candidates with their evidence. Part 3 is the exact morning procedure. Every
 number here is quoted from the file named next to it. Numbers in `<angle brackets>` do not exist yet.
 
@@ -12,7 +12,7 @@ number here is quoted from the file named next to it. Numbers in `<angle bracket
 > **1. Worst gate and its failing number.**
 > Gate: `<gate>` at tier `<tier>`, on `<capture>`. Measured: `<number>` against the threshold `<threshold>`
 > (`outputs/own/eval/own_eval.md`, run at `<time>`). It is the worst gate under the ranking rule of Part 3, step 3,
-> which was committed before the own capture was scored (`<commit id of J0>`).
+> which was committed before the own capture was scored (commit `e042ca5`).
 >
 > **2. Root-cause hypothesis and the evidence for it.**
 > Hypothesis: `<one sentence>`. Evidence: `<the measurement that shows it; file and row>`. Rejected alternatives:
@@ -25,7 +25,7 @@ number here is quoted from the file named next to it. Numbers in `<angle bracket
 >
 > **4. Regeneration.** Before = tag `before-fix`, after = tag `after-fix`. Commands: `<copied from Part 3, step 6>`.
 
-After the fix (commit J4), appended under the declaration and never edited into it:
+After the fix, appended under the declaration and never edited into it:
 
 | | Before (`before-fix`) | Predicted | After (`after-fix`) |
 |---|---|---|---|
@@ -54,7 +54,7 @@ Part 3.
 | Video | 95% interval coverage | 70% / 88% / 60% | 0.26 / 0.07 / 0.37 |
 | LiDAR | ceiling ≤ 1.5 cm per room (ARKitScenes, laser) | 3/4 rooms, max 2.16 cm | 0.25 |
 
-The own capture replaces the photo and video rows with tape ground truth. It has no LiDAR, because the candidate's
+The own capture replaces the photo and video rows with tape ground truth. It has no LiDAR, because my
 phone has none (`OPEN_QUESTIONS.md`). So the LiDAR rows stay as they are.
 
 ### C1. LiDAR bias: the completed rehearsal (D-021, D-027). Template already filled, not the declared loop
@@ -109,8 +109,8 @@ phone has none (`OPEN_QUESTIONS.md`). So the LiDAR rows stay as they are.
   - floor_only, second run: 18.95 [4.07, 33.83] against 61.90 m².
 - **Root cause, with evidence.**
   - D-034's 20% floor is a **scale** term. The big errors are **missing rooms**: with_ceiling has 5 rooms for 8
-    (3 matched), and the floor_only rerun has 3 for 8 (`modules/benchmark_final.md` §9.4, BF-13).
-  - Coverage rose with D-034 (floor_only 31% → 88%, with_ceiling 38% → 60%; §9.2). But the upper bounds sit about
+    (3 matched), and the floor_only rerun has 3 for 8 (`modules/benchmark_final.md` §7.4, BF-13).
+  - Coverage rose with D-034 (floor_only 31% → 88%, with_ceiling 38% → 60%; §7.2). But the upper bounds sit about
     28 m² below the reference, so no scale sigma can reach it.
 - **Fix.** When `meta.reliability` is low, widen the footprint's upper bound by an area the run measures itself. For
   example, the floor area swept by the camera path that lies outside every room. Or report the footprint as a lower
@@ -158,7 +158,7 @@ Its consequence for the fix loop: **any video before/after must be run at least 
 ### Already measured: option A (B-1, repeatability)
 
 The judge predicted "about 15% of walls, 7/7 rooms" before the code existed. B-1 measured 7/99 → 14/95 = 14.7% and
-6 → 8/8 rooms (`modules/plan_v2_ablation.md` row 1; `COMMIT_PLAN.md` phase F, tags on F50 / F52). The gate is still
+6 → 8/8 rooms (`modules/plan_v2_ablation.md` row 1). The gate is still
 failed: the final run gives 15/87 = 17.2% (`REPORT.md` §1). Use it only if the morning loop cannot be shipped. If so,
 say that the prediction was the judge's.
 
@@ -166,11 +166,10 @@ say that the prediction was the judge's.
 
 ## Part 3. Morning procedure (own capture → worst gate → declare → fix → before/after)
 
-**0. Before scoring anything.** In the real repo, commit this file unchanged:
-`docs(fixloop): ranking rule and candidates, committed before the own capture is scored` (J0). The rule in step 3 is
-then provably fixed in advance.
+**0. Before scoring anything.** Commit this file unchanged. Done in commit `e042ca5` ("fix loop: write the ranking
+rule before the own capture is scored"), so the rule in step 3 is provably fixed in advance.
 
-**1. Process and score the own capture** (README §7.1):
+**1. Process and score the own capture** (`OWN_CAPTURE_RUNBOOK.md`):
 
 ```bash
 O=../TakeHome/OwnCaptures
@@ -235,13 +234,13 @@ Rules for edge cases, written down now so they cannot be bent later:
 - Otherwise, list the failing walls by room. If the failures cluster in L-shaped rooms, corridors or rooms seen
   through doors (C4), the prediction is the pass fraction with that cluster fixed to its median-room error.
 - Calibration: the prediction is the coverage after the proposed widening, applied to the before run's intervals.
-- Write the declaration (Part 1, items 1–3), then commit it:
-  `docs(fixloop): fix declaration - worst gate <gate> = <number>, root cause <...>, predicted <number>` (J1).
+- Write the declaration (Part 1, items 1–3), then commit it on its own, before any fix code:
+  `fix loop: declare <gate> = <number>, root cause <...>, predicted <number>`.
 
-**5. Tag "before" and run it.** In the real repo:
+**5. Tag "before" and run it.**
 
 ```bash
-git tag -a before-fix -m "Fix loop: before (declared in <J1 commit>)"
+git tag -a before-fix -m "fix loop: before (declared in <declaration commit>)"
 # photo-tier fix (the photo folders were already gathered by process_own_capture.py)
 env -u PYTHONPATH python scripts/run_capture.py outputs/own/_photo_inputs_main --tier photo --out outputs/fixloop/before/photo
 env -u PYTHONPATH python scripts/eval_own_capture.py --gt $O/gt/ground_truth.csv \
@@ -257,7 +256,7 @@ runs.
 **6. Fix, tag "after", run the same commands.**
 
 ```bash
-# one commit per root cause: fix(<module>): <the declared fix>   (J3..)
+# one commit per root cause: <module>: <the declared fix>
 git tag -a after-fix -m "Fix loop: after"
 # the same commands as step 5, with --out outputs/fixloop/after/...
 git diff before-fix after-fix -- floorplan scripts/run_capture.py > docs/fixloop.diff   # the readable diff
@@ -267,9 +266,8 @@ Anyone can regenerate both runs with `git worktree add ../before before-fix` and
 then the step 5 commands in each.
 
 **7. Report.** Fill in the before / predicted / after table in Part 1. Then update `TECHNICAL_REPORT.md` §6 and
-`COMPLIANCE.md` row 4, and commit
-`docs(fixloop): before vs after, predicted vs measured, why it fell short (if it did)` (J4). Then refresh the
-report: `bench_final.py --skip-lidar`, or the full run if the fix touched the LiDAR path.
+`COMPLIANCE.md` row 4, and commit them: before vs after, predicted vs measured, and why it fell short (if it did).
+Then refresh the report: `bench_final.py --skip-lidar`, or the full run if the fix touched the LiDAR path.
 
 **Time budget.** Photo run plus scoring is about 1–2 min per state (`REPORT.md` §4: v3 photo 9–45 s on the sample,
 warm cache). A video run is 272–1737 s per state on the sample. Two runs per state make a video fix the most

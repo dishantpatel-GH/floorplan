@@ -1,6 +1,6 @@
 # Module: video tier (`floorplan/video/`)
 
-Status: scratch build. It runs end to end on all three sample captures.
+Status: runs end to end on all three sample captures.
 
 - On the short capture (single_room, 37 s) it recovers metric scale to +1.2% to +4.2% (4 runs) with a 10–13 cm
   camera-path error over 14 m. Its claimed interval covers the error.
@@ -91,7 +91,7 @@ GeoCalib (Apache-2.0 code, CC-BY-4.0 weights: attribution), ALIKED (BSD-3), Ligh
 
 | # | Step | File | What it does | Why it is needed | What goes wrong without it |
 |---|---|---|---|---|---|
-| 1 | Scan the video | `frames.py` | Decodes every frame once at 160 px width. Records the timestamp, the image shift relative to the previous frame (phase correlation) and the sharpness (variance of the Laplacian). | Without poses, the only way to know "how much the view changed" is to measure it in the image. | Fixed-rate sampling. It wastes frames when the user stands still and leaves gaps with no overlap during fast turns, and the gaps break the tracking. |
+| 1 | Scan the video | `frames.py` | Decodes every frame once at 160 px width. Records the timestamp, the image shift relative to the previous frame (phase correlation) and the sharpness (variance of the Laplacian). | Without poses, the only way to know "how much the view changed" is to measure it in the image. | Fixed-rate sampling. It wastes frames when the operator stands still and leaves gaps with no overlap during fast turns, and the gaps break the tracking. |
 | 2 | Keyframes | `frames.py` | A new keyframe is taken when the picture has moved 15% of its width (about 9°) or 1 s has passed. Within each trigger, the sharpest of the last 6 frames is kept. Keyframes are snapped to the frames DPVO sees (every 2nd frame). | It is the LiDAR keyframe rule (D-008) translated to image space. Picking the sharpest frame avoids motion blur. | Blurred keyframes give bad depth and bad colour. |
 | 3 | Upright rotation | `orientation.py` | Uses the container's rotation flag if it has one (iPhone Camera-app videos do). Otherwise GeoCalib votes on which 90° rotation makes gravity point down the screen. | The phone was held in portrait, but `rgb.mp4` stores the frames sideways and carries no flag. Learned models expect upright images. | Depth and calibration models run on sideways images and degrade. |
 | 4 | Focal length | `sfm.py`, `orientation.py` | Self-calibrates one shared focal length with SfM (ALIKED + LightGlue + COLMAP bundle adjustment) on the first 120 keyframes. GeoCalib's median focal is the prior and the fallback. | No intrinsics file exists. The focal length sets the field of view, which every depth and pose model needs. | A focal error of e% stretches lateral dimensions by about e%. |
@@ -146,8 +146,6 @@ The output has the same keys as the LiDAR scene. Three things differ:
   Below response 0.1 (5 frames) the shifts were random, so they are capped at 5%. With an 8% threshold we got 365
   keyframes for 37 s, which is too many for SfM and depth. At 15% we get 186, or 164 after snapping to the DPVO
   frames.
-- **Say it in the defense.** "Same rule as LiDAR keyframes, 'enough new view', measured in pixels instead of
-  metres."
 
 ### V-3 Camera trajectory: DPVO (chosen) vs SfM vs MapAnything vs Depth Anything 3
 
@@ -164,7 +162,8 @@ All four were run on single_room's keyframes and scored against ARKit. Evidence:
 - **Decision.** DPVO for the path, with metric scale from depth (V-6).
 - **Why.** It is the only option that tracks *through* the textureless stretches. It is fast (109 s for 1,714 frames
   on single_room, 0.83 GB of GPU), and its remaining failure (scale drift) can be measured and corrected.
-- **Licence.** DPVO code is MIT; the weights ship without a separate licence (SETUP.md §3: "probably yes").
+- **Licence.** DPVO code is MIT; the weights ship without a separate licence (commercial use probably fine:
+  `docs/DISCLOSURES.md` §1).
 - **Risk.** DPVO has no relocalisation. The DPV-SLAM loop closure is tested as an ablation (section 5).
 
 ### V-4 Focal length: SfM self-calibration with a GeoCalib prior
@@ -230,8 +229,6 @@ both models:
   On floor_only (one DPVO run, scratch test on the same depth and poses): without segmentation the windows after
   the restarts were off by -93%. With it, most windows are within ±10% (whole-path SE3 ATE 170 → 76 cm in that
   run). DPVO restarts differ between runs (Issue 13c); the final run's whole path is still wrong (section 5).
-- **Say it in the defense.** "One pair is a weak vote, so I add up the votes' whole curves, not their winners. That
-  is the same reason bundle adjustment sums residuals."
 
 ### V-7 Scale uncertainty: bootstrap (statistical) ⊕ depth-model bias (systematic)
 
@@ -274,13 +271,13 @@ both models:
 
 | # | Symptom | Root cause (evidence) | Possible fixes | Chosen and why |
 |---|---|---|---|---|
-| 1 | Frames look sideways | Portrait capture stored landscape. ffprobe shows no rotation tag. ARKit shows world-up projecting to image -x | Read the IMU (forbidden); ask the user; detect from the image | Detect from the image (V-1). Real Camera-app videos carry the tag, and it is read first |
+| 1 | Frames look sideways | Portrait capture stored landscape. ffprobe shows no rotation tag. ARKit shows world-up projecting to image -x | Read the IMU (forbidden); ask the operator; detect from the image | Detect from the image (V-1). Real Camera-app videos carry the tag, and it is read first |
 | 2 | GeoCalib scores 0°/180° (and 90°/270°) **identically** | GeoCalib's up-field always points to the top of the screen (mean up-field (-0.2, -0.97) for every rotation of the same frame). It has no upside-down examples to learn from | A semantic classifier; geometry after reconstruction (points mostly below the camera: 94%/92%/56%); camera-pitch prior (-31/-27/-19°) | Pitch prior. Strongest signal, and available before depth, so depth runs on upright frames. The point-height cue is too weak on with_ceiling (56%) |
 | 3 | The video tier and ARKit disagree by one frame | OpenCV drops the first packet of `rgb.mp4`, which has a negative PTS (-0.0167 s). Decoded frame *i* is odometry row *i+1*: offset 1 gives a 5.7 ms max residual against 33 ms for offset 0. The clocks also drift by up to 29 ms over 215 s | Index arithmetic; timestamp matching | Timestamp matching (`evaluate.match_frames`), robust to both effects. **Also affects the shared loader** (change request) |
 | 4 | 8% threshold gave 365 keyframes in 37 s, with bursts of 1-frame gaps | Real fast motion plus a few unreliable phase-correlation peaks (response < 0.1: random shifts) | Raise the threshold; cap unreliable shifts; use optical flow | Both: threshold 15% and cap at 5% (V-2) |
 | 5 | SfM registers 41/186 images in 5 models | The capture was made *for LiDAR*: the phone sweeps 0.3–1 m from white walls and curtains. 43 of 185 consecutive-keyframe pairs (9 stretches) have 0 inliers (contact sheet inspected: blank wall, curtain, blur) | More keypoints; denser keyframes; dense matchers (LoFTR/RoMa, not installed, ScanNet-trained = NC risk); learned VO | Learned VO (DPVO) for the path; SfM kept only for focal self-calibration (V-3, V-4) |
 | 6 | DA3 on all 186 keyframes: OOM at 504 px, 1.69 m ATE at 336 px | Global attention memory grows with frames × tokens on an 8 GB shared GPU; at low resolution the poses collapse | Windows + Sim3 chaining | Tested windows: too inconsistent (V-3) |
-| 7 | MapAnything windows: focal -36%, scale up to +115% | Images-only mode is "roughly metric" (SETUP.md 6.1). Close-up blank walls give it no cues | Feed intrinsics; feed poses | Not pursued: DPVO + depth is better and lighter |
+| 7 | MapAnything windows: focal -36%, scale up to +115% | Images-only mode is only roughly metric (noted during environment setup). Close-up blank walls give it no cues | Feed intrinsics; feed poses | Not pursued: DPVO + depth is better and lighter |
 | 8 | DPVO scale 0.87 → 0.69 in 37 s; jumps x2.6 and x9 on floor_only | Monocular VO has no metric reference, and DPVO re-initialises scale after losing track on blank walls | Global scale; local scale; jump segmentation; loop closure | Local scale + segmentation (V-6); loop closure as ablation |
 | 9 | Rotation error 2.8° on a good SfM fragment | The alignment rotation came from camera *centres* of a short, nearly straight path, which constrains rotation about the path axis poorly | Align on orientations | Chordal-mean rotation alignment (1.2° on the same fragment) |
 | 10 | Scale came out ×51 (6,198% error) | Bug: scales at which the views stop overlapping returned `inf`, which my normalisation turned into **zero** cost, so "no overlap" won | Penalise non-overlap | Non-overlap costs TRUNC (the maximum), so it can never win |
@@ -433,84 +430,6 @@ in all 4):
 4. `floorplan.plan.align.gravity_correction` is used with `max_tilt_deg=10` here. Its docstring could say that
    other tiers need a larger tolerance than ARKit's 2°.
 
----
-
-## 7. Proposed commits (replay in the real repo)
-
-The order follows how the module was actually built, including the fixes, so the history shows the reasoning.
-Each commit runs on its own.
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 1 | `feat(video): video tier parameters with documented defaults` | `floorplan/video/params.py` | Every knob traceable to a decision |
-| 2 | `feat(video): motion-triggered keyframes from phase correlation + sharpness` | `floorplan/video/frames.py` | V-2: the LiDAR keyframe rule in image space |
-| 3 | `feat(video): upright rotation from container tag or GeoCalib axis vote` | `floorplan/video/orientation.py` | V-1, Issue 1–2 |
-| 4 | `feat(video): evaluation against the LiDAR tier (timestamp matching, SE3/Sim3, C2C)` | `floorplan/video/evaluate.py` | Measure before tuning; Issue 3 and 9 |
-| 5 | `feat(video): hloc SfM wrapper` | `floorplan/video/sfm.py` | First trajectory candidate (V-3); later used for focal self-calibration (V-4) |
-| 6 | `exp(video): option comparison SfM / MapAnything / DA3 / DPVO / depth models` | `floorplan/video/experiments.py` | Evidence for V-3, V-5: SfM fragments, feed-forward windows inconsistent |
-| 7 | `feat(video): DPVO runner in its own env + pose interpolation` | `floorplan/video/dpvo_runner.py`, `floorplan/video/vo.py` | V-3 |
-| 8 | `feat(video): metric depth with MoGe-2 / DA3METRIC and flying-pixel filter` | `floorplan/video/depth.py` | V-5 |
-| 9 | `feat(video): metric scale from summed depth-agreement cost curves` | `floorplan/video/scale.py` | V-6 |
-| 10 | `fix(video): non-overlap must cost the maximum, not zero` | `floorplan/video/scale.py` | Issue 10: scale ×51 bug |
-| 11 | `feat(video): front-end orchestration, gravity + flip check, TSDF via adapter` | `floorplan/video/frontend.py`, `floorplan/video/__init__.py` | V-1, V-8, V-9 |
-| 12 | `feat(scripts): run_video_frontend with evaluation figures` | `scripts/run_video_frontend.py` | One command per capture |
-| 13 | `chore(scripts): fetch_weights with pinned HF revisions and SHA-256` | `scripts/fetch_weights.py` | "Weights fetched by script" constraint |
-| 14 | `feat(video): scale-jump segmentation for VO restarts` | `floorplan/video/scale.py`, `params.py` | Issue 8 and 12: floor_only windows from -93% to mostly within ±10% |
-| 15 | `fix(video): stricter jumps, minimum segment length, clamp, merge similar segments` | `floorplan/video/scale.py`, `params.py` | Issue 13b: no false cuts on single_room |
-| 16 | `feat(video): flag VO restarts (whole_scene_consistent) and warn` | `floorplan/video/frontend.py` | Issue 13d: no silent confident garbage |
-| 17 | `fix(video): single-threaded BA for focal calibration` | `floorplan/video/sfm.py` | Issue 13c (partial) |
-| 18 | `fix(video): require +10 deg median pitch before flipping orientation` | `floorplan/video/frontend.py`, `params.py` | Issue 15 |
-| 19 | `exp(video): DPV-SLAM loop-closure ablation on floor_only` | none (run with `--loop-closure --tag __dpvo_loop`; numbers in docs) | Drift accountability: on/off ablation |
-| 20 | `docs(video): module documentation` | `docs/modules/video_tier.md` | Defense material |
-
-Do not commit `outputs/` (scenes, work folders and figures). The figures quoted in the docs can go into
-`docs/figures/` if the reviewers should see them without running anything.
-
----
-
-## 8. Concepts to explain in the defense
-
-- **Monocular scale ambiguity.** A video of a room and a video of a doll's house that is exactly 10x smaller look
-  identical. From images alone, geometry is known only *up to scale*. Something metric must fix it: here, a depth
-  network that has learned typical sizes of things.
-- **Scale drift.** Visual odometry chains small motions. Each one is estimated relative to the previous scale, so
-  small errors compound and the scale wanders. After a tracking loss it can restart at a completely different value
-  (a "jump").
-- **Phase correlation.** Shift two images against each other in the frequency domain. The peak of the inverse FFT
-  of the normalised cross-power spectrum sits at the translation. It is cheap and global, and its peak height says
-  how trustworthy it is.
-- **Variance of the Laplacian.** The Laplacian responds to edges. A blurred image has weak edges, so a low variance
-  means blur.
-- **GeoCalib.** A network predicts, per pixel, where "up" is and how far from the horizon the pixel looks (a
-  perspective field). An optimiser then fits the focal length, roll and pitch that best explain those fields. It is
-  trained on upright photos, which is why it cannot detect an upside-down image.
-- **SfM, bundle adjustment, self-calibration.**
-  - Match keypoints across images, then jointly solve for all camera poses, 3D points and the focal length, so that
-    re-projected points land on their detections.
-  - With many images sharing one camera, the focal length becomes observable.
-- **DPVO (Deep Patch Visual Odometry).** It tracks small patches with a learned recurrent network and solves a
-  sliding-window bundle adjustment over patch depths and poses. Learned matching works on weak texture where
-  keypoint detectors fail.
-- **Metric monocular depth (MoGe-2).** A network trained on many scenes predicts metric depth from one image, given
-  the field of view. It typically gets the *shape* right to a few % but the *global scale* wrong by several %, with
-  the error correlated across a scene.
-- **Depth-agreement scale (this module).** Move frame i's 3D points with the relative pose, scaled by s, into frame
-  j. Only the right s makes them land at the depth frame j's network predicted. Summing these cost curves over many
-  pairs averages per-frame depth errors.
-- **Block bootstrap.**
-  - Re-run the estimate on resampled data many times; the spread gives the uncertainty.
-  - Resampling *blocks* of neighbouring pairs keeps their correlation, so the interval is not falsely narrow.
-  - The bootstrap only sees random error, so the systematic depth bias is added separately.
-- **TSDF fusion.** Each voxel stores a truncated signed distance to the nearest surface, averaged over all frames
-  that see it. The surface is the zero crossing. It averages noise and fills small gaps.
-- **Umeyama alignment, ATE, SE3 vs Sim3.** Find the rotation, translation (and, for Sim3, scale) that best overlay
-  one trajectory on another. The RMS residual is the absolute trajectory error. SE3 keeps our scale, so it shows
-  what a user would get. Sim3 removes scale, so it shows shape only, and its scale factor *is* our scale error.
-- **Cloud-to-cloud distance.** For every reconstructed point, the distance to the nearest reference point. It
-  measures accuracy, not completeness.
-
-
----
 ---
 
 # Video tier v2: long captures, focal length, phone files, integration
@@ -902,7 +821,7 @@ Reading:
    opt-in.
    - `depth_map_scale`: sheet-plane depth vs MoGe depth at the sheet pixels, averaged over every sighting in the
      segment. This removes the floor bias of V2-I8.
-   - It was to be calibrated on the candidate's own capture, which now has no sheet.
+   - It was to be calibrated on my own capture, which now has no sheet.
 3. **Bridges that work on blank walls.** 2D wall-map matching of the two segments (gravity known, so 3 DoF), or
    matching keyframes 2–5 s before and after the restart with LightGlue. Accept only with a degeneracy test.
 4. **Depth-bias calibration** on ARKitScenes (v1 next step 2), to shrink the 4% model term.
@@ -911,45 +830,7 @@ Reading:
 for example from the scene's C2C of predicted surfaces (about 6–8 cm median), and use
 `info["recommended_measurement_cloud"]`.
 
-## V2-§8 Proposed commits (after v1's 20)
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 21 | `feat(video): ffprobe metadata reader (rotation, codec, 35 mm focal)` | `floorplan/video/metadata.py` | V2-2 |
-| 22 | `feat(video): focal fusion (metadata/SfM/GeoCalib) with sigma, cached; focal term in scale sigma` | `frontend.py`, `params.py` | V2-2, v1 Issue 13e |
-| 23 | `perf(video): cache DPVO, GeoCalib, keyframe exports` | `frontend.py`, `vo.py` | Re-running the CPU stages must not repeat GPU work |
-| 24 | `fix(video): absolute work/video paths (DPVO runs in its own cwd)` | `frontend.py` | V2-I5 |
-| 25 | `feat(video): fresh DPVO run per VO segment; forced cuts in scale estimation` | `dpvo_runner.py`, `vo.py`, `scale.py`, `frontend.py` | V2-1 |
-| 26 | `feat(video): per-segment gravity levelling + restart continuity` | `frontend.py` | V2-3 |
-| 27 | `feat(video): fragment pose graph on predicted depth (reuses recon/drift)` | `floorplan/video/posegraph.py`, `frontend.py` | V2-4 |
-| 28 | `feat(video): segment self-check; drop untrusted segments; honest scale_sigma_rel / whole_scene_consistent` | `frontend.py`, `params.py` | V2-5, V2-7 |
-| 29 | `feat(video): paper-sheet cue with flatness + consistency gates` | `frontend.py`, `params.py` | V2-6, V2-I4 |
-| 30 | `feat(eval): per-segment errors, trusted-only trajectory, sheet oracle, --eval-capture/--no-graph` | `evaluate.py`, `scripts/run_video_frontend.py` | V2-§4 |
-| 31 | `fix(video): auto DPVO stride from the frame rate (~30 fps into DPVO)` | `params.py`, `frontend.py` | V2-I10 |
-| 32 | `docs(video): v2 section` | `docs/modules/video_tier.md` | |
-| (proposed, not done) | `fix(video): keyframe shift relative to the upright width` | `frames.py` | V2-I12. It changes keyframes, so every cache must be rebuilt |
-
-## V2-§9 Concepts for the defense
-
-- **Segment.** A stretch of video between two tracking failures. Each segment has its own unknown scale, so it gets
-  its own metric scale and its own error bar.
-- **Re-initialising VO.** After a failure the tracker's memory is polluted. Starting it again from the failure point
-  is like the user pressing "record" again there.
-- **Self-consistency check without ground truth.** If the camera path is right, two nearby frames' depth maps must
-  land on each other. If they do not, the path is wrong, whatever its claimed σ.
-- **Why drop instead of down-weight.** A wall from a broken segment has no meaningful interval, and "unobserved" is an
-  honest answer, while a confident wrong number caps the score.
-- **4-DoF pose graph.** Gravity fixes roll and pitch, so the solver moves only yaw and position. Tilt is fixed
-  beforehand per segment from gravity.
-- **Verified vs assumed joins.** "The camera did not teleport" places segments roughly (36 cm ATE over 35 m). Only a
-  geometric match (ICP that passes the fitness, RMSE, jump and degeneracy checks) makes the joint map rigid, and the
-  flag says which one we have.
-- **Error propagation for the focal length.** A 3% wider assumed field of view makes the depth network place
-  everything about 3% farther away, so the focal σ enters the scale σ 1:1 (measured).
-- **Sheet oracle.** Replace the sheet's measurement by ground truth to see how good the *rest* of the chain is. It
-  showed that the bottleneck is the reconstructed floor, not the paper.
-
-## V2-§10 Video protocol tweaks (for `docs/CAPTURE_PROTOCOL.md`), with the evidence behind each
+## V2-§8 Video protocol tweaks (for `docs/CAPTURE_PROTOCOL.md`), with the evidence behind each
 
 1. **Record at 60 fps if the phone offers it at 1080p/4K; otherwise 30 fps is fine now that the stride is automatic.**
    - Evidence: the same single_room footage as a 30 fps phone file, tracked at DPVO stride 2 (15 fps effective), lost

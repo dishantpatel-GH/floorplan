@@ -97,7 +97,7 @@ Other entry points: `detect_sheets` (all detections + rejected candidates with r
 | # | Question | Options | Choice | Evidence |
 |---|---|---|---|---|
 | S-1 | Pose from 4 corners | (a) unconstrained parallelogram back-projection (closed form, aspect-free); (b) known-size rectangle fit (IPPE+LM) per paper type | **(b)**, (a) kept for gating/aspect | Same detected corners on a foreshortened view: (a) +1.4% height error, (b) -0.13%. With 0.3 px corner noise: (a) 2.1% sd, (b) 0.37% sd (one-off experiment on rendered case single_room frame 835; script not kept in the repo). Enforcing right angles + aspect removes the weakly-constrained direction. |
-| S-2 | A4 vs Letter unknown | (a) ask the user; (b) classify, pick one; (c) keep both hypotheses as a mixture | **(c)** | A4 vs Letter differs by 6% in length: a wrong pick is a 2-4% scale error. The mixture costs nothing when the type is clear (posterior ~1) and widens honestly when not. Side note: the size measure L^0.31 W^0.69 is identical (234.0 mm) for both papers; it is used in the aspect-free gate. |
+| S-2 | A4 vs Letter unknown | (a) ask the operator; (b) classify, pick one; (c) keep both hypotheses as a mixture | **(c)** | A4 vs Letter differs by 6% in length: a wrong pick is a 2-4% scale error. The mixture costs nothing when the type is clear (posterior ~1) and widens honestly when not. Side note: the size measure L^0.31 W^0.69 is identical (234.0 mm) for both papers; it is used in the aspect-free gate. |
 | S-3 | Corner uncertainty | (a) line-fit residuals only; (b) + calibrated edge-bias term (0.1 px per side end) | **(b)** | (a) predicts ~0.02 px corner sd; measured corner errors on rendered sheets are ~0.2-0.3 px (10x). Calibration table in section 5: 0.05 px is over-confident (coverage 77%), 0.1 px gives 98%. |
 | S-4 | Focal uncertainty | (a) ignore (trust EXIF); (b) prior only; (c) prior x rectangle likelihood | **(c), likelihood width x1.5** | The rectangle likelihood does self-calibrate: with a 3% focal error the median height error is 0.49% (it would be ~2-3% from the prior alone; sensitivity of height to focal is 0.6-1.0). Width x1.0 is over-confident (coverage 94%, z rms 1.12), x2.0 too wide (z rms 0.67); x1.5 gives 98% / 0.78. |
 | S-5 | Candidate generation | single threshold / Canny / MSER / LSD-quad grouping / several cheap generators | **several cheap generators + clustering** | Each single generator missed cases others caught on rendered tests; LSD grouping is combinatorial and slower. |
@@ -222,36 +222,3 @@ sigma 1.6%, **coverage 99%**, wrong cue rejected in 98% of the rooms that had on
   through `h_recon_rel_sigma` in `sheet_cue` (caller supplies).
 - Real-photo validation is still missing: run `find_sheet` on `TakeHome/OwnCaptures/photos/*` with the tape ground
   truth tomorrow (same API; nothing capture-specific is tuned).
-
-## 7. Proposed commits
-
-1. `scale: paper-sheet detector (candidates, sub-pixel edges, verification gates)` - `floorplan/scale/sheet.py`
-   (detection half), `floorplan/scale/__init__.py` - the free scale reference of D-013 needs a detector first.
-2. `scale: known-rectangle metric measurement with Monte Carlo intervals` - `floorplan/scale/sheet.py`
-   (`fit_rectangle`, `measure_sheet`, `depth_map_scale`) - turns corners into metres with honest uncertainty.
-3. `scale: robust, group-aware fusion of scale cues and priors` - `floorplan/scale/fuse.py` - one scale with an
-   interval from whatever cues exist; correlated cues not double-counted.
-4. `test: blind rendered-sheet benchmark on real sample frames` - `scripts/test_sheet_scale.py` - detection rate,
-   error, calibration, false positives with exact LiDAR truth.
-5. `docs: scale_reference module write-up` - `docs/modules/scale_reference.md`, `outputs/scale_reference/*` - the
-   defense needs every decision and number traceable.
-
-## 8. Concepts to explain in the defense
-
-- **Why a known-size object fixes scale:** a picture of a 297 mm sheet that spans 200 px is twice as far away as one
-  spanning 400 px (for a fixed lens). With the perspective of four corners we get the full 3D pose of the sheet, so
-  the camera's height above the floor in metres. The same height in the reconstruction gives the scale ratio.
-- **Homography / pose of a plane:** four points on a plane fix how that plane maps into the image. If we also know the
-  rectangle's real size and the lens (K), there is one 3D placement that explains it.
-- **Why the rectangle constraint matters:** with the shape forced to be an exact A4 rectangle, the fit cannot "absorb"
-  corner noise by skewing the shape, so the distance is 5x more stable.
-- **Monte Carlo uncertainty:** we jiggle the inputs (corners, focal) the way they could plausibly be wrong, refit
-  many times and read the spread. That spread is the interval.
-- **Calibration / coverage:** if we say "95% interval", the truth must fall inside about 95% of the time. We check
-  that on hundreds of rendered sheets where the truth is known.
-- **Inverse-variance weighting:** precise cues count more (weight 1/sigma^2); the combined sigma is smaller than each.
-- **Correlated errors:** ten photos from the same phone share its focal error; averaging them does not remove it.
-- **Robust rejection / Birge ratio:** a cue far from the consensus is dropped when a majority exists; if the remaining
-  cues still disagree, we widen the interval rather than pretend.
-- **Focal self-calibration from a rectangle:** a wrong focal length makes the back-projected sheet's corners not
-  90 degrees; under a tilted view this tells us the focal.

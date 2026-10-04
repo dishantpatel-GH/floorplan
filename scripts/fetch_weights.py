@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Download every model weight the video tier needs, at pinned revisions, with checksums.
+"""Download every model weight the video and photo tiers need, at pinned revisions, with checksums.
 
 The case study requires "weights and large binaries fetched by script or volume": nothing is committed to the repo,
 and a fresh machine gets exactly the versions this code was evaluated with.
@@ -8,23 +8,29 @@ and a fresh machine gets exactly the versions this code was evaluated with.
   * GitHub-release files (GeoCalib, ALIKED, LightGlue) have no commit hash, so they are pinned by SHA-256 instead.
   * Files go to the standard caches (HF_HOME, torch.hub), which is where the libraries look for them, so the
     pipeline then runs fully offline (HF_HUB_OFFLINE=1).
+  * The photo tier's wall segmenter (SegFormer-B5, D-060) runs in its own env with its own cache (weights/hf_seg
+    next to the repo unless HF_HOME is set; floorplan/photo/semantic.py), so its files go there.
 
 Usage: python scripts/fetch_weights.py [--experiments] [--dry-run]
   --experiments  also fetch the models used only by the option comparison (DA3METRIC, DA3-BASE, MapAnything)
 
-Licences (all allow commercial use): MoGe-2 MIT; DPVO MIT repo (weights ship without a separate licence);
-GeoCalib CC-BY-4.0 (attribution); ALIKED BSD-3; LightGlue Apache-2.0; DA3METRIC-LARGE / DA3-BASE Apache-2.0;
-MapAnything facebook/map-anything-apache Apache-2.0. Do NOT swap in facebook/map-anything (CC-BY-NC) or
-DA3-GIANT/LARGE (CC-BY-NC).
+Licences: MoGe-2 MIT; DPVO MIT repo (weights ship without a separate licence); GeoCalib CC-BY-4.0 (attribution);
+ALIKED BSD-3; LightGlue Apache-2.0; DA3METRIC-LARGE / DA3-BASE Apache-2.0; MapAnything
+facebook/map-anything-apache Apache-2.0. All of these allow commercial use. SegFormer-B5 does not: the NVIDIA Source
+Code License allows research or evaluation only (docs/DISCLOSURES.md). Do NOT swap in facebook/map-anything
+(CC-BY-NC) or DA3-GIANT/LARGE (CC-BY-NC).
 """
 import argparse
 import hashlib
+import os
 import sys
 from pathlib import Path
 
 HF_FILES = [  # (repo, revision, files or None for the whole snapshot, needed by)
     ("Ruicheng/moge-2-vitl-normal", "cb0e8bbd6b1e243589717c78e750b1ba4c093acf", ["model.pt"], "core"),
     ("pablovela5620/dpvo", "c998d3b57bf47c619f851d37dff0aa1fa43e1c34", ["dpvo.pth"], "core"),
+    ("nvidia/segformer-b5-finetuned-ade-640-640", "739f5d4692954e4a185eac280dec1ba5a7d52f1d",
+     ["config.json", "preprocessor_config.json", "pytorch_model.bin"], "seg"),
     ("depth-anything/DA3METRIC-LARGE", "4010e39f3634a45bc60553321fb49fb760bd594e", None, "experiments"),
     ("depth-anything/DA3-BASE", "f4a6c9b3c95e41c82048423d3493a81ec3fa810e", None, "experiments"),
     ("facebook/map-anything-apache", "00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a", None, "experiments"),
@@ -49,19 +55,29 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def seg_cache_dir() -> str | None:
+    """The hub cache the segmenter env reads. None: the library default, which the segmenter inherits too."""
+    if os.environ.get("HF_HUB_CACHE"):
+        return None
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from floorplan.photo.semantic import seg_hf_home
+    return str(seg_hf_home() / "hub")
+
+
 def fetch_hf(experiments: bool, dry: bool) -> None:
     from huggingface_hub import hf_hub_download, snapshot_download
     for repo, rev, files, group in HF_FILES:
         if group == "experiments" and not experiments:
             continue
-        print(f"[hf] {repo}@{rev[:8]} {files or 'snapshot'}")
+        cache = seg_cache_dir() if group == "seg" else None
+        print(f"[hf] {repo}@{rev[:8]} {files or 'snapshot'}" + (f" -> {cache}" if cache else ""))
         if dry:
             continue
         if files:
             for f in files:
-                hf_hub_download(repo, f, revision=rev)
+                hf_hub_download(repo, f, revision=rev, cache_dir=cache)
         else:
-            snapshot_download(repo, revision=rev)
+            snapshot_download(repo, revision=rev, cache_dir=cache)
 
 
 def fetch_urls(dry: bool) -> None:

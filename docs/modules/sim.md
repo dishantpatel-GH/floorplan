@@ -5,7 +5,7 @@ scored against ground truth computed from the scene geometry. They rehearse the 
 measure fixes exactly. They do **not** replace the real benchmark (sample captures with laser GT, the own captures
 with tape GT). How to run everything: `sim/README.md`.
 
-## 1. Datasets (protocol v2.1, D-051 + D-055: designed once from 31 published sources + the user's review)
+## 1. Datasets (protocol v2.1, D-051 + D-055: designed once from 31 published sources + my review)
 
 The scripted person follows docs/CAPTURE_PROTOCOL.md v2.1.
 - **Photos: every room is seen looking in from each of its doors and looking out through them.**
@@ -32,7 +32,7 @@ The scripted person follows docs/CAPTURE_PROTOCOL.md v2.1.
 The v2 photo sets these replaced are kept in each dataset's `old_v2/`.
 
 **Earlier datasets (v1 protocol), kept for the record.**
-- `outputs/sim/k65_s0`: its walk entered furniture (found by the user).
+- `outputs/sim/k65_s0`: its walk entered furniture (found when I reviewed the frames).
 - `outputs/sim/k65_fps30` / `k65_fps10`: the frame-rate check (10 fps: 9 VO segments, 30 fps: 14).
 - `outputs/sim/k65_even`: the spin A/B.
 

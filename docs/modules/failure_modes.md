@@ -17,7 +17,7 @@ It does two things:
    - `kind`, `score` and `where`;
    - `evidence`: the numbers;
    - `handling`: the recommended actions;
-   - a one-line `message` for the user.
+   - a one-line `message` for the operator.
 
 Detectors never delete data silently. The caller applies the handling, and the flag goes into the JSON, so every
 exclusion can be audited.
@@ -215,50 +215,3 @@ wall r0_w8: 250 points, match 0.82 against a control of 0.47. It is unverified.
   include `SurfaceFlag.to_dict()` in the plan JSON `meta`.
 - **Next measurement.** Count SIFT/LightGlue matches against sharpness ratio to turn the blur threshold into a direct
   matching-quality threshold.
-
-## 7. Proposed commits
-
-1. `qa: SurfaceFlag + Handling vocabulary for difficult surfaces`
-   - Files: `floorplan/qa/__init__.py`, the `surfaces.py` header and dataclasses.
-   - Why: one auditable format for every exclusion or re-label.
-2. `qa: per-frame image quality, blur/low-light flags, sharpest-frame picker`
-   - Files: `surfaces.py` (`frame_quality`, `flag_frames`, `pick_sharpest`).
-   - Why: frame selection and re-capture advice for the photo and video tiers.
-3. `qa: LiDAR confidence blobs and glossy-floor statistics`
-   - Files: `surfaces.py` (`lowconf_blob_mask`, `floor_reflection_stats`, `below_floor_points`).
-   - Why: glass and mirror regions; sub-floor points.
-4. `qa: seen-through test with sparse voxel occupancy + cluster classification`
-   - Files: `surfaces.py` (`VoxelOccupancy`, `occlusion_violations`, `cluster_plan`, `detect_mirrors`).
-   - Why: phantom geometry from mirrors, glass, drift and people.
-5. `qa: reflection test with shifted-plane control; wall-gap classifier with sill test`
-   - Files: `surfaces.py` (`reflection_consistency`, `is_mirror`, `points_behind_walls`, `_sill_coverage`,
-     `classify_wall_gaps`).
-   - Why: mirror vs glazing vs opening.
-6. `scripts: analyze_failure_modes (frames, geometry, synthetic, lowlight, examples, learned, summary)`
-   - Files: `scripts/analyze_failure_modes.py`.
-   - Why: reproducible evidence.
-7. `docs: FAILURE_MODES.md + modules/failure_modes.md`
-   - Why: the brief's "cover mirrors, glass, wet-look, low light".
-
-## 8. Concepts to explain in the defense
-
-- **Why mirrors create phantom rooms.** Every depth sensor assumes light travels straight to a surface and back. A
-  mirror folds the path, so the reflected object appears as far *behind* the mirror as it really is in front of it.
-- **Reflection symmetry test.** Fold the suspicious points back through the wall. If they land on furniture that is
-  really in the room, it was a mirror.
-  - The control: fold through a plane 25 cm off. A real mirror only matches at the right plane. A cluttered room
-    matches "a bit" everywhere.
-- **Seen-through test (visibility consistency).** If one view saw a solid wall here, no other view can have seen
-  something behind that wall through it. A violation means a reflection, glass, a moved object or drift. Planarity
-  of the crossings tells a pane apart from a disagreement between passes.
-- **Sill test.** A window has wall below it; a doorway goes to the floor. We check whether wall surface was observed
-  in the band 10–50 cm above the floor under the gap.
-- **Confidence blobs vs edges.** ARKit's low confidence is mostly thin lines on object edges, which are harmless. Glass
-  and mirrors give *areas*. A morphological opening keeps the areas.
-- **Why learned depth fails on glass.** A single image cannot tell a reflection from a scene. The shape is often right
-  (1.5% error after scaling), but the absolute scale on glass-heavy frames was wrong by 28–41%. Hence scale is
-  fused over many frames, never taken from one.
-- **Blur vs rotation.** Hand-held blur is mostly rotational: 0.4–1% of frames are blurry below 30°/s and 31–49% above
-  90°/s. So the protocol says "turn slowly", and the video tier keeps the sharpest frame per half second.
-- **Noise inflates sharpness.** The Laplacian measures high-frequency energy, and noise is high-frequency. So we check
-  noise before trusting sharpness.

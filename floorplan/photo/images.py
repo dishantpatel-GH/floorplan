@@ -8,7 +8,7 @@ Why this matters:
     (f_px = f35 / 36 mm * long_side), the convention for a 4:3 phone frame filling the 36 mm width. When it is absent
     we fall back to GeoCalib (learned single-image calibration), then to a 70 deg field-of-view default; the source
     is recorded so the interval can widen.
-  * Some Android phones write FocalLengthIn35mmFilm = 0 but keep the physical FocalLength (the candidate's OnePlus
+  * Some Android phones write FocalLengthIn35mmFilm = 0 but keep the physical FocalLength (my OnePlus
     Nord: 4.745 mm, f35 0). For phones whose main sensor we know, f35 = FocalLength * 43.27 mm / sensor diagonal.
 """
 from __future__ import annotations

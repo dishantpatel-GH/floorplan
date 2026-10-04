@@ -3,7 +3,7 @@
 * fuse_tsdf: Open3D tensor VoxelBlockGrid TSDF. It averages many noisy LiDAR observations into one surface. Normals
   come from the TSDF gradient and point toward the side the camera observed from, which is "into the room" for walls.
   We use the tensor API because Open3D 0.20's legacy ScalableTSDFVolume silently returns an empty volume
-  (found during environment setup, SETUP.md section 6.7).
+  (found during environment setup).
 * collect_raw_points: the filtered LiDAR points themselves (no averaging). Final dimensions are fitted on these, so
   TSDF smoothing at corners cannot bias them.
 """

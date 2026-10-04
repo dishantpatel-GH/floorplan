@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Process the candidate's own capture end to end and score it against tape ground truth (D-015).
+"""Process an own-home capture end to end and score it against tape ground truth (D-015).
 
-Expected layout (TakeHome/HOUSE_CAPTURE_GUIDE.md, step 0; the simulator writes the same, sim/emulate.py):
+Expected layout (docs/HOUSE_CAPTURE_GUIDE.md, step 0; the simulator writes the same, sim/emulate.py):
   <root>/photos/<room>/*.jpg        one folder per room; a repeat take of one room is <room>_take2/
   <root>/video/take1.* take2.* [lowlight.*]
   <root>/lidar/<take>/              Stray Scanner folders (optional; LiDAR tier)

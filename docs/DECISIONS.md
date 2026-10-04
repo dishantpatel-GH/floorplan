@@ -1,7 +1,7 @@
 # Decision log
 
 Every design choice, why it was made, what else was considered and what evidence supports it.
-Newest entries go at the bottom. Each entry ends with a one-line **"Say it in the defense"** summary.
+Newest entries go at the bottom.
 
 Template: **Context** (the problem) → **Options** (what we could do) → **Decision** → **Why** → **Evidence** →
 **Risks / revisit if**.
@@ -19,13 +19,11 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   to show *what the data contains*: rooms, loop closures, glass, ceiling coverage.
 - **Evidence.** The ARKit-axes assumption would have been wrong: 22–32 cm re-projection error versus 6–7 mm for the
   OpenCV axes (D-005).
-- **Say it in the defense.** "I measured the data's conventions before trusting them; one wrong axis flip would have
-  cost 25 cm everywhere."
 
 ## D-002 Scope: the provided sample data is the target input
 
 - **Context.** The case study says "We provide no captures" (Part 1). The email, however, says "Please run your code
-  on this Sample Data". The candidate has no iPhone or LiDAR device, so they cannot record their own captures, build
+  on this Sample Data". I have no iPhone or LiDAR device, so I cannot record my own captures, build
   the Part 2 benchmark set, or run the Part 3 head-to-head.
 - **Options.**
   - (a) Block until the recruiters reply.
@@ -36,8 +34,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   The deadline does not allow waiting.
 - **Risks / revisit if.** If the recruiters reply that Part 1 is still required, a Route 2 protocol takes about
   1 hour to write. Stray Scanner, which produced this data, is the natural tool for it.
-- **Say it in the defense.** "I built against the data you sent, flagged what I couldn't do without a device, and
-  asked."
 
 ## D-003 Order of work: LiDAR tier first
 
@@ -54,8 +50,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
      geometry.
   4. The fix loop (Part 4, 25% of the score) needs a benchmark with failing gates, so an evaluation harness must
      exist early.
-- **Say it in the defense.** "Same back-end for every tier; tiers differ only in how they get metric geometry and
-  how wide their intervals are."
 
 ## D-004 Measure with geometry; use learned models only where geometry is missing
 
@@ -75,8 +69,7 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - The gates are 1–2 cm.
   - A plane fitted to thousands of LiDAR points has a standard error of millimetres, while a learned polygon vertex
     is quantised to the raster.
-  - Geometry also explains its own failures, which matters for the fix loop and the defense.
-- **Say it in the defense.** "Models propose, geometry measures."
+  - Geometry also explains its own failures, which matters for the fix loop.
 
 ## D-005 Pose convention: camera-to-world, OpenCV camera axes; world is y-up
 
@@ -92,8 +85,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   The fused floor plane's normal is within 0.02–0.6° of +y.
 - **Decision.** Use the `odometry.csv` pose directly as `T_world_camera` with OpenCV camera axes. Treat +y as up.
 - **Why.** Measured, not assumed.
-- **Say it in the defense.** "Stray Scanner already converts ARKit's axes; I verified it by re-projection, 7 mm
-  versus 30 cm."
 
 ## D-006 Fuse only high-confidence LiDAR depth, up to 4 m
 
@@ -109,8 +100,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - TSDF fusion of the remaining frames averages out the remaining noise.
 - **Risks / revisit if.** Glass and mirror surfaces end up with *no* points. We must detect them as "unobserved"
   rather than treat them as open space (handled in openings detection).
-- **Say it in the defense.** "Low-confidence LiDAR is where glass and edges lie; I drop it and treat the holes as
-  unknown, not as free space."
 
 ## D-007 Dense fusion: Open3D tensor VoxelBlockGrid (TSDF)
 
@@ -125,11 +114,10 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - TSDF is the standard, explainable way to average depth.
   - It runs on CPU in seconds (the exploration fused 2,437 frames in under 30 s).
   - Its output (points and normals) feeds plane fitting directly.
-- **Evidence.** Open3D 0.20's legacy `ScalableTSDFVolume` silently returns an empty volume. This was found and
-  documented during environment setup (`SETUP.md` §6.7), which is why we use the tensor API.
+- **Evidence.** Open3D 0.20's legacy `ScalableTSDFVolume` silently returns an empty volume. This was found
+  during environment setup, which is why we use the tensor API.
 - **Risks / revisit if.** TSDF slightly rounds corners and can erode thin structures. Dimensions are therefore taken
   from planes fitted to *raw* high-confidence points near each wall, not from the TSDF surface.
-- **Say it in the defense.** "TSDF for a clean surface to find structure; raw points for the final measurements."
 
 ## D-008 Keyframes: 5 cm / 5° / 0.5 s, skip mostly-invalid frames
 
@@ -144,7 +132,7 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - A frame becomes a keyframe after 5 cm of travel, 5° of rotation, or 0.5 s, whichever comes first.
   - Frames where fewer than 25% of depth pixels survive the D-006 filter are skipped.
 - **Why.**
-  - Fixed stride (b) over-samples when the user stands still and under-samples fast turns.
+  - Fixed stride (b) over-samples when the operator stands still and under-samples fast turns.
   - Motion-based selection keeps coverage uniform in space.
 - **Evidence.** Frames kept out of the total:
 
@@ -155,7 +143,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   | with_ceiling | 1,978 / 9,745 |
 
   Scene build times are 9 s, 24 s and 47 s on CPU.
-- **Say it in the defense.** "Keyframes by motion, not by time, so coverage is uniform in space."
 
 ## D-009 Level the scene with the floor plane, then rotate walls onto the axes (Manhattan)
 
@@ -184,7 +171,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
 
   The rest of the "vertical" surfaces are furniture and clutter.
 - **Risks / revisit if.** Non-rectangular rooms. Walls off the Manhattan axes are kept and fitted at their own angle.
-- **Say it in the defense.** "ARKit's gravity is good, but the floor is the definition of level; half a degree is 4 cm at 5 m."
 
 ## D-010 Build the room/wall extractor twice, two ways, and let evidence pick
 
@@ -202,8 +188,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - The loser's good ideas are borrowed.
 - **Why.** The choice of segmentation paradigm is the biggest risk in the project, and building both costs only wall-clock time.
 - **Evidence.** `docs/modules/judge_plan_extractor.md` (verdict: D-018).
-- **Say it in the defense.** "I didn't guess the room-segmentation approach; I built two and kept the one that gave the same answer
-  twice on the same apartment."
 
 ## D-012 Scope after the recruiters' reply: own captures are mandatory; complete scope
 
@@ -214,7 +198,7 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - Complete the scope with as little deviation as possible.
 - **Decision.**
   - **LiDAR tier:** sample data (Stray Scanner), plus the ARKitScenes laser ground truth for absolute accuracy.
-  - **Photo and video tiers:** our own home, captured with the candidate's phone following our protocol, with tape
+  - **Photo and video tiers:** my own home, captured with my phone following the protocol, with tape
     ground truth, staged damage (2 classes), repeat captures and a consumer-app head-to-head.
   - **Sample data:** we also run video and photo tiers derived from the sample `rgb.mp4`, for cross-tier agreement
     with LiDAR.
@@ -223,8 +207,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
     not possible on own rooms).
 - **Why.** This follows the recruiters' instruction and covers every part of the brief. The only deviations are the
   ones forced by hardware, and each is stated.
-- **Say it in the defense.** "Everything in scope; the only deviations are hardware-forced, and each is disclosed with a
-  substitute."
 
 ## D-013 The capture protocol includes a sheet of paper on the floor as a scale reference (SUPERSEDED by D-067)
 
@@ -250,14 +232,12 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
 - **Risks / revisit if.**
   - A white sheet on a white floor has low contrast. The detector must handle it, and we test it on our captures.
   - A sheet that is not flat (curled) is detected by its non-planarity and down-weighted.
-- **Say it in the defense.** "A sheet of paper is a free, standardised scale bar; it turns a few-percent scale guess into
-  a sub-percent measurement, and intervals widen honestly when it's missing."
 
 ## D-011 Measure the LiDAR noise from the data; weight points by it; use exact depth intrinsics
 
 - **Context.**
   - Intervals need a sensor-noise term, and fits should trust precise points more.
-  - Guessing "1 cm" is not good enough for 1–2 cm gates. Accuracy comes first (the candidate's standing instruction).
+  - Guessing "1 cm" is not good enough for 1–2 cm gates. Accuracy comes first (my standing rule).
 - **Experiment.** `scripts/noise_model.py`:
   - Re-project frame i's depth into frame j (0.1–1 s later) with the ARKit poses.
   - Compare with frame j's measured depth.
@@ -283,8 +263,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
 - **Why.** These are measured, not assumed. Weighting is the textbook optimal estimator for points of unequal
   precision. Points near the wall dominate, which is also how a careful surveyor works.
 - **Caveat.** The σ values include a little pose error, so they are an upper bound: conservative intervals.
-- **Say it in the defense.** "I measured my sensor's noise from the data itself, 7 mm at 1–2 m rising to 19 mm at
-  4 m, and weight every point by it."
 
 ## D-014 Photo-tier inputs for the sample data are simulated from the video, without leaking poses
 
@@ -307,16 +285,15 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
 - **Limitations (disclosed).**
   - Video frames are compressed and lower quality than real photos.
   - The phone was held in portrait, so the frames are portrait.
-- **Say it in the defense.** "For the sample apartment I simulated the photo protocol from the video, using poses only
-  to pick shots, never as input; my own home's real photos are the primary photo benchmark."
 
 ## D-015 Score own captures against tape ground truth by geometry, not by hand
 
-- **Context.** The candidate's own home is the photo/video benchmark. Its ground truth is a hand-written list of
+- **Context.** My own home is the photo/video benchmark. Its ground truth is a hand-written list of
   wall lengths (W1..Wn clockwise from the main door), ceiling heights, opening widths and damage extents.
 - **Decision.** `floorplan/benchmark/gt_eval.py` pairs ground truth with predictions automatically, in three steps:
   1. **Rooms:** Hungarian assignment on wall-length profiles, or exact name match for photo folders.
   2. **Walls:** the best cyclic order, clockwise seen from above (mirror-aware, I-001), preferring a door wall as W1.
+     Superseded by D-072.
   3. **Openings:** Hungarian assignment on width. Missed and phantom openings count as misses, as the gate requires.
 
   It then reports the gates and the empirical coverage of our 95% intervals.
@@ -325,7 +302,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
 - **Evidence.** The synthetic test (`tests/benchmark/test_gt_eval.py`) recovers an injected 12 mm wall error exactly and
   finds the door wall. It also exposed a bug: a door shared by two rooms was flagged as phantom when only one room's
   ground truth listed it. Fixed.
-- **Say it in the defense.** "Scoring is automatic and geometric; you can rerun it on your laser numbers."
 
 ## D-016 One place where intervals widen with thinner input: the tier scale term
 
@@ -340,8 +316,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   learned depth, priors. (Since D-067 the sheet is opt-in and off by default.)
 - **Why.** A scale error multiplies every length in the reconstruction. Treating it as one shared, explicit term is
   correct, and it can be audited: the term is written into each measurement's `method` string.
-- **Say it in the defense.** "Every interval is fit error plus sensor noise plus drift, plus, for video and photos, the
-  scale uncertainty; it widens exactly where the data thins."
 
 ## D-017 Photo protocol revised: turn on the spot in the middle, plus doorway pairs (instead of corner shots)
 
@@ -364,10 +338,8 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - The doorway pair turns "same spot, two rooms" into a hard geometric link.
 - **Also (withdrawn by D-067: no sheet).** The paper sheet goes on the darkest open floor patch. The detector finds 84%
   of sheets when the paper is brighter than the floor, but only 20% of white paper on a near-white floor.
-- **Risks / revisit if.** Simulating this protocol from the sample's walk-through video is imperfect. The candidate's
+- **Risks / revisit if.** Simulating this protocol from the sample's walk-through video is imperfect. My
   own capture is the real test, and the wave-3 photo agent is validating the change overnight.
-- **Say it in the defense.** "My first photo protocol failed my own data test, too little overlap, so I changed it to
-  the panorama-style spin plus a doorway pair that hard-links rooms."
 
 ## D-018 LiDAR plan extractor: plan_beta (space-first) as the base, with four plan_alpha parts ported
 
@@ -395,8 +367,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - The biggest is B-1: rooms merge when a partition is unseen above 1 m.
   - A one-parameter experiment showed matched rooms going 6 → 10 and the median wall Δ going 11 → 2.5 cm.
   - A frozen copy, `floorplan/plan/beta_v1`, keeps the "before" for the Part 4 fix loop.
-- **Say it in the defense.** "Tied on the headline gate, so I chose the extractor whose failures are omissions, not
-  inventions, and ported the other's best parts."
 
 ## D-019 Canonical LiDAR scenes: drift correction ON by default; per-point source frame kept
 
@@ -406,12 +376,11 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
 - **Decision.**
   - `scripts/build_canonical_scenes.py` builds `outputs/scenes_v2/` with drift ON and the D-011 intrinsics.
   - `scripts/run_capture.py` runs drift ON by default; `--no-drift` exists for the ablation only.
-  - Raw points now carry their source frame (`raw_frame`), so a room can be measured from a single visit. The
-    candidate's idea: within one visit, tracking is consistent to about 0.7 cm, while two passes disagree by
+  - Raw points now carry their source frame (`raw_frame`), so a room can be measured from a single visit. My
+    idea: within one visit, tracking is consistent to about 0.7 cm, while two passes disagree by
     1.5–2.5 cm even after correction.
 - **Why.** "Poses used as-is" is an automatic fail of the drift gate. Single-visit measurement attacks the
   repeatability floor directly.
-- **Say it in the defense.** "Drift correction is on by default; the off switch exists only to prove it matters."
 
 ## D-020 Video tier v2: treat the video like the LiDAR tier, with learned depth
 
@@ -458,8 +427,6 @@ Template: **Context** (the problem) → **Options** (what we could do) → **Dec
   - Only iPad was validated. The sample data is iPhone.
 - **Part 4.** This is a complete fix-loop rehearsal: failing number, root cause with evidence, pre-registered
   prediction, shipped fix, measured result. The declared fix loop targets the worst gate of the final benchmark.
-- **Say it in the defense.** "Apple's LiDAR surfaces sit 7 mm proud into the room; I proved it wasn't scale,
-  registration or my estimator, pre-registered the correction, and it held on rooms I hadn't looked at."
 
 ## D-022 Photo protocol tweaks from the v2 test
 
@@ -474,7 +441,7 @@ From the photo-tier v2 evidence (`docs/modules/photo_tier.md` v2):
    scale was 22% off.
 
 Plus, from damage v2: paint the staged stain **clearly** brown/yellow. Pale simulated blotches were missed. Applied
-to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
+to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-023 Damage reporting has two tiers: confirmed (drives scope) and review (flagged, no scope)
 
@@ -492,9 +459,7 @@ to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
   - At 0.35 every true stain is confirmed. Faint true cracks drop to "review": still visible, just not auto-quoted.
   - This is a precision-first choice for money-relevant outputs.
 - **Evidence.** The clean-capture false crack becomes `review` with 0 scope items. The threshold must be checked on
-  the candidate's real staged decals (own capture).
-- **Say it in the defense.** "Detection is sensitive; quoting is conservative. Low-confidence findings go to a human,
-  not onto the invoice."
+  the real staged decals (own capture).
 
 ## D-024 Reject "bars" (handles, edges, grout lines) as cracks with a dominant-line test
 
@@ -509,8 +474,6 @@ to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
   - Works at every tier: no depth needed.
 - **Trade-off.** Perfectly straight, axis-aligned hairline cracks are not reported. We accept this: such lines are
   indistinguishable from joints and edges in images alone.
-- **Say it in the defense.** "A crack zig-zags; a handle doesn't. I test how much of the line hugs one straight
-  axis-aligned line."
 
 ## D-025 Protruding-object check, made local to the detected line
 
@@ -577,7 +540,7 @@ From `docs/modules/video_tier.md` v2:
   about 62° wide against about 37° in portrait.
 - **Close the loop.** Re-film the first view at the end.
 
-Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
+Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-029 Deterministic drift solve: single-threaded ICP, parallel loop candidates
 
@@ -712,12 +675,12 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-037 Interactive capture: a pure-Python phone rig plus a thin Isaac layer; photos on P, never Space
 
-- **Request.** The user drives a phone through the house (WASD, tilt) and records only what a phone would record.
+- **Request.** The operator drives a phone through the house (WASD, tilt) and records only what a phone would record.
 - **Decision.**
   - `sim/rig.py` holds the motion, collision, recording and photo-folder logic. It needs no Isaac Sim and is shared
     with the scripted sessions and the tests.
   - `sim/teleop.py` binds keys, the viewport and a HUD with a minimap.
-  - The session file stores the intended path and the shots. Rendering is a separate pass, so the user drives at
+  - The session file stores the intended path and the shots. Rendering is a separate pass, so the operator drives at
     interactive speed and the same drive can be re-rendered at any quality.
 - **Details that matter.**
   - Photos go to the room in front of the camera, so doorway pairs sort themselves as the protocol requires.
@@ -728,9 +691,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-038 Human imperfection is part of every simulated capture
 
-- **Request (user).** "Take video at slightly different angles as well as different heights throughout the run,
-  because humans are prone to mess that up." Also: "the match between two consecutive photos should differ, with
-  changing height and angle."
+- **Request.** Video at slightly different angles and heights throughout the run, because people never hold them
+  constant. The overlap between consecutive photos should vary too, with changing height and angle.
 - **Decision.**
   - **Walks** (`rig.humanize`, applied at render time to scripted and keyboard paths alike): mean-reverting drift
     of height (σ 7 cm, about 6 s), tilt (σ 5°), roll (σ 2°), aim (σ 1.5°) and side sway (3 cm), plus walking bob and
@@ -744,7 +706,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 ## D-039 Phone emulation: the walk-in's iPhone 15 by default, with the real sample's sensor statistics
 
 - **Decision (`sim/emulate.py`).** The default profile is `iphone15`, because the walk-in uses an iPhone 15 or newer.
-  A `nord` profile (the user's own phone; no video focal key) is also available.
+  A `nord` profile (my own phone; no video focal key) is also available.
 - **LiDAR.**
   - Each depth pixel averages 3×3 ray-cast sub-rays (edges blend), with noise from the measured σ(range)
     (`lidar_noise.json`), spatially correlated.
@@ -851,7 +813,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 - **Scope.** Applies to the walks rendered after 11:00 (kujiale_0038, kujiale_0022). The kujiale_0065 walk keeps the
   older, sloppier walker; it is a useful robustness case and is labelled as such.
 
-## D-047 Simulated captures use the real phone formats (user requirement: "as it is in the real case")
+## D-047 Simulated captures use the real phone formats
 
 | Tier | What the sim writes | Real-phone reference |
 |---|---|---|
@@ -942,7 +904,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-050 Photo protocol A/B in simulation: "about a quarter overlap" stays; "even circle" is not better (one seed)
 
-- **Question (user).** Would spreading the N spin photos evenly over the full circle cover a hub room better than
+- **Question.** Would spreading the N spin photos evenly over the full circle cover a hub room better than
   "overlap the previous photo by about a quarter" (which, with 4 photos in a 4-door room, covers only ~220°)?
 - **Test.** Same 1 BHK (kujiale_0065), same person seed and standing spots; only the spin rule changed.
 
@@ -956,12 +918,12 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
   "about a quarter overlap".
 - **Next.** Repeat over several seeds and houses before changing the page.
 
-## D-051 The capture protocol, designed once from published practice and the user's review (v2)
+## D-051 The capture protocol, designed once from published practice and my review (v2)
 
 - **Why redesign.**
-  - The user's review of the first simulated captures found the camera inside furniture (bedroom wardrobe, kitchen
+  - My review of the first simulated captures found the camera inside furniture (bedroom wardrobe, kitchen
     range hood, balcony curtains) and too many photos for small rooms.
-  - The user asked for a floor pass then a ceiling pass, and less jitter.
+  - I wanted a floor pass then a ceiling pass, and less jitter.
   - The research (docs/CAPTURE_PRACTICES_RESEARCH.md, 31 sources) gave the industry practice to copy.
 - **Protocol (docs/CAPTURE_PROTOCOL.md; scripted in sim/protocol_v2.py).**
   - **Photos.**
@@ -982,7 +944,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
     use only that strict free space.
   - **Human imperfection** is applied when the path is made, and every pose is checked in 3D. Result: **no camera
     closer than 0.26 m to any surface** in all three houses (before: 5.5% of frames under 5 cm, i.e. inside furniture).
-  - **Less jitter** (user): hand tremor 0.35° → 0.10°, walking bob 1.2 → 0.5 cm, slower sway and aim wobble. Slow
+  - **Less jitter**: hand tremor 0.35° → 0.10°, walking bob 1.2 → 0.5 cm, slower sway and aim wobble. Slow
     height and tilt drift kept.
 - **Bugs found on the way.**
   - The walk helper reset the tilt at every segment, so the ceiling pass was not looking up.
@@ -1025,14 +987,14 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
   (within 6 m). The refit is kept only if it measures more sides.
 - **Balcony.** A doorway view of a balcony sees mostly its window wall (no wall points through glass). The far-end
   photo, looking back at the solid door wall, is used instead.
-- **Protocol (user: "for bigger rooms you should have more photos").** Turning photos scale with area: about 4 under
+- **Protocol: bigger rooms get more photos.** Turning photos scale with area: about 4 under
   10 m², 5 up to 18 m², 6 above, within the brief's 8-photo cap (turning + ceiling + one doorway photo per door).
 - **Result (simulated 1 BHK, v2 photos).** Living room area −90% → −13%, wall median 6.9%. The balcony stays wrong
   (+339%) with one far-end photo; see D-055.
 
 ## D-055 Photo protocol v2.1: every room seen in and out through its doors; small rooms left and right
 
-- **User review (4 Oct, 14:20).**
+- **Review (4 Oct, 14:20).**
   - "Every image is almost left facing; we should have right-facing images as well, in the kitchen and bathroom."
   - "Add a photo of the balcony from the hallway."
   - "There should always be photos from each room looking out and in, so that we can patch them together."
@@ -1069,7 +1031,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
   On the 1 BHK, every other room-to-room gap is ≥ 6.8 s against a pairing limit of ~5.6 s.
 - **Status.** Datasets regenerated (`outputs/sim/k65v2`, `k22v2`, `k38v2`, `k65v2_dim`; the v2 photo sets are kept
   in each `old_v2/`). Scores to follow.
-- **Addendum (user, 15:00).** A small room's ceiling photo taken at the far end pointed, at random, at the wall
+- **Addendum (15:00).** A small room's ceiling photo taken at the far end pointed, at random, at the wall
   0.4 m away (a close-up of the window corner). It now aims along the long side towards the side with room in front
   (< 1.2 m on one side → the other). Same random draws, so only those photos changed: k65 2 photos, k22 1 photo,
   re-rendered with `render.py --only`.
@@ -1190,11 +1152,11 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-064 Capture protocol v2.2: audit the data first, then a coverage-aware scripted person
 
-- **User (18:40).** "Rather than methods that build a plan and then discard it as wrong, first check if the data is
-  accurate."
+- **Principle (18:40).** Rather than build a plan and then discard it as wrong, first check that the data is
+  accurate.
 - **Audit tools.**
   - `sim/audit_photos.py`: ray-cast, per photo and per wall, in the 1–2 m band.
-  - Three agents reviewed every photo by eye (`verify/visual_review.md`).
+  - Three agents reviewed every photo by eye (`outputs/sim/<house>/verify/visual_review.md`).
 - **Findings (consistent across all three houses).**
   - Turns cover only 108–260°.
   - Doorway photos lose 25–55% of the frame to jambs.
@@ -1208,12 +1170,12 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
   - A coverage pass adds a photo of any wall under 30% seen, within 8 per room.
   - Shallow rooms are photographed along their length from each end, with doorway photos turned about 60°.
   - The second take uses a different spot (0.6–1.2 m away).
-  - Body clearance 25 → 18 cm (walkable area +16–19%); camera clearance 25 → 15 cm (user).
+  - Body clearance 25 → 18 cm (walkable area +16–19%); camera clearance 25 → 15 cm.
 - **Walk.**
-  - Room by room: floor line, then ceiling line (user 19:00; was the whole house twice).
+  - Room by room: floor line, then ceiling line (changed at 19:00; was the whole house twice).
   - The loop looks 30° into the room, so it covers all the walls while walking. There is no turning on the spot,
     which monocular tracking cannot handle.
-  - Small rooms are walked into (user: "never from inside").
+  - Small rooms are walked into ("never from inside").
 
 ## D-065 Photos with the 0.5× ultra-wide lens
 
@@ -1249,8 +1211,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 - **Cause.** Coverage is better at 0.5×, but the wide view sees straight through the 2.1–2.3 m kitchen and balcony
   openings. The box fit took the kitchen's and balcony's far walls as the living room's sides (10.6 m vs 8.0 m
   true), and the plan's overlap step then crushed the room. The pipeline's through-door handling was tuned on 1×.
-- **Decision.** The capture protocol and the house guide go back to the 1× main lens for photos, just before the
-  user's own capture. The other v2.2 changes stay:
+- **Decision.** The capture protocol and the house guide go back to the 1× main lens for photos, just before my
+  own capture. The other v2.2 changes stay:
   - every wall checked;
   - cramped rooms photographed like small rooms;
   - doorway pairs at every door;
@@ -1274,8 +1236,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-067 No reference object in any capture; the paper-sheet cue is opt-in
 
-- **User (4 Oct, evening).** No A4 sheet, AprilTag or other reference object in any capture: "not every customer
-  will have one, and competitor apps need none".
+- **Rule (4 Oct, evening).** No A4 sheet, AprilTag or other reference object in any capture: not every customer
+  will have one, and competitor apps need none.
 - **Decision.** The capture pages no longer ask for a sheet, and the pipeline does not look for one by default.
   This supersedes D-013 and the sheet parts of D-016, D-017, D-020, D-028, D-040, D-047, D-056 and D-061. A printed
   marker stays rejected, as in D-013 option (b).
@@ -1317,8 +1279,6 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
   step changed its number. The paper decals for the staged damage stay.
 - **Risks / revisit if.** The own-home tape measurements show a scale error outside the interval. The fix is then
   MoGe-2's bias on real images and the per-room scale consistency, not a reference object.
-- **Say it in the defense.** "No reference object: a customer may not have one. On the simulator the sheet bought at
-  most 0.9 points for photos and cost 17 points for video, so it is now an opt-in."
 
 ## D-069 Door-height scale cue: built and measured, kept OFF
 
@@ -1346,7 +1306,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
     8.1%; the fused sigma goes from 3.8% to 3.4%.
   - Real frames: of the 33 door candidates, 16 were cut by the top border, 7 were too small, 5 were in frames with no
     floor plane, 2 did not stand on the floor and 3 failed other checks. These are video frames, not photos. The
-    photo tier is not benchmarked on this dataset (user decision); this only shows how often the checks fail.
+    photo tier is not benchmarked on this dataset (D-071); this only shows how often the checks fail.
 - **Status.** `PhotoParams.door_scale_cue = False`. The module is NOT wired into `floorplan/photo/frontend.py`: the
   hook was lost in concurrent edits, so the parameter has no effect today. Wiring it needs one line after the cue
   list, and a validation on real photos of homes.
@@ -1357,9 +1317,6 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
     fused 1-sigma is 3.4–3.8%.
 - **Revisit if.** The own-home photos (OnePlus Nord, tape ground truth, `scripts/process_own_capture.py`) show at least
   2 whole doors per capture. Wire the hook, then keep the cue only if it brings the scale closer to the tape.
-- **Say it in the defense.** "Door heights were tried as a free scale cue. On the simulator only 2 doors passed the
-  checks and the scale moved by 0.9 points, inside the noise. On real frames no door passed. So it is built, measured
-  and off."
 
 ## D-070 Video closet: a corridor seen through a doorway, not ghost geometry; the fix needs a written policy first (proposed, not merged)
 
@@ -1379,25 +1336,53 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-071 Benchmark scope per tier: photo tier on the simulator, sample captures for video and LiDAR only
 
-- **Decision (user, 4 Oct, 21:20).** The recruiters' sample captures (single_room, floor_only, with_ceiling) are used
+- **Decision (4 Oct, 21:20).** The recruiters' sample captures (single_room, floor_only, with_ceiling) are used
   for the video and LiDAR tiers only. The photo tier is never benchmarked on them. It is benchmarked on the simulated
-  k65 flat (exact ground truth) and on the user's own home photos (tape ground truth).
+  k65 flat (exact ground truth) and on my own home photos (tape ground truth).
 - **Why.** The sample captures contain no photos. Our photo sets for them were cut from the Stray Scanner video
   (`scripts/make_photo_folders.py`): 1920×1440 video frames with motion blur, video exposure and frame intrinsics
   written into EXIF by us. They do not represent "2 to 8 stills per room from any iPhone 15 or newer", so a score on
   them says little about the photo tier a customer would use.
 - **What changed.**
   - The photo jobs on the sample captures were stopped (21:20).
-  - `scripts/bench_final.py`: the sample-capture photo block becomes opt-in (being changed with D-072).
+  - `scripts/bench_final.py`: the sample-capture photo block was to become opt-in. Not done: it still scores every
+    photo run it finds under `outputs/benchmark/final/photo/`.
   - Photo-tier numbers quoted in the report come from k65 (walls median 5.6%, 58% within 8%, footprint −9.0%,
     `outputs/sim/k65v2/runs_iphone15/eval_1x_today`) and from the own capture once scored.
-  - Earlier photo rows for the sample captures (REPORT.md §1, COMPLIANCE.md, TECHNICAL_REPORT.md, DEFENSE_PREP.md)
+  - Earlier photo rows for the sample captures (REPORT.md §1, COMPLIANCE.md, TECHNICAL_REPORT.md)
     are history; the submission-checklist audit lists each place to update.
 - **Cost.** No real-camera photo benchmark exists until the own capture is scored. Say so in the report.
 
+## D-072 Tape ground truth: walls are paired by geometry on an outline, not by order
+
+- **Context.** D-015 paired walls by cyclic order. One extra 3–10 cm stub or door reveal in a plan shifts every later
+  pair, so walls that are right within 1 cm scored tens of centimetres. On the simulated k65 LiDAR plan, the 33 cm
+  median wall error came from the scorer, not the plan.
+- **Decision** (`floorplan/benchmark/gt_eval.py`, `floorplan/benchmark/wall_match.py`).
+  - **With GT outlines** (`scripts/eval_own_capture.py --gt-json`, else `sim_gt.json` next to the CSV, which the
+    simulator writes): the predicted room is moved onto the GT room by a rigid transform (no scale), and each GT wall
+    takes the predicted walls on its line (same direction ±10°, offset ≤ 0.30 m; collinear pieces merge). When the
+    whole plan fits the GT (IoU ≥ 0.5), rooms without a matching label are paired by overlap.
+  - **With tape lengths only:** `tape_method="geometric"`, the default of `gt_eval.evaluate`. The outline is rebuilt
+    from W1..Wn (clockwise, right-angled corners), the predicted room is registered on it by IoU (the door wall breaks
+    near-ties; lengths never choose), and walls are paired as above. If several outlines fit the tape, each is scored
+    and the worst is reported. If none fits, a constrained order pairing is used, with the axis and the door as hard
+    constraints.
+  - `anchored` and `order-merged`, the earlier order pairings, stay for comparison. The plain cyclic order is still
+    reported as `wall_order_based`, outside the gates.
+- **Own house.** `scripts/house_gt.py` writes `gt_polygons.json` next to `ground_truth.csv`: room outlines from the
+  hand sketch's layout and the tape lengths. The sketch is not to scale, so the outlines only decide the pairing;
+  every scored length comes from the tape.
+- **Not yet consistent.** `scripts/eval_own_capture.py --tape-pairing` offers only `anchored` (its default) and
+  `order-merged`, and `scripts/process_own_capture.py` passes no `--gt-json`. So a tape-only GT scored from the
+  command line is paired by the anchored order. For the own house, run
+  `scripts/eval_own_capture.py --gt-json <gt>/gt_polygons.json`.
+- **Evidence.** `tests/benchmark/test_gt_eval.py` runs the default outline path: it finds the door wall as W1 and
+  recovers an injected 12 mm wall error exactly.
+
 ## D-073 Head-to-head app on Android: Matterport (free) first, CubiCasa (one free scan) second; not magicplan
 
-- **Constraint.** The user's phone is a OnePlus Nord (Android, ARCore yes, no LiDAR). The brief wants a free tier
+- **Constraint.** My phone is a OnePlus Nord (Android, ARCore yes, no LiDAR). The brief wants a free tier
   ("cost is not an accepted reason; free tiers exist") and an app that measures the rooms itself.
 - **magicplan is out.** It removed the camera/AR scan from Android in version 2024.24.0: "Android devices are not
   supported for magicplan's scan features" (https://help.magicplan.app/supported-devices). On Android it only draws
@@ -1405,11 +1390,11 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `TakeHome/HOUSE_CAPTURE_GUIDE.md`.
   reviews (`outputs/handoff/apps/`).
 - **Checked and rejected.** ARPlan 3D and CamToPlan measure with ARCore, but recent reviews say the free tier locks
   saved plans or screenshots (a paid trial is needed); Floor Plan Creator has no camera measuring.
-- **Chosen (user asked for free apps).**
+- **Chosen (free apps only).**
   1. Matterport, free plan (no card, one space): 360° phone scans, model built in the cloud (under an hour to about
      8 hours), Measurement Mode for walls, ceiling height, doors and windows. OnePlus is on its supported list.
   2. CubiCasa, one free scan (needs Android 12+ and ARCore): a walk-through scan, a plan with room width × length and
      area within about 6 hours (vendor AI plus a human check).
-- **Deviation from the brief.** Part 3 asks for our LiDAR tier against the app. The user has no LiDAR device, so the
+- **Deviation from the brief.** Part 3 asks for our LiDAR tier against the app. I have no LiDAR device, so the
   head-to-head compares our camera tiers (video, photo) with these apps on the same rooms and the same tape; the
   LiDAR tier's accuracy is shown on ARKitScenes laser data instead. Say this in the report.

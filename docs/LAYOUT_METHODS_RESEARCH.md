@@ -80,7 +80,7 @@ below (Pick 3, §1.3) are background only; the view-type-weighted scale fusion s
 
 **Integration.**
 1. **Own environment.** Create `envs/seg` with torch from the PyTorch index plus `transformers>=4.54`. The main env must not get `transformers` (requirements.txt, I-002).
-   - A worker `scripts/seg_worker.py <photos…>` writes one uint8 ADE label PNG per photo.
+   - A worker, `scripts/seg_walls.py`, writes one uint8 ADE label map per photo.
    - It labels the same EXIF-rotated image that MoGe sees.
 2. **Labels on the view.** `PhotoView` gains `sem`: the label map nearest-resampled to the 518 px depth grid.
 3. **Class groups** (HF 0-based ids). Map by index: label strings differ between repos, e.g. OneFormer's "window " with a trailing space.
@@ -282,7 +282,7 @@ This is Cabral & Furukawa's formulation, built for exactly our input (panoramas,
    - A notch is accepted only if both of its edges have wall evidence and no free space lies inside it.
 4. **Unseen sides.** A side with no evidence is reported as `unseen`, with a wide sigma and a QA message: "take a second spin from the other end of this room". It is not mirrored. The existing lower bound (neighbouring walls' extent) stays.
 5. **Cross-check with PolyLayout** (`envs/polylayout`, installed). Run it when a room has 6 or more photos that see the ceiling junction, and flag topology disagreements.
-   - It needs about 10 room-covering views and an explicit up axis (SETUP.md).
+   - It needs about 10 room-covering views and an explicit up axis.
    - Its numbers are decimetre-level (ScanNet++ Chamfer distance 0.20 m), so it gives topology, not dimensions.
 6. **Multi-room check.** If the facing walls of two adjacent rooms are more than about 0.35 m apart (more than a wall thickness), the nearer wall is a suspected furniture front, and the result is flagged.
 7. **Protocol.** L-shaped and open-plan rooms get a second spin in the other arm, in the same folder.

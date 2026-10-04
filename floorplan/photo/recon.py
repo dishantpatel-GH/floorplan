@@ -61,7 +61,8 @@ def crop_for_model(rgb: np.ndarray, long_side: int) -> tuple[np.ndarray, tuple[f
 
 
 def _bf16_backbone(model):
-    """Encoder + multi-view transformer in bf16 (4.9 -> 2.6 GB of weights); heads stay fp32 (SETUP.md 6.1)."""
+    """Encoder + multi-view transformer in bf16 (4.9 -> 2.6 GB of weights); heads stay fp32 (casting the whole model
+    fails with a dtype mismatch)."""
     def to_f32(o):
         if torch.is_tensor(o):
             return o.float() if o.dtype == torch.bfloat16 else o

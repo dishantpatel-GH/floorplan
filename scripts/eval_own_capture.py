@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Score plans of the candidate's own captures against tape ground truth, and build the Part 3 head-to-head table.
+"""Score plans of own-home captures against tape ground truth, and build the Part 3 head-to-head table.
 
 Usage:
   python scripts/eval_own_capture.py --gt gt/ground_truth.csv --plan photo=<plan.json> --plan video=<plan.json> \

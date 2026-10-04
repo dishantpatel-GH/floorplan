@@ -39,7 +39,7 @@ walls in gate (Fisher p = 0.63). The space-first `plan_beta` won because it neve
 of rooms nobody entered. Four alpha parts were ported (D-018). The v2 change, alpha's wall lines used as
 segmentation cuts, took matched rooms from 6 to 8/8 (`modules/plan_beta.md` v2.4). v4 makes extraction tier-aware.
 For video it adds a raw-point surface (1 room → 3 rooms on single_room) and a 5 cm surface-noise σ. For photos it
-seeds one room per folder and takes adjacency only from photo links (plan_beta.md v4.8).
+seeds one room per folder and takes adjacency only from photo links (plan_beta.md Part v4).
 
 ## 2. Tiers, honest accuracy, capture protocol
 
@@ -89,7 +89,7 @@ Good trajectories do not yet give good plans. The final benchmark, scored agains
   gave −1.7% and −6.7% (REPORT, "earlier code states").
 - **D-034:** when segments are joined without verified geometry, the scale σ is floored at 20% and
   `meta.reliability = "low"` is set. Coverage on the long videos rose: floor_only 31% → 88%, with_ceiling 38% → 60%
-  (`modules/benchmark_final.md` §9.2).
+  (`modules/benchmark_final.md` §7.2).
 - **It still misses when rooms are missing** (BF-13). A scale term cannot cover area that is not in the plan.
 - **Not repeatable (I-007).** The same command twice on floor_only gave 5 rooms / 40.91 m², then 3 rooms / 18.95 m²
   (REPORT §2). There are two measured causes (BF-12):
@@ -291,7 +291,7 @@ which the video finds independently (BF-14).
 
 **[PENDING: own-capture benchmark against tape at the photo and video tiers (`scripts/process_own_capture.py` →
 `outputs/own/eval/own_eval.md`, then `bench_final.py --skip-lidar` → REPORT §6); photo repeat room; staged damage;
-head-to-head against <app, version> on 2 rooms (REPORT §3; at the video or photo tier, because the candidate's phone
+head-to-head against <app, version> on 2 rooms (REPORT §3; at the video or photo tier, because my phone
 has no LiDAR).]**
 
 ## 8. Known failure modes

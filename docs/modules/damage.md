@@ -135,7 +135,7 @@ the default path.**
   - **specificity:** 0 false positives on the three clean LiDAR captures (114 m² analysed);
   - **injection:** stain recall 8/12 with 100% class accuracy, a median area error of 1.9% and 100% interval coverage;
     crack recall 7/9 (section 5).
-- The time box (2.5 h) also ruled out building and fairly evaluating (2). Every rule is cheap to explain in the defence.
+- The time box (2.5 h) also ruled out building and fairly evaluating (2). Every rule is cheap to explain.
 
 **D-dmg-2: chroma-first stain segmentation.** Segmenting on darkness failed in the first injection run:
 - stains merged with neighbouring shadows, and pale stains on noisy surfaces were missed;
@@ -285,50 +285,6 @@ Results are in `outputs/damage/injection_summary.json`, with per-seed `inject_ev
   - plane-deviation geometry for holes and bulges from LiDAR;
   - an optional OWLv2+SAM proposer in a separate env, used only as an extra proposer that goes through the same metric
     and consistency checks.
-
-## 7. Proposed commits (replay order)
-
-1. `damage: surfaces from plan/scene, tier-agnostic Views, z-buffer occlusion, orthophotos`. Files:
-   `floorplan/damage/project.py`. Why: the metric substrate everything else measures on.
-2. `damage: stain and crack detectors with logged rejection rules and multi-view support`. Files:
-   `floorplan/damage/detect.py`. Why: detection plus a metric description with 95% intervals.
-3. `damage: concealed-damage rules as data with p_condition`. Files: `floorplan/damage/rules.py`,
-   `floorplan/damage/rules.json`. Why: flags with the rule that fired and its rationale.
-4. `damage: scope line items keyed to surface ids with propagated intervals`. Files: `floorplan/damage/scope.py`,
-   `floorplan/damage/scope_catalog.json`. Why: Part 2 scope output.
-5. `damage: analyse_damage entry point + run_damage CLI`. Files: `floorplan/damage/__init__.py`,
-   `scripts/run_damage.py`. Why: one call per capture, for all tiers.
-6. `damage: injection benchmark (consistent multi-view decals + scorer)`. Files: `scripts/inject_damage.py`. Why:
-   recall, extent error and interval coverage on data with known truth.
-7. `docs: damage module`. Files: `docs/modules/damage.md`.
-
-## 8. Concepts to explain in the defence
-
-- **Orthophoto:** an image of the wall as if photographed straight on, at a fixed scale. Every pixel is 5 × 5 mm, so
-  "how big is the stain" is counting pixels.
-- **Median across views:** the wall's paint looks the same from every angle; a reflection or a person does not. The
-  median keeps what most views agree on.
-- **Z-buffer occlusion:** for each photo we know how far the nearest surface is in every direction. If the sofa is
-  nearer than the wall, that pixel is not the wall.
-- **Chroma vs lightness:** a shadow makes the wall darker but not yellower; water leaves yellow-brown tide marks. Testing
-  the colour shift separates them.
-- **Half-maximum edge:** a stain's edge is a gradient. Defining the edge as "half as strong as the stain's middle" is
-  independent of contrast, and it removed a 1 cm bias.
-- **Hysteresis:** strong evidence starts a region, and weaker evidence may extend it. This avoids both speckle and
-  chopped regions.
-- **Two-sided contrast:** a crack is darker than the wall on *both* sides; the edge of a picture frame is darker on one
-  side only.
-- **Multi-view support:** real damage is seen from several viewpoints at the same spot on the wall. We demand at least 4
-  agreeing views and 70% agreement.
-- **Error budget → 95% interval:** pixel size, view-to-view registration, where exactly the edge is (threshold
-  sensitivity), and the tier's scale uncertainty, combined in quadrature. Coverage was *checked*: 8/8 stain areas
-  inside their intervals; cracks fall short, and that is reported.
-- **p_condition:** a rule like "stain within 0.3 m of the floor" is evaluated as a probability given the measured
-  position and its uncertainty, not as a hard yes/no.
-- **Injection test:** without real damage in the sample, we paint stains and cracks of known size onto real walls in
-  every frame, consistently in 3D, and check whether the detector finds them blind. The decals sit on a locally fitted
-  plane, not on the plan wall, to avoid grading our own geometry.
-
 
 ---
 
@@ -628,55 +584,6 @@ In every staged set **the tape strip itself was rejected as a stain** ("thin str
 - **The whole crack pipeline is tuned and evaluated on one apartment** (the same caveat as D-dmg-7), now with more
   rules. Fresh captures (tomorrow's home) are the real test.
 
-## v2.7 Proposed commits (replay order, after the v1 commits)
-
-1. `damage: sub-surface windows, inverse pixel mapping, video-file and photo view adapters`
-   - Files: `floorplan/damage/project.py`.
-   - Why: fine crack windows; views for every tier from the run_capture inputs alone.
-2. `damage: gap bridging, MST length, spur pruning, pixel two-sided line test`
-   - Files: `floorplan/damage/detect.py` (helpers).
-   - Why: cracks were split at junctions and step edges (I-10, I-12, I-13).
-3. `damage: fine 2.5 mm crack re-tracing with leak guard; rules on refined measurement; tortuosity rule`
-   - Files: `floorplan/damage/detect.py`.
-   - Why: crack length −54% → −4.5% with 0 clean false positives (I-6, I-11, I-15–I-17).
-4. `damage: evidence-based confidence + min_confidence from the PR sweep`
-   - Files: `floorplan/damage/detect.py`.
-   - Why: v1 saturated at 1.0 (I-9).
-5. `damage: local ring contrast and local half-maximum for stains; tide-line rule on outline band`
-   - Files: `floorplan/damage/detect.py`.
-   - Why: stains on paper; lines inside discoloured patches.
-6. `damage: run_damage_on_plan hook + plan-schema adapter`
-   - Files: `floorplan/damage/__init__.py`.
-   - Why: one-command CLI; never raises.
-7. `damage: run_damage --input/--tier/--param/--min-conf`
-   - Files: `scripts/run_damage.py`.
-   - Why: same views as the hook; ablations.
-8. `damage: staged paper/tape decals + PR sweep summary`
-   - Files: `scripts/inject_damage.py`.
-   - Why: rehearse tomorrow's decals; choose τ by evidence.
-9. `docs: damage v2`
-   - Files: `docs/modules/damage.md`.
-
-## v2.8 Concepts to explain in the defence (v2)
-
-- **Coarse-to-fine:** search the whole wall cheaply at 5 mm, then look closely, at 2.5 mm, only where something was
-  found. That is the same idea as a doctor's overview X-ray, followed by a detailed scan of the suspicious spot.
-- **Gap bridging:** a crack is physically continuous. If two dark pieces point at each other across a small gap, the
-  gap is a faint stretch, not the end of the crack.
-- **Minimum spanning tree length:** connect all skeleton pixels with the shortest total wire. That is the crack's length,
-  branches included, without double-counting corners.
-- **Leak guard (threshold ladder):** lowering the threshold finds faint ends, but too low and it follows wood grain. If
-  the trace suddenly doubles or curls up, raise the threshold.
-- **Pixel-level two-sided test:** a line is darker than *both* neighbours. The edge of a piece of tape is darker than
-  one side only.
-- **Tortuosity:** cracks run roughly in one direction; outlines of objects curl. Span/length measures this.
-- **Precision/recall sweep:** for each confidence cut-off, count what is still found and what is wrongly found. Choose
-  the lowest cut-off with zero false findings.
-- **Confidence is an evidence score, not a probability:** with 20 true and 1 false detection it cannot be calibrated.
-  This is said openly.
-- **Simulated staged decals:** before the real test, we painted virtual paper sheets and tape strips onto real walls to
-  check that the "rectangle" and "strip" rules reject the paper and tape but not what is drawn on them.
-
 # Damage v3: damage_precision (2026-10-04)
 
 Everything below was added in v3; sections 1-8 (v1) and "Damage v2" above are kept unchanged as history. Every number
@@ -934,29 +841,7 @@ stain, R7-W2 at 0.412, "object on a shelf above a glass screen". It played no pa
 - **Plan-side:** O9 (a likely mirror or glazed panel read as a window) is not addressed here. Concealed-flag rules
   that trust opening types inherit plan errors.
 
-## v3.8 Proposed commits (replay order, after the v2 commits)
-
-1. `damage: stain must lie on the surface (region relief vs local wall, two-sided, tier-aware)`
-   - Files: `floorplan/damage/__init__.py` (`_region_relief`, the stain branch in `analyse_damage`, the
-     `relief_review` → review rule in `to_plan_items`), `tests/test_damage_precision.py`.
-   - Why: confirmed false stain (0.73) + seal-leak flag + 2 scope items on clean floor_only → 0.
-2. `damage: report counts after two-tier filtering`
-   - Files: `floorplan/damage/__init__.py` (`tier_counts`, two log lines, `damage.json["reported"]`,
-     `plan.meta.damage.confirmed/review`).
-   - Why: the log said "4 scope items" when the plan had 0.
-3. `damage: read published plan.json ({value, ci95}) in surface_measurements`
-   - Files: `floorplan/damage/__init__.py` (`_lohi`).
-   - Why: `run_damage.py --plan <run>/plan.json` raised `KeyError: 'hi'`.
-4. `run_damage: --no-stain-relief ablation, per-detection status, review-only scope marked`
-   - Files: `scripts/run_damage.py`.
-5. `docs: damage v3 (damage_precision)`
-   - Files: `docs/modules/damage.md`.
-   - Evidence: `outputs/damage_precision/`, `outputs/damage/v3/`, `outputs/damage/v3_ablation_no_stain_relief/`,
-     `outputs/damage/v3a_one_sided/`.
-
-(`scripts/inject_damage.py` was not changed. Its `summary` command already reports interval coverage.)
-
-**Regenerate:**
+## v3.8 Regenerate
 
 ```
 # before (run on the v2 sources, now in outputs/damage_precision/src_before/):
@@ -975,24 +860,3 @@ env -u PYTHONPATH python outputs/damage_precision/relief_null.py
 FLAT_BAND=0.06 TIERS=video OUT=outputs/damage_precision/relief_null_video_band6cm.json env -u PYTHONPATH python outputs/damage_precision/relief_null.py
 env -u PYTHONPATH python outputs/damage_precision/heldout_relief_bbox.py
 ```
-
-## v3.9 Concepts to explain in the defence
-
-- **"A stain is ON the wall."** Colour tells you *something* is yellow. Geometry tells you *where* the yellow thing
-  is. Paint discolouration has zero thickness, so if the LiDAR says the yellow patch is 2.4 cm in front of the wall,
-  it is an object, whatever its colour.
-- **Why absolute, not relative (unlike the crack check).** A crack is thin, so its own sides are the wall. A false
-  stain usually comes from part of a bigger object (here, the lid of a jar), so "beside it" is still the object. The
-  reference must be the *wall*, measured locally (points near the plane, outside a 2 cm gap), so a bowed wall does not
-  look like relief.
-- **Two-sided.** In front = an object. Behind = we are looking *through* the plane (glass, mirror, an opening). Both
-  mean "no paint here".
-- **Tier-aware strength of evidence.** The same measurement is decisive with LiDAR (flat-wall noise 95th pct
-  0.87 cm against a 1.5 cm threshold) and only suggestive with learned depth (95th pct up to 3 cm). So LiDAR rejects,
-  and learned depth sends to a human (D-023 philosophy).
-- **Abstain when blind.** Fewer than 30 points: the test says nothing and the detection stands on its other
-  evidence. It is never a silent pass or fail.
-- **Validate the path you ship.** The old clean validation ran on pre-integration scenes and plans, so it could not
-  see a surface that only the one-command plan creates. The re-validation includes the integrated runs.
-- **Logs are outputs too.** A log that says "4 scope items" when the plan has 0 misleads the reader the same way a
-  wrong number in the plan would. The log now prints the same counts the plan contains.

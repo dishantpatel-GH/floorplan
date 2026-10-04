@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Editable PDF of the candidate's hand-drawn house sketch (own-capture ground truth, 4 Oct).
+"""Editable PDF of my hand-drawn house sketch (own-capture ground truth, 4 Oct).
 
 The sketch (MyHouse_Dataset/IMG_20261004_223533.jpg) is redrawn as a clean schematic in the same layout. Every
 dimension becomes a fillable box pre-filled in cm, so the user can correct numbers in any PDF viewer; grey text under

@@ -140,8 +140,6 @@ pairs), `all_rooms_one_frame`, `components`, `unplaceable_fragments`, `edges`, `
   matches, 37 of them across rooms.
 - **Decision.** (c). A pair of photos needs only its own matches + each photo's depth to give a metric relative pose:
   no third photo, no triangulation. SfM stays as a logged diagnostic (`info.sfm`).
-- **Say it in the defense.** "SfM needs overlap chains; with 2-8 photos per room it fell apart. Each matched pair
-  plus learned depth is already a metric measurement, so I build the graph from pairs."
 
 ### P-2 MapAnything is not the geometry source here (measured), MoGe-2 depth is
 
@@ -159,8 +157,6 @@ pairs), `all_rooms_one_frame`, `components`, `unplaceable_fragments`, `edges`, `
 - **P-2c (rejected after measuring).** MapAnything as a *proposal* for same-room photo pairs without matches, reduced
   to 4 DoF, refined by ICP, accepted only if the dense check passes and the photos overlap: 87 proposals, 6 accepted,
   **3 of the 6 still 0.6-2.5 m wrong** (sliding along a wall passes a depth check). So `intra_room_proposals=False`.
-- **Say it in the defense.** "I measured MapAnything on these photos: 20-35% short and rotations off by up to 85°.
-  I kept it out of the measurement path and used a single-image metric depth model whose scale was within 5%."
 
 ### P-3 Gravity: GeoCalib per photo, refined by the floor plane
 
@@ -197,8 +193,6 @@ pairs), `all_rooms_one_frame`, `components`, `unplaceable_fragments`, `edges`, `
   `bridge_min_inliers = 20`. After that: no wrong edge in the linked block (relative rotation p90 6.1°).
 - **Trade-off, chosen deliberately.** Fewer rooms linked (4/9 instead of 7/9) but every link is correct. A wrong
   link silently produces a confident wrong plan; a missing link produces a flagged, widened fallback.
-- **Say it in the defense.** "Matches can be consistent and wrong. I check the whole depth map for contradictions,
-  check loops, and refuse weak single links; I would rather say 'not linked' than draw a wrong apartment."
 
 ### P-6 Fallback placement: beside the block, flagged, widened
 
@@ -306,43 +300,6 @@ Evidence: `outputs/photo_tier/<capture>/{scene_info,evaluation}.json`, `photo_vs
   integrated (D-056), off by default since D-067. (3) Bundle-adjust the final graph on reprojection error
   with depth priors. (4) Run on the own-home photos (tape ground truth) — the primary photo benchmark.
 
-## 7. Proposed commits (replay order)
-
-1. `photo: params + EXIF/HEIC photo loading with focal prior` — `floorplan/photo/{__init__,params,images}.py` —
-   everything downstream needs upright images and a focal.
-2. `photo: exhaustive ALIKED+LightGlue matching and verified-match reader` — `floorplan/photo/sfm.py` — cross-room
-   evidence for links.
-3. `photo: MoGe-2 depth, GeoCalib gravity, floor-refined levelled views` — `floorplan/photo/{depth,views,geometry}.py`.
-4. `photo: metric pair edges, dense free-space check, pose graph, loop + bridge pruning` — `floorplan/photo/link.py`.
-5. `photo: scale cue fusion with paper-sheet adapter` — `floorplan/photo/scale.py`.
-6. `photo: front-end producing the LiDAR scene format, fallback placement` — `floorplan/photo/frontend.py`,
-   `scripts/run_photo_frontend.py`.
-7. `photo: evaluation vs simulated truth + LiDAR, top-view figure` — `floorplan/photo/{evaluate,report}.py`.
-8. `photo: MapAnything runner and intra-room proposal experiment (off by default)` — `floorplan/photo/{recon,intra}.py`.
-9. `docs: photo tier module doc` — `docs/modules/photo_tier.md`.
-
-## 8. Concepts to explain in the defense
-
-- **Metric depth from one photo.** A network trained on millions of images with known depth predicts distance per
-  pixel in metres; given the field of view (from EXIF) it is right to a few percent here.
-- **Levelling / gravity.** Knowing "up" for each photo removes tilt, so placing a photo is a turn about the vertical
-  plus a shift. Fewer unknowns = fewer matches needed.
-- **Feature matching and epipolar verification.** Distinctive points are matched between two photos; a geometric
-  test (all matches must be consistent with one camera motion) removes most wrong matches.
-- **Similarity transform.** Rotation + shift + scale; between two photos with metric depth, 2 matched 3-D points
-  fix yaw, scale and shift.
-- **RANSAC.** Try many minimal guesses, keep the one most points agree with; robust to outliers.
-- **Free-space violation.** If photo A says "there is a wall 2 m away along this ray" but photo B's points (moved by
-  the proposed link) sit 1 m away on the same ray, both cannot be true: the link is wrong.
-- **Pose graph and loop consistency.** Photos are nodes, links are edges; with loops, a wrong edge disagrees with the
-  rest and shows up as the largest residual. A bridge has no loop to check it.
-- **Inverse-variance fusion.** Combine estimates weighting each by 1/σ²; σ of the result shrinks; if they disagree
-  more than their σ allows, inflate σ (χ²).
-- **Honest fallback.** When evidence is missing, still deliver one plan, but mark the guessed parts and widen their
-  intervals instead of presenting them as measured.
-
-
----
 ---
 
 # photo_tier v2 (4 Oct 2026, night): the revised protocol D-017 (spin + doorway pairs)
@@ -439,16 +396,13 @@ protocol, measures corners vs rotate, and gives a verdict on the protocol before
   |---|---|---|---|---|---|---|
   | pairs ≥ 15 verified matches | 5/5 | 6/6 | 60% | 75% | 36% | 0% |
 
-  With the Nord's 1× lens in landscape (~69° HFOV, to be confirmed from the candidate's EXIF) a 60° step leaves
+  With the Nord's 1× lens in landscape (~69° HFOV, to be confirmed from my phone's EXIF) a 60° step leaves
   ~13% overlap: feature links between consecutive spin photos will be the exception, so (a) alone would leave most
   spin photos unconnected. Same-spot pairs whose pitch differs by ≥ 20° matched in only 24% of cases even at < 20°
   heading change (n = 45): **a level phone matters as much as the overlap**.
 - **Decision.** (c). The yaw comes from geometry measured in every photo (wall normals), the protocol only resolves
   the 90° ambiguity. Measured per-step yaw error on the simulated spins: see v2.5 (most within ±10°, worst 16°;
   the walk-through-derived "spins" have 40-90° steps, a real spin is more regular).
-- **Say it in the defense.** "With 6 shots and a 69° lens, neighbours overlap ~13%, too little for matching, so I
-  don't rely on matches inside a spin: every photo measures its own wall directions; the protocol says 'about 60°,
-  clockwise', which picks the right one of the four Manhattan candidates."
 
 ### P-9 Turning direction fixed by the protocol (clockwise), not inferred
 
@@ -622,7 +576,7 @@ and wall lengths cannot be scored yet (`outputs/photo_tier/<run>/plan_beta_on_ph
 1. Read `scene["cam_room"]`, `scene["traj"]` and `scene["raw_point_room"]` (already written by the photo tier).
 2. Seed the watershed with ONE marker per room folder (that folder's camera centres) instead of distance-transform
    maxima, and forbid merging two regions whose markers belong to different folders.
-3. Name output rooms after the folder (`Room.label = folder`) so scope items keep the user's room names.
+3. Name output rooms after the folder (`Room.label = folder`) so scope items keep the operator's room names.
 4. Accept `info["rooms"][folder]["widen"]` and `["placement"]` and multiply that room's interval half-widths by
    `widen` (linked 2, door_match 3.5, fallback 4), and mark adjacency between rooms that touch only because of a
    fallback placement as `status="inferred"`.
@@ -650,47 +604,13 @@ Runtime 74-85 s each (cold: features, MoGe-2 and GeoCalib computed; shared GPU).
    gap, which removes the sliding ambiguity of P-12 and makes the pair bridge unique.
 2. Loop pruning by per-kind thresholds → χ² test per edge (each edge judged under its own covariance).
 3. The simulation cannot show the protocol's real benefit: a walk-through has no true spins (2-5 headings per room,
-   steps 40-92°) and no true doorway pairs (frames 8-195 s apart, 0-0.6 m apart). The candidate's own capture is the
+   steps 40-92°) and no true doorway pairs (frames 8-195 s apart, 0-0.6 m apart). My own capture is the
    real test; the per-element numbers above (pair yaw ±4°, spin steps ~3-5°) are what transfers.
 4. Thresholds of the room-overlap check were set on this apartment (physically motivated, not cross-validated).
 5. Door-matching by opening WIDTH needs openings from per-room plan extraction (interface change above).
 6. Ultra-wide/HDR/night modes, people in frame: untested.
 
-## v2.7 Proposed commits (replay order, after the v1 commits)
-
-1. `photo: read EXIF capture time (DateTimeOriginal + SubSec)` — `floorplan/photo/images.py` — needed to pair
-   doorway photos.
-2. `photo: typed pose-graph edges with explicit sigmas` — `floorplan/photo/link.py` — priors and feature edges in one
-   solver; bridges/pruning respect the kind.
-3. `photo: D-017 protocol structure: doorway pairs, spin groups, Manhattan-snapped priors` —
-   `floorplan/photo/protocol.py`, `floorplan/photo/params.py`.
-4. `photo: cross-room features need a doorway pair; pair yaw repair by no-overlap` — `floorplan/photo/frontend.py`,
-   `floorplan/photo/protocol.py` — removes false feature links (4/4), fixes under-rotated pairs.
-5. `photo: layout registration, pair bridge, door-match fallback, anchor by rooms, view cache` —
-   `floorplan/photo/frontend.py`, `floorplan/photo/protocol.py`.
-6. `photo: widen scale sigma when the focal length is guessed` — `frontend.py`, `params.py` — PT-14.
-7. `sim: rotate protocol + EXIF capture times in make_photo_folders` — `scripts/make_photo_folders.py`.
-8. `photo: report reads capture_name from truth` — `floorplan/photo/report.py`.
-9. `eval: photo v2 evidence scripts` — `outputs/photo_tier/v2/*.py` (or move to `scripts/photo_v2_*.py`).
-10. `docs: photo tier v2` — `docs/modules/photo_tier.md`.
-
-## v2.8 Concepts to explain in the defense
-
-- **Manhattan yaw modulo 90°.** Walls of a room meet at right angles; a photo's wall normals tell its heading
-  relative to the room up to a quarter turn. A coarse prior (protocol: ~60°, clockwise) picks the quarter.
-- **Shared-centre prior.** Photos taken from one spot differ by a rotation only; a Gaussian prior on the distance
-  between their centres (σ = how much a person sways) is a pose-graph edge without any image match.
-- **Pose graph with typed edges.** Each edge says "B is here relative to A, ± σ". Feature edges are precise (cm),
-  priors are loose (0.2-0.3 m, 6-10°); least squares weights them by 1/σ.
-- **No-overlap constraint.** Two rooms cannot occupy the same space: if room B's surfaces fall inside the free space
-  room A's photos observed (by > 1.5 m), the link that put B there is wrong.
-- **Why overlap between photos matters.** Feature matching needs the same surface in both images; with a 69° lens and
-  60° turns only ~13% of the image is shared. Measured: ≥ 50% overlap links almost always, ~20% about a third of the
-  time, ~0% never; a tilt difference of ≥ 20° kills it even with full overlap.
-- **Honest failure.** When the data cannot decide (wall-layout placement ambiguous within 15%), do not pick one:
-  flag, widen, report the competing hypotheses.
-
-## v2.9 Verdict on the revised protocol (before the 08:00 capture)
+## v2.7 Verdict on the revised protocol (before the 08:00 capture)
 
 **Keep D-017 (spin + doorway pairs) with five changes.** Evidence for keeping: doorway pairs are the only link that
 does not depend on texture or overlap: on the simulation every kept pair joined truly adjacent rooms with a relative
@@ -896,38 +816,6 @@ no layout is made (cached scenes, v3.2 table: v3 = v4). The corner rows are cont
    others (R1 −29% → −46%). They need the v2.6 door-gap registration first.
 6. Hallways: the 1-2 m band of a hallway is mostly doors, so the layout over-reaches (R7). Treat a folder with ≥ 2
    doorway pairs and a narrow free space as a corridor (next).
-
-## v3.7 Proposed commits (after the v2 commits)
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 1 | `photo: per-room Manhattan layout from the spin photos (layout.py)` | `floorplan/photo/layout.py`, `floorplan/photo/params.py` | P-15, P-16: sizes from the room's own photos |
-| 2 | `photo: write info.room_layouts (anchored by placed spin photos, aligned frame)` | `floorplan/photo/frontend.py` | the plan extractor consumes it |
-| 3 | `plan(photo): rooms from spin layouts, neighbour clip, push-apart, doorway-pair openings` | `floorplan/plan/beta/tiers.py`, `floorplan/plan/beta/extract.py` | plan_beta.md v4.10 |
-| 4 | `eval: photo v3 evidence (cached scoring, full-turn proxy, LiDAR identity)` | `outputs/photo_tier/v3/*.py` | numbers in this section |
-| 5 | `docs: photo tier v3` | `docs/modules/photo_tier.md`, `docs/modules/plan_beta.md` | |
-
-## v3.8 Concepts for the defense
-
-- **A spin is a panorama.** Photos taken from one spot differ only by a rotation, so their depth maps can be put
-  together around one centre without any matching. That is why a 13% overlap does not matter here.
-- **Manhattan rectangle fit.** After rotating onto the room axes, each wall is one number (its offset). Four robust
-  1-D fits replace a 2-D shape problem.
-- **Farthest point per column.** Looking along one image column, the wall is behind everything else. Furniture is
-  in front, so the farthest vertical surface above 1 m is the wall.
-- **Length, not point count.** A near object has many pixels. A wall has length. Counting distinct 10 cm cells along
-  the wall makes near clutter and far walls comparable.
-- **A room cannot contain another room's spin spot.** The photographer stood in the other room, so a wall fitted
-  beyond that spot was seen through a door.
-- **Calibrated vs honest.** The ±50% per-side term comes from the measured errors on the simulated spins (dimension
-  coverage 13/20 without it, 15/20 with it). A narrow interval that misses is worse than a wide one that says
-  "we did not see this".
-- *Say it in the defense:* "Each room's spin is a small panorama, so I fit the room from its own photos, not from the
-  fragments of floor that a few photos see. That gives every room, correct links and no overlaps, and the footprint
-  moves from −71% to −27% on the sample. Room sizes are still not within 8% on simulated photos. With true poses and
-  a full turn, 5 of 16 dimensions are within 8%; the misses are L-shaped rooms, doors and furniture. So my intervals
-  are wide, and the tape on my own flat is the real test."
-
 
 # photo_tier v3-poly (4 Oct 2026, ~18:00): rooms that are not rectangles
 

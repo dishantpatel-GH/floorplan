@@ -1,0 +1,7 @@
+# Optional: the tools that turn a hand sketch into tape ground truth, scripts/sketch_plan_pdf.py (reportlab) and
+# scripts/read_plan_pdf.py (pypdf). The pipeline does not need them. Versions are the ones the tools were run with;
+# what they need besides (pillow, charset-normalizer) is already pinned in requirements.txt.
+#
+# Install after requirements.txt:  uv pip install --no-deps -r requirements-tools.txt
+reportlab==5.0.1
+pypdf==6.19.0

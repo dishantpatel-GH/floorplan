@@ -1,8 +1,8 @@
-"""Score a plan against tape-measured ground truth (the candidate's own captures; decision D-015).
+"""Score a plan against tape-measured ground truth (own-home captures; decision D-015).
 
 Ground truth comes from benchmark/ground_truth.csv (one row per measurement, metres). Walls are named W1..Wn
 CLOCKWISE (seen from above) starting with the wall that holds the room's main door; see
-TakeHome/HOUSE_CAPTURE_GUIDE.md step 8.
+docs/HOUSE_CAPTURE_GUIDE.md step 8.
 
 Matching (rooms -> walls -> openings) is done by geometry only, never by hand:
   * rooms: Hungarian assignment on a cost built from the sorted wall-length profile and perimeter, unless the plan

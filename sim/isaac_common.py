@@ -1,7 +1,7 @@
 """Isaac Sim helpers shared by the interactive tool (teleop.py) and the renderer (render.py).
 
 Run these with the Isaac Sim interpreter that has numpy 1.26 (envs/isaacsim_np126/bin/python, see sim/README.md):
-Isaac Sim 5.1 needs numpy==1.26.0 and the user's env_isaaclab has numpy 2.4.2, which breaks Replicator's annotators
+Isaac Sim 5.1 needs numpy==1.26.0 and my env_isaaclab has numpy 2.4.2, which breaks Replicator's annotators
 ("TypeError: Unable to write from unknown dtype, kind=f, size=0"). Issue I-008.
 """
 from __future__ import annotations

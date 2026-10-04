@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torch-scatter-shim"
+version = "2.1.2.post0"
+description = "Pure-PyTorch stand-in for the subset of torch_scatter used by DPVO (no compiled ops; torch_scatter wheels do not exist for torch 2.14)"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.setuptools]
+packages = ["torch_scatter"]

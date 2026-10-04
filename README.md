@@ -27,35 +27,46 @@ to measured points (D-004). Learned models are used only where the sensor gives 
 Linux x86_64 with Python 3.11 and [uv](https://docs.astral.sh/uv/). The LiDAR tier, the tests and the scoring
 scripts run on the CPU. The video and photo tiers need an NVIDIA GPU (tested on 8 GB).
 
-Run everything from the repo root. Environments and data sit next to the repo, not in it, so the venv goes in the
+Run everything from the repo root. Environments and data sit next to the repo, not in it, so the envs go in the
 parent folder too: the benchmark shell scripts and the module notes use `../.venv/bin/python`. Weights go to the
-usual Hugging Face and torch caches.
+usual Hugging Face and torch caches, except the segmenter's, which go to `../weights/hf_seg`.
+
+The steps, in order:
 
 ```bash
+# 1. main env
 uv venv --python 3.11 ../.venv && source ../.venv/bin/activate
 uv pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --index-url https://download.pytorch.org/whl/cu130
 #   CPU only: torch==2.14.1+cpu torchvision==0.29.1+cpu from https://download.pytorch.org/whl/cpu
 uv pip install --no-deps -r requirements.txt   # the full pinned closure, so nothing else gets pulled in
-python scripts/fetch_weights.py                # pinned revisions and SHA-256; the LiDAR tier needs no weights
+# 2. weights: pinned revisions and SHA-256 (the LiDAR tier needs none)
+python scripts/fetch_weights.py
+# 3. video tier: the DPVO env (needs the CUDA toolkit, nvcc)
+bash setup/dpvo_setup.sh
+# 4. photo tier: the wall segmenter's env
+bash setup/seg_env.sh
 export HF_HUB_OFFLINE=1                        # everything runs offline from here
 env -u PYTHONPATH python -m pytest -q tests    # 42 tests, about 20 s
 ```
 
+Install times on the dev machine: the main env 55 s from a warm uv cache (`docs/COMPLIANCE.md`, D3), the DPVO env
+about 5 min (`docs/DISCLOSURES.md` §5b). A cold install was not timed.
+
 `env -u PYTHONPATH` matters if your shell sets `PYTHONPATH` (a sourced ROS install, for example): foreign pytest
 plugins on that path abort the run.
 
-**Video tier only.** DPVO needs compiled CUDA ops, so it runs in its own env as a subprocess. That env is built by a
-setup script that is not in this repo yet (DPVO @ `0ac95b6` plus a small patch for torch 2.14, see
-`docs/DISCLOSURES.md` §5b). Point the pipeline at it with `FLOORPLAN_DPVO_PYTHON`, `FLOORPLAN_DPVO_REPO` and
-`FLOORPLAN_DPVO_SHIMS`. Without them, `floorplan/video/vo.py` looks for `envs/dpvo` and `third_party/` next to the
-repo. The video tier also reads rotation and focal length with `ffprobe` when it is installed.
+**Video tier.** DPVO needs compiled CUDA ops, so it runs in its own env as a subprocess. `setup/dpvo_setup.sh`
+builds DPVO @ `0ac95b6` with a small patch for torch 2.14 (`docs/DISCLOSURES.md` §5b) into `../envs/dpvo` and
+`../third_party/`, where `floorplan/video/vo.py` looks. For other paths, set `FLOORPLAN_DPVO_PYTHON`,
+`FLOORPLAN_DPVO_REPO` and `FLOORPLAN_DPVO_SHIMS` for both the script and the pipeline. The build targets the GPU
+it was tested on (`TORCH_CUDA_ARCH_LIST=8.9`); set that variable for another GPU. The video tier also reads
+rotation and focal length with `ffprobe` when it is installed.
 
-**Photo tier, wall masks (optional).** An ADE20K segmenter (SegFormer-B5, D-060) keeps wardrobes and cabinets from
-being taken as walls. It needs `transformers`, which must stay out of the main env (`docs/ISSUES.md` I-002), so it
-runs from a second env: `FLOORPLAN_SEG_PYTHON`, or `envs/seg` next to the repo (model cache: `weights/hf_seg` next
-to the repo). There is no setup script for it yet, and `fetch_weights.py` does not fetch its model. Without it the
-photo tier works from geometry only and says so in the log and in `scene/scene_info.json`. The k65 result below
-used it.
+**Photo tier, wall masks.** An ADE20K segmenter (SegFormer-B5, D-060) keeps wardrobes and cabinets from being taken
+as walls. It needs `transformers`, which must stay out of the main env (`docs/ISSUES.md` I-002), so
+`setup/seg_env.sh` builds a second env, `../envs/seg` (or set `FLOORPLAN_SEG_PYTHON`). Without it the photo tier
+works from geometry only and says so in the log, in `run_report.json` and in `plan.json` (`meta.warnings`). The k65
+result below used it.
 
 ## One command per capture
 
@@ -82,8 +93,8 @@ and 272-1737 s at the video tier.
 
 ## Own capture
 
-Capture with `docs/CAPTURE_PROTOCOL.md` (one page) and copy the files by USB cable: messaging apps strip the EXIF
-data and recompress. Then:
+Capture with `docs/CAPTURE_PROTOCOL.md` (one page) or the step-by-step `docs/HOUSE_CAPTURE_GUIDE.md` (with the tape
+measurements), and copy the files by USB cable: messaging apps strip the EXIF data and recompress. Then:
 
 ```bash
 O=path/to/capture   # photos/<room>/, video/take1.mp4, gt/ground_truth.csv (template: benchmark/ground_truth.csv)
@@ -94,7 +105,7 @@ python scripts/bench_final.py --skip-lidar                   # adds the own capt
 
 The step-by-step version, with measured run times, is `docs/OWN_CAPTURE_RUNBOOK.md`. Tape ground truth from a hand
 sketch: `scripts/sketch_plan_pdf.py`, then `scripts/read_plan_pdf.py`, then `scripts/house_gt.py`. The first two
-need `reportlab` and `pypdf`, which are not in `requirements.txt`.
+need `reportlab` and `pypdf`: `uv pip install --no-deps -r requirements-tools.txt`.
 
 `sim/` renders simulated homes (Isaac Sim, InteriorAgent scenes) into phone-format files with exact ground truth.
 It is used to rehearse a cold run and to measure fixes (`sim/README.md`). Simulated numbers are always labelled as
@@ -127,6 +138,7 @@ tier is measured on the sample captures and on ARKitScenes only (agreed with the
 | `floorplan/` | the pipeline: `io`, `recon` (keyframes, drift, fusion), `plan` (`beta` is the default extractor, `alpha` the other), `video`, `photo`, `scale`, `uncertainty`, `damage`, `qa`, `export`, `eval`, `benchmark` |
 | `scripts/` | `run_capture.py`, plus the benchmark, evaluation and own-capture scripts |
 | `sim/`, `tests/`, `schema/` | test-data generator, tests, the output schema |
+| `setup/` | env scripts for DPVO (with its patch and shim) and the wall segmenter, and their pins |
 | `docs/DECISIONS.md` | why each choice was made (D-001 onwards) |
 | `docs/ISSUES.md` | problems found, their cause and the fix |
 | `docs/CAPTURE_PROTOCOL.md`, `docs/DEVICE_MATRIX.md` | how to capture, and which phone runs which tier |

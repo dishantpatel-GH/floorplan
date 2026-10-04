@@ -393,12 +393,12 @@ device. The values include the +1.36 cm bias correction.
   (`docs/modules/lidar_bias.md`, fix-loop table): after the D-021 correction, ceiling height errors on 5 laser-scanned
   rooms are −0.40, −0.68, +0.46, −0.14 and +0.29 cm, so 5 of 5 are within 0.7 cm. Before correction, 3 of 5 were
   within 1.5 cm. Two of those rooms were held out when the correction was chosen. Two caveats:
-  - that test measures the room box plane-to-plane on an iPad, not this plan extractor on the candidate's iPhone;
+  - that test measures the room box plane-to-plane on an iPad, not this plan extractor on the sample captures' iPhone;
   - so it supports the sensor-plus-correction part of the claim, not the per-room extractor.
 - **Spread across captures (≤ 1 cm): not measurable on the sample.** Only one capture observes the ceilings, so we
   cannot say "repeatable-but-biased" or "unrepeatable". The closest internal evidence is within with_ceiling, which
   walks the apartment twice: the ceiling level seen by different fragments spreads 6.04 cm with ARKit poses and
-  0.54 cm after drift correction. A real cross-capture spread needs the candidate's own repeat capture with the
+  0.54 cm after drift correction. A real cross-capture spread needs a repeat capture with the
   ceiling scanned.
 
 ## 6. Damage on clean captures (false positives)

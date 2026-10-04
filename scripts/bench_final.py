@@ -609,7 +609,7 @@ def write_report(R: dict) -> str:
     else:
         L += ["**Placeholder until the own capture.** Filled automatically from `outputs/own/eval/own_eval.json` → "
               "`head_to_head` (written by `scripts/process_own_capture.py <root>` when `app_export/app_dimensions.csv` "
-              "exists). Note: the case study asks for our **LiDAR** tier against the app; the candidate's phone (OnePlus "
+              "exists). Note: the case study asks for our **LiDAR** tier against the app; my phone (OnePlus "
               "Nord) has no LiDAR, so the comparison that can be run is our video (or photo) tier, and the report must say so.",
               "", "| Room | Item | Tape GT (m) | Ours (m) | App (m) | \\|err\\| ours | \\|err\\| app | Outcome |",
               "|---|---|---|---|---|---|---|---|", "| – | – | – | – | – | – | – | pending |"]

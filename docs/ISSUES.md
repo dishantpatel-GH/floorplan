@@ -107,7 +107,7 @@ Module-level issues live in `docs/modules/<module>.md`, section 4.
 
 ## I-007 The same video gives different plans on different runs (long walkthroughs)
 
-- **Evidence.** `docs/modules/benchmark_final.md` §9, `outputs/benchmark/final/dpvo_determinism/`.
+- **Evidence.** `docs/modules/benchmark_final.md` §7, `outputs/benchmark/final/dpvo_determinism/`.
   - floor_only video, two runs of the identical command: 0 rooms then 8 rooms (05:05 report).
   - After the cuDNN fix: 5 rooms / 40.91 m² then 3 rooms / 18.95 m² (06:28 report).
 - **Root causes (measured, two independent ones).**
@@ -129,17 +129,17 @@ Module-level issues live in `docs/modules/<module>.md`, section 4.
     the outcome fragile.
 - **Status.** Open; documented, and mitigated only by honest intervals.
 
-## I-008 Isaac Sim's Replicator crashes in the user's env_isaaclab (numpy 2.4.2; Isaac Sim 5.1 needs numpy 1.26.0)
+## I-008 Isaac Sim's Replicator crashes in my env_isaaclab (numpy 2.4.2; Isaac Sim 5.1 needs numpy 1.26.0)
 
 - **Evidence.**
   - Attaching any annotator fails with
     `TypeError: Unable to write from unknown dtype, kind=f, size=0` in `omni.syntheticdata`.
   - `isaacsim-kernel` requires `numpy==1.26.0`, and `isaaclab` requires `numpy<2`, yet numpy 2.4.2 was installed
-    (11 Feb, by some later install). The user's own Isaac Lab scripts may be affected too.
+    (11 Feb, by some later install). My other Isaac Lab scripts may be affected too.
 - **Fix (non-invasive).** `envs/isaacsim_np126` is a uv venv on the same Python 3.11.14 with numpy 1.26.0. A `.pth`
   file adds `env_isaaclab`'s site-packages after it, and `env_isaaclab` is untouched. All Isaac scripts use
   `envs/isaacsim_np126/bin/python`.
-- **Status.** Worked around. Downgrading numpy in `env_isaaclab` is the user's call.
+- **Status.** Worked around. Downgrading numpy in `env_isaaclab` is a separate decision, outside this project.
 
 ## I-009 The photo tier converts EXIF 35 mm-equivalent focal length with a 36 mm-width rule; phones use the diagonal
 

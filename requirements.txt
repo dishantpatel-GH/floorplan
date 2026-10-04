@@ -144,4 +144,6 @@ pygments==2.21.0
 # mapanything     @ git+https://github.com/facebookresearch/map-anything.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9
 # (both need extra deps, e.g. einops, timm, safetensors, omegaconf, hydra-core, uniception)
 #
-# DPVO (video-tier camera trajectory) lives in its OWN env with compiled CUDA ops: see README.md "Setup".
+# DPVO (video-tier camera trajectory) lives in its OWN env with compiled CUDA ops: setup/dpvo_setup.sh.
+# The photo tier's wall segmenter (transformers) has its own env too: setup/seg_env.sh.
+# The sketch and PDF tools for tape ground truth (reportlab, pypdf) are pinned in requirements-tools.txt.

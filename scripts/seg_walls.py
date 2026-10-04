@@ -21,7 +21,10 @@ import time
 
 import numpy as np
 
-MODEL = os.environ.get("SEG_MODEL", "nvidia/segformer-b5-finetuned-ade-640-640")
+DEFAULT_MODEL = "nvidia/segformer-b5-finetuned-ade-640-640"
+DEFAULT_REVISION = "739f5d4692954e4a185eac280dec1ba5a7d52f1d"   # pinned; scripts/fetch_weights.py fetches this one
+MODEL = os.environ.get("SEG_MODEL", DEFAULT_MODEL)
+REVISION = os.environ.get("SEG_REVISION", DEFAULT_REVISION if MODEL == DEFAULT_MODEL else "main")
 
 
 def main():
@@ -43,8 +46,8 @@ def main():
     if a.threads:
         torch.set_num_threads(a.threads)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    proc = SegformerImageProcessor.from_pretrained(MODEL)
-    model = SegformerForSemanticSegmentation.from_pretrained(MODEL).to(dev).eval()
+    proc = SegformerImageProcessor.from_pretrained(MODEL, revision=REVISION)
+    model = SegformerForSemanticSegmentation.from_pretrained(MODEL, revision=REVISION).to(dev).eval()
     if dev == "cuda":
         model = model.half()
     names = [model.config.id2label[i] for i in range(len(model.config.id2label))]
@@ -66,7 +69,7 @@ def main():
         out[name] = logits.argmax(1)[0].byte().cpu().numpy()
     np.savez_compressed(a.out, names=np.array(names), keys=np.array(list(out.keys())),
                         **{f"m{i}": v for i, v in enumerate(out.values())})
-    print(f"[seg] {len(out)} photos, {MODEL}, {dev}, {time.time() - t0:.1f}s -> {a.out}", flush=True)
+    print(f"[seg] {len(out)} photos, {MODEL}@{REVISION[:8]}, {dev}, {time.time() - t0:.1f}s -> {a.out}", flush=True)
 
 
 if __name__ == "__main__":

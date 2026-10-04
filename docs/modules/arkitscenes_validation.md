@@ -290,7 +290,7 @@ There are four ablations:
   - The CI model should add a systematic term of about **±1.5 cm per interior distance** (95%). The statistical
     standard error of a plane fit is 0.04–0.08 mm, about 200× too small.
   - Next step: run this script on 3–5 more single-scan ARKitScenes rooms with different materials. The script takes any
-    `--scene/--laser`, and each laser scan is about 1.8 GB, fetched by `data/arkitscenes/fetch_parallel.sh`.
+    `--scene/--laser`, and each laser scan is about 1.8 GB, fetched by `../data/arkitscenes/fetch_parallel.sh` (with the data, outside the repo).
   - If the offset is stable, (c) becomes a Part 4 fix with a hold-out room.
 
 **Issue 4: the edge-margin erosion first deleted almost every surface.**
@@ -390,7 +390,7 @@ The corner profile is in Issue 3.
 - The room box is within 2 cm on all three axes.
 - Ceiling height is −1.92 cm, which **fails the 1.5 cm ceiling-height gate** in absolute terms.
 
-The cause is the systematic inward bias (Issue 3), not noise. This is the honest number to bring to the defense.
+The cause is the systematic inward bias (Issue 3), not noise. This is the honest number to report.
 
 **Figures.**
 
@@ -455,81 +455,3 @@ The cause is the systematic inward bias (Issue 3), not noise. This is the honest
 > - Decision: use nearest-pose matching, conf ≥ 2, and measure on raw points.
 > - Evidence: room box +0.25 / −1.52 / −1.92 cm (raw) vs −2.5 cm (TSDF). Surface error median 1.1 cm.
 > - Systematic inward bias of about 0.5 cm per surface, worst near corners. Not corrected yet; carried in the confidence interval.
-> - Say it in the defense: "On a laser-scanned room my widths are within 1.5 cm, my ceiling height reads 1.9 cm low, and I can
->   show you why."
-
----
-
-## 7. Proposed commits (for the real repo, in order)
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 1 | `feat(io): ARKitScenes adapter with the StrayCapture interface (z-up -> y-up, 10 Hz poses -> nearest depth frame)` | `floorplan/io/arkitscenes.py` | Lets the unchanged pipeline run on a dataset with laser ground truth |
-| 2 | `chore(data): script to fetch one ARKitScenes room + Faro scan` | `scripts/fetch_arkitscenes.sh` (from `data/arkitscenes/README.md` commands and `fetch_parallel.sh`) | Weights and large binaries are fetched by script, as the brief requires; nothing large is committed |
-| 3 | `feat(eval): stage-1 on ARKitScenes and laser registration (align_scene on both, 4 yaws + FFT + ICP)` | `scripts/validate_arkitscenes.py` (stage 1, laser and registration parts) | Puts the laser in our frame without any shipped transform |
-| 4 | `feat(eval): cloud-to-cloud accuracy (point-to-plane, signed) and completeness vs laser` | same file | First absolute-accuracy numbers |
-| 5 | `exp(eval): independent wall detection per cloud -> wrong correspondences (-92 cm)` | same file, first `measure_room` version | Keeps the failed attempt in the history (Issue 1); Part 5 process evidence |
-| 6 | `fix(eval): match surfaces ours->laser, fit laser independently on common cells; sequential extraction` | same file | Like-for-like dimensions (Issues 1, 2) |
-| 7 | `feat(eval): error by range / incidence / corner distance; ghost-point check; figures` | same file | Diagnoses *where* the error comes from |
-| 8 | `exp(eval): ablations: pose interpolation, confidence threshold, edge margin, corner exclusion` | same file | Evidence for D-006, D-007 and the nearest-pose choice; documents fixes that did not work |
-| 9 | `docs: ARKitScenes validation module doc + decision entry` | `docs/modules/arkitscenes_validation.md`, `docs/DECISIONS.md` | Explains every choice |
-
-If refactor commit 1 of the requested changes (`build_scene` accepting a capture) lands first, commit 3 shrinks to a single call.
-
----
-
-## 8. Concepts to explain in the defense
-
-- **Ground truth from a laser scanner.**
-  - A Faro terrestrial scanner measures millions of points with millimetre accuracy from a tripod.
-  - It is the standard reference for scan-to-BIM accuracy.
-  - It is "truth" only where it can see: one position means shadows behind objects.
-- **Adapter pattern.** Give a new data source the same interface as the old one, so all downstream code runs unchanged.
-  The test then measures the real code.
-- **Camera-to-world vs world-to-camera.**
-  - A pose matrix maps points one way. Its inverse maps them back.
-  - ARKitScenes stores world→camera; our pipeline wants camera→world.
-  - Getting this wrong moves points by tens of centimetres.
-- **Changing the up axis.** A rotation of −90° about x maps z-up to y-up. It must be a proper rotation (determinant +1),
-  or the plan comes out mirrored.
-- **Slerp.** Spherical linear interpolation of rotations, the rotation equivalent of a straight line between two
-  values. We tested it and preferred the real poses (D2).
-- **Manhattan alignment.**
-  - Rotate the scene so walls run along x and z.
-  - Afterwards, two clouds of the same room differ only by a multiple of 90° and a shift.
-  - That turns a hard 6-degree-of-freedom search into 4 discrete guesses.
-- **FFT cross-correlation.**
-  - Rasterise both wall slices into images.
-  - The shift that best overlays them is the peak of their cross-correlation.
-  - The FFT computes every shift at once.
-- **ICP (Iterative Closest Point), point-to-plane.**
-  1. Pair each point with its nearest neighbour in the other cloud.
-  2. Solve for the rigid motion that minimises the distances along the target's surface normals.
-  3. Repeat with shrinking pairing distances.
-
-  It needs a good starting guess, which is what the steps above provide.
-- **Point-to-point vs point-to-plane distance.**
-  - The nearest-point distance includes the gap between laser samples.
-  - The distance to the local surface plane does not, and it has a sign: in front of or behind the surface.
-- **Median, p90, p95.** Robust summaries: half the points err less than the median, 90% less than p90. They are used
-  instead of the mean because a few outliers (laser holes) would dominate a mean.
-- **Trimmed least squares.**
-  - Fit a plane to all points.
-  - Then refit using only points within 3 cm, then 2, 1.5 and 1 cm.
-  - Clutter and outliers drop out, while thousands of good points still average the noise down.
-- **Sequential plane extraction.** Find the strongest plane, remove its points, find the next. This is why one noisy wall is
-  not reported five times.
-- **Statistical vs systematic error.**
-  - The standard error of a plane fit shrinks with the number of points: 0.05 mm here.
-  - A bias does not shrink: here 0.5 cm per surface, the same in every frame.
-  - Honest confidence intervals must add the systematic part, and this validation is how we measure it.
-- **TSDF bias.** A truncated signed distance field averages depth along camera rays. Its zero crossing, the surface, can shift
-  slightly toward the cameras, and it rounds corners. That is why dimensions are taken from raw points (D-007), confirmed here:
-  −2.5 cm for TSDF versus −0.25 to −1.9 cm for raw.
-- **Learned depth densification at corners.**
-  - iPhone and iPad LiDAR fires a sparse grid of dots.
-  - ARKit fills in a dense depth map with a neural network guided by the RGB image.
-  - Near concave corners the fill blends the two surfaces, pulling depth toward the camera. Our corner-distance profile shows this:
-    +0.84 cm at 5–10 cm from a corner, 0.00 cm beyond 40 cm.
-- **Ablation.** Change one thing, keep everything else fixed, and measure the difference. It is how each choice above (nearest
-  pose, confidence threshold, edge margin) is justified with numbers instead of opinion.

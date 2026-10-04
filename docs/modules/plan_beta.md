@@ -383,78 +383,6 @@ module would shrink the intervals directly.
 
 ---
 
-## 7. Proposed commits (to replay in the real repo)
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 1 | `feat(plan_beta): parameters and plan raster with fast raw-point box queries` | `floorplan/plan/beta/{__init__,params,grid}.py` | All tunables in one documented place; 16 M-point queries in ms |
-| 2 | `feat(plan_beta): interior free space from floor hits and camera path` | `freespace.py` | Space-first: rooms from where one can stand |
-| 3 | `feat(plan_beta): ray carving + bounded furniture-hole filling` | `freespace.py` | Fixes I-1 (holes under furniture) |
-| 4 | `feat(plan_beta): distance-transform watershed room segmentation` | `segment.py` | Bormann-style over-segment then merge |
-| 5 | `fix(plan_beta): narrow necks separate rooms, only wide ones merge` | `segment.py` | I-2: three rooms had merged |
-| 6 | `feat(plan_beta): wall-line arrangement polygons with jog/doorway cleanup` | `walls.py` | Rectilinear rooms, corners at intersections (I-3) |
-| 7 | `feat(plan_beta): overlap resolution between room polygons` | `walls.py` | I-4 |
-| 8 | `feat(plan_beta): wall offsets on raw LiDAR points (mode + trimmed LS, viewed from inside)` | `walls.py` | D-007: dimensions from the sensor, not the raster |
-| 9 | `feat(plan_beta): per-room floor level and area-weighted ceiling height` | `levels.py` | Ceiling gate; dropped ceilings (I-6) |
-| 10 | `feat(plan_beta): Monte Carlo intervals for lengths, areas, footprint` | `measure.py` | Interval on every number |
-| 11 | `feat(plan_beta): doors/passages from necks, widths on jamb faces` | `openings.py`, `extract.py` | Opening gate |
-| 12 | `feat(plan_beta): wall-plane see-through windows/doors, mirror reflection test` | `openings.py` | Windows, mirrors (I-7, I-11, I-12) |
-| 13 | `feat(plan_beta): Plan assembly, adjacency, thickness; debug and openings figures` | `extract.py`, `render.py` | Output contract; visual check |
-| 14 | `feat(plan_beta): run script with metrics.json` | `scripts/run_plan_beta.py` | One command per capture |
-| 15 | `fix(plan_beta): wall evidence needs vertical extent in 1-2 m band` | `freespace.py` | I-8 (desk as wall) |
-| 16 | `fix(plan_beta): door width along the cut, solid-bin jamb edges` | `openings.py`, `segment.py` | I-10 |
-| 17 | `fix(plan_beta): see-through rays must start inside the room` | `openings.py` | I-7 |
-| 18 | `perf(plan_beta): prefilter level/vertical points, fewer rays` | `levels.py`, `walls.py`, `params.py` | I-15: < 90 s under load |
-| 19 | `feat(plan_beta): repeatability self-check (register, room/wall/opposite-distance match)` | `selfcheck.py`, run script | Repeatability gate without ground truth |
-| 20 | `exp(plan_beta): wall slope ablation (axis/room/free), tilt into sigma` | `walls.py`, `measure.py`, `params.py` | I-9, D-B6 (regenerable via `--set`) |
-| 21 | `fix(plan_beta): post-refinement overlap guard and 6 cm shift limit` | `walls.py`, `extract.py` | I-4 second half |
-| 22 | `fix(plan_beta): lintel must span the gap; weak links and unmeasured widths get low confidence` | `openings.py`, `extract.py` | I-13, I-14 |
-| 23 | `docs(plan_beta): module documentation and decisions` | `docs/modules/plan_beta.md` | Defensibility |
-
----
-
-## 8. Concepts to explain in the defense
-
-- **Distance transform (DT).** For every free cell, the distance to the nearest obstacle. In a 3 m wide room the
-  centre has DT = 1.5 m; in a 0.8 m doorway the DT is 0.4 m. Twice the DT at the narrowest point between two
-  rooms is the width of the connection.
-- **h-maxima.** Keep only DT peaks that rise at least h above the lowest point (saddle) connecting them to a
-  higher peak. This removes tiny bumps that would seed fake rooms.
-- **Watershed.** Imagine flooding the inverted DT from each seed. Basins grow until they meet, and they meet at
-  the saddles, which are the narrow places (doors).
-- **Morphological closing, opening and hole filling.** Closing (dilate then erode) fills small gaps. Opening
-  (erode then dilate) removes thin specks. Hole filling marks enclosed regions as inside. All three are bounded
-  here so they cannot cross walls.
-- **Ray carving.** A LiDAR ray from the camera to the point it hit proves the space in between was empty. This is
-  the same idea as occupancy-grid mapping in robotics.
-- **Line arrangement / cell complex.** A set of lines cuts the plane into cells. Choosing cells by how much of
-  each the room covers gives a clean polygon whose corners are line intersections.
-- **Mode, trimmed mean, trimmed least squares.** These are robust estimators. Start at the most common value,
-  ignore points far from it, and average the rest. Outliers such as furniture or skirting cannot drag the result.
-- **Standard error and effective sample size.** The SE of a mean is σ/√n, but only if the samples are
-  independent. Neighbouring LiDAR points are not, so we count 10 cm patches. Otherwise 100,000 points would
-  claim micrometre precision.
-- **Systematic vs random error.** Random error averages out (fit SE); systematic error does not (LiDAR bias,
-  drift, tilt). That is why the interval adds fixed terms.
-- **95% interval.** If the error model is right, the true value lies inside it 19 times out of 20. For a normal
-  error, ±1.96σ.
-- **Monte Carlo error propagation.** Draw every uncertain input from its distribution, recompute the output, and
-  read the spread. It works for non-linear outputs such as areas and polygon unions.
-- **Shoelace formula.** The area of a polygon from its vertex coordinates: ½|Σ(xᵢyᵢ₊₁ - xᵢ₊₁yᵢ)|.
-- **Mirror reflection test.** A mirror shows the room reflected. Reflecting the "seen through the wall" points
-  back across the wall plane should land them on real surfaces if it is a mirror, and in empty space if it is a
-  window or door.
-- **KD-tree.** A spatial index that answers "nearest point to this one" in log time; used for the mirror test.
-- **Rigid registration (shared `register.py`).** Find the rotation and translation that best overlays capture B
-  on capture A. It uses wall and floor geometry only, never the plans being compared, so a wrong plan cannot
-  hide its own error.
-- **IoU (intersection over union).** Overlap area divided by combined area, used to say "this room in A is that
-  room in B".
-- **Manhattan assumption.** Most interior walls meet at right angles, so after one global rotation walls run along
-  x or z and each wall is a single number (its offset). I-9 shows where this assumption costs accuracy.
-
----
-
 ## Requested changes to shared code
 
 1. **`floorplan/pipeline/scene.py`:** store a frame index (or timestamp) per raw point. This would allow
@@ -489,7 +417,7 @@ The judge chose beta and asked for four alpha parts. v2 has them, measured one b
 canonical scenes (`outputs/scenes_v2`). The big one is B-1: alpha's long wall lines now cut the free space for the
 segmentation, with a furniture test of my own (a cut must be a two-sided partition or rise ≥ 0.8 m), so the
 floor_only room merge disappears without shrinking any room. Rooms matched 6 → 8 (all), walls passing 7 / 99 →
-13 / 87, median |Δ| 15.0 → 8.2 cm, footprint and floor recall unchanged. The candidate's single-visit idea (X-1)
+13 / 87, median |Δ| 15.0 → 8.2 cm, footprint and floor recall unchanged. My single-visit idea (X-1)
 was implemented and **rejected by its own evidence** (same-topology median 1.9 → 3.2 cm). The gate is still
 failed; what remains is mostly the extractor's own raster-phase sensitivity (found in this round, B-5) and the
 2 cm residual misalignment between the captures.
@@ -637,51 +565,6 @@ remove that; the drift module can.
   validation measures planes, not this extractor's output).
 - **X-4** has no measured effect: on the photo scene available every region voted a different folder.
 
-## v2.6 Proposed commits (to replay in the real repo, after section 7 and the judge's commits)
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 24 | `chore(plan): freeze plan_beta v1 as floorplan/plan/beta_v1 for the before/after` (tag `before-fix`) | `floorplan/plan/beta_v1/*` | Part 4 needs a regenerable "before" |
-| 25 | `exp(plan): plan_v2 harness on scenes_v2 (judge scoring, invariance, plausibility)` | `scripts/plan_v2_eval.py` | Same harness as the judge, new scenes, own registration |
-| 26 | `feat(plan): alpha's wall lines as segmentation cuts (paired or tall faces)` (tag `after-fix` if Part 4) | `floorplan/plan/beta/{lines,segment,extract,params}.py` | B-1, V2-D1/D2 |
-| 27 | `fix(plan): unentered regions split by a cut return to their entered neighbour` | `segment.py`, `extract.py` | V2-I-1 follow-up, no floor lost |
-| 28 | `feat(plan): noise-weighted wall fits and tape-height position band` | `walls.py`, `params.py` | X-2, X-3 |
-| 29 | `exp(plan): single-visit wall measurement (raw_frame), off by evidence` | `walls.py`, `grid.py`, `extract.py`, `params.py` | X-1, V2-I-2: the negative result is kept |
-| 30 | `feat(plan): drift sigma by visit, inconsistency term in wall sigma` | `walls.py`, `params.py` | B-4 |
-| 31 | `feat(plan): jamb-in-core door width from alpha (tall-face rule)` | `openings.py`, `params.py` | B-3 |
-| 32 | `fix(plan): ceiling double layer within 20 cm is inferred with a covering interval` | `levels.py`, `params.py` | B-6 |
-| 33 | `feat(plan): canonical outline after refinement, with overlap guard` | `walls.py`, `extract.py`, `params.py` | B-2, V2-I-4 |
-| 34 | `feat(plan): photo-folder room hints and coverage warning` | `extract.py`, `params.py` | X-4, B-8 |
-| 35 | `exp(plan): world-lattice raster anchor (off): exposes raster-phase sensitivity` | `grid.py`, `params.py` | B-5, V2-I-5 |
-| 36 | `docs(plan): plan_beta v2 section and plan_v2 ablation` | `docs/modules/plan_beta.md`, `docs/modules/plan_v2_ablation.md` | Defense |
-
-## v2.7 Concepts to explain in the defense
-
-- **Segmentation cut vs free-space barrier.** A barrier removes floor from the plan; a cut only tells the
-  watershed "rooms meet here". The cut cells are given back afterwards, so a wrong cut can at worst split a room
-  that has a narrow connection; it can never shrink the footprint. That is why it can afford to use evidence
-  below 1 m.
-- **Vertical extent as a furniture test.** A wall rises from the floor to the ceiling; almost all furniture stops
-  at 0.5–1.0 m. Counting how many 10 cm height bins a face covers (≥ 8 of them) separates the two without any
-  object recognition.
-- **Why averaging two passes beats one visit.** If each pass is off by an independent drift error of σ, the mean of
-  two is off by σ/√2; one visit is off by σ. Single-visit only helps when errors *between walls of one visit*
-  dominate, which on these captures they do not (measured).
-- **Weighted least squares.** Each point's influence is 1/σ²: a point measured at 0.5 m (σ ≈ 6 mm) counts more
-  than one at 3 m. It is the minimum-variance unbiased linear estimator when the noise levels are known.
-- **Inconsistency term.** The fit's rmse is what we see; the sensor's own noise is what we expect. The excess,
-  √(rmse² − σ_sensor²), is something else: two passes, a curtain, a bowed wall. It does not shrink with more
-  points, so it is added to the interval undivided.
-- **Truncated normal.** We trim at ±1.5 cm, so even pure sensor noise shows a smaller rmse than σ. The expected
-  rmse is computed for the truncated distribution, or the inconsistency would be underestimated.
-- **Raster phase.** Where a wall falls inside a 2 cm cell. Any yes/no rule on cells (coverage ≥ 50%, a run ≥ 30
-  cm) can flip when the phase moves by a millimetre. A test that does not move the phase (v1's shift test) cannot
-  see this; pinning the raster to a world lattice can.
-- **Repeatability ceiling.** If two captures are misaligned by 2 cm locally, no extractor can make their walls
-  agree to 1 cm. Same-topology walls (1.7 cm median) measure that floor directly.
-- **Negative results.** X-1 and the lattice anchor are kept in the code behind switches with their numbers: a fix
-  that was tried and measured worse is evidence, and the history should show it.
-
 ## Requested changes to shared code (v2)
 
 1. **Drift module:** write `drift_sigma` (held-out between-pass residual, and the within-visit ICP floor) into the
@@ -828,35 +711,6 @@ TSDF points lexicographically (or by voxel key) in `fuse_tsdf` before returning 
   topology-uncertainty flag. Intervals cannot express a topology error. The next step is to use it to mark
   unstable walls in the output, not to pick a build.
 
-## v3.6 Proposed commits
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 37 | `fix(plan): enclosed partly-covered arrangement cells belong to the room (no 2.5 m2 flips at the 50% rule)` | `walls.py`, `extract.py`, `params.py` | S-3 |
-| 38 | `exp(plan): sub-cell raster-phase vote (medoid build), off by evidence; meta.phase_vote diagnostic` | `extract.py`, `grid.py`, `params.py` | S-2, negative result kept |
-| 39 | `exp(plan): phase invariance test and output-dir override in the v2 harness` | `scripts/plan_v2_eval.py` | the shift test cannot see the phase |
-| 40 | `test(plan): phase helpers and wall agreement` | `tests/test_stability.py` | |
-| 41 | `docs(plan): Part v3 stability` | `docs/modules/plan_beta.md`, `docs/modules/plan_v2_ablation.md` | |
-
-## v3.7 Concepts for the defense
-
-- **Knife-edge decisions.** A yes/no rule on a continuous quantity (coverage ≥ 50%) makes the output jump when the
-  input crosses the threshold. If the decision is large (a 2.5 m² cell), a tiny input change gives a large output
-  change. The fix is either a rule that moves smoothly with the evidence, or a decision taken on different,
-  unambiguous evidence. S-3 decides on walls, not on coverage.
-- **Determinism is not stability.** Making the drift bit-reproducible removed the symptom on one machine. Only
-  fixing the knife edge makes a second capture land on the same plan.
-- **Medoid / majority vote.** It works when most samples agree, as in a majority of independent classifiers. When
-  pairwise agreement is only 60–70%, the "majority" is itself unstable, and here it was also biased toward the
-  shrunken outline.
-- **Why we judge on the repeat pair and the footprint, not the self-tests.** Self-invariance can be bought by
-  always making the same (wrong) choice. The repeat pair and floor recall check that the plan agrees with
-  another capture and still covers the floor.
-- *Say it in the defense:* "Same input, two plans. Two causes: Open3D's threaded ICP (fixed, now bit-identical)
-  and a 2.5 m² cell decided on a 50% coverage knife edge (0.535 vs 0.457). I replaced that by an evidence rule: an
-  enclosed cell inside the room's own walls is room floor hidden by furniture. I also built the proposed
-  multi-phase vote, and it shrank the plan, so it is off and documented."
-
 ---
 
 # Part v4: tiers (video and photo scenes)
@@ -875,7 +729,7 @@ surfaces come from learned depth.
 - **Video, single_room:** 1 room of 23.3 m² against 17.6 m² and 3 rooms from LiDAR. The 95% interval
   [18.3, 28.4] did not contain the LiDAR value (video_tier.md V2-I9). The scale error was only +2.8%, so this is the
   extractor, not scale.
-- **Photo:** the extractor ignored the room folders. Its rooms could not be matched to the user's rooms. It merged or
+- **Photo:** the extractor ignored the room folders. Its rooms could not be matched to the operator's rooms (one folder per room). It merged or
   split them freely, and it reported adjacency from rooms that touch only because the photo front-end placed an
   unlinked room "beside the block" (a guess, photo_tier.md P-6).
 
@@ -903,7 +757,7 @@ placement.
 | Step | What | Tier | Why |
 |---|---|---|---|
 | 0 (T-1) | `tiers.augment_surface`: raw points averaged into 3 cm voxels (voxels with ≥ 2 points), a PCA normal from 24 neighbours, oriented to face the camera along the stored ray, planar voxels only (smallest-eigenvalue share < 5%), added to `points/normals` | video | gives back the wall evidence and wall lines the TSDF dropped |
-| 2' (T-3) | `tiers.folder_segmentation`: one watershed marker per folder. The marker is a disc of 30 cm (operator radius) around the folder's cameras whose distance to the nearest obstacle is ≥ 50% of the folder's best camera. Cameras outside free space snap ≤ 0.5 m. No merging across folders; free space no folder reaches stays out | photo | the folder is the user's own statement of a room; spin photos stand mid-room, doorway photos stand in the door and would grow into the wrong room |
+| 2' (T-3) | `tiers.folder_segmentation`: one watershed marker per folder. The marker is a disc of 30 cm (operator radius) around the folder's cameras whose distance to the nearest obstacle is ≥ 50% of the folder's best camera. Cameras outside free space snap ≤ 0.5 m. No merging across folders; free space no folder reaches stays out | photo | the folder is the operator's own statement of a room; spin photos stand mid-room, doorway photos stand in the door and would grow into the wrong room |
 | 3e (T-2) | `tiers.add_geom_sigma`: every wall offset σ ← √(σ² + 5 cm²) | video, photo | surface noise of learned depth that the fit terms do not see |
 | 3e (T-5) | `inferred_sigma_m` 5 cm → 50 cm | photo | an unmeasured photo wall is only the edge of a few view wedges, not a free-space edge next to a wall |
 | 6 (T-3) | room `label` = folder name. Each room's (and its walls') interval half-widths × `info.rooms[folder].widen` (linked 2, door-match 3.5, fallback 4). Footprint × the area-weighted mean factor. Lower bounds clipped at 0 | photo | the front-end's placement confidence carried into the plan |
@@ -958,7 +812,7 @@ Photo. Four cached photo scenes, scored against the LiDAR plan the photos were s
 |---|---|---|
 | T-3 folder seeds (vs v3) | rooms named and matchable, adjacency 0 of 1 correct → 4 of 4 correct over the 4 scenes, no overlaps | **kept** |
 | seed only from cameras with DT ≥ 50% of the folder's best (vs all cameras) | floor_only/rotate 5 rooms and 2/2 correct links vs 4 rooms and 1/1 | **kept** |
-| `min_room_m2` 0.8 and no unvisited drop (vs LiDAR 1.2 / 0.6) | keeps 5 vs 4 rooms (with_ceiling/rotate), 2 vs 1 (with_ceiling/corners) | **kept** (a folder is a room the user declared) |
+| `min_room_m2` 0.8 and no unvisited drop (vs LiDAR 1.2 / 0.6) | keeps 5 vs 4 rooms (with_ceiling/rotate), 2 vs 1 (with_ceiling/corners) | **kept** (a folder is a room the operator declared) |
 | T-4 convex-hull fill per folder | with_ceiling/rotate footprint 16.5 → 44.9 m² (LiDAR 62.4), median room-area error 80% → 47%; but floor_only/rotate 28.8% → 68% **and a 2.1 m² overlap** between R2 and R3 | **rejected**: an overlap breaks a gate; kept as `folder_hull_fill` (off) |
 | T-1 raw surface for photo | median area error 77.9 → 79.7% / 28.8 → 28.8%, no topology change | not adopted (no evidence of gain) |
 | T-5 `inferred_sigma_m` 0.5 m | room-area interval coverage 4/13 → 9/13 rooms over the 4 scenes; values unchanged (same scene, same geometry) | **kept** (honesty; see limitations) |
@@ -1048,41 +902,6 @@ photo front-end.
    are still refined on raw points. On run B the dimensions agree within 1.6–2.2% after T-1, so it was not needed
    for the gate, but it is untested.
 
-## v4.8 Proposed commits
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 42 | `feat(plan): tier-aware BetaParams (params_for_tier), tier recorded in Plan.tier and meta.tier_v4` | `floorplan/plan/beta/params.py`, `tiers.py`, `extract.py` | one place for per-tier values; LiDAR bit-identical |
-| 43 | `fix(plan): video tier adds a raw-point surface (PCA normals) to the TSDF surface` | `tiers.py`, `extract.py` | T-1, V2-I9: 1 room / 23.3 m² → 3 rooms / 17.5 m² |
-| 44 | `feat(plan): surface-noise sigma on wall offsets for learned-depth tiers` | `tiers.py`, `extract.py`, `params.py` | T-2: intervals cover LiDAR end to end |
-| 45 | `feat(plan): photo tier: one seed per folder, folder names, per-folder widening, adjacency from links only` | `tiers.py`, `extract.py`, `params.py` | T-3, T-5: correct adjacency, no overlaps, honest intervals |
-| 46 | `exp(plan): per-folder convex-hull fill (off: overlap on floor_only/rotate)` | `tiers.py`, `params.py` | negative result kept as a switch |
-| 47 | `feat(cli): run_capture passes --tier to plan_beta; clip size intervals at 0` | `scripts/run_capture.py` | wiring; T-I8 |
-| 48 | `docs(plan): Part v4 tiers` | `docs/modules/plan_beta.md` | |
-
-## v4.9 Concepts for the defense
-
-- **Fusion thresholds trade coverage for cleanliness.** A TSDF voxel needs several observations, so with a few
-  noisy depth maps a wall can vanish. The space-first extractor needs walls to stop free space, so a missing wall
-  merges rooms. The fix keeps the cleaner fused surface and adds back the planar parts of the raw cloud.
-- **PCA normal.** The direction of least spread of a point's neighbours. A planarity test (smallest eigenvalue
-  share) keeps walls and rejects clutter.
-- **Error terms add in quadrature.** Fit noise, surface noise (T-2) and scale (D-016) are independent, so
-  σ² = σ_fit² + σ_geom² + (s·L)². Each comes from its own evidence.
-- **Seeds encode prior knowledge.** The watershed grows basins from markers. Giving it one marker per user folder
-  turns "how many rooms?" from a guess into the user's statement. Choosing spin-centre cameras (high distance
-  transform) avoids seeding in a doorway.
-- **Adjacency must be evidence, not coincidence.** After a fallback placement, two rooms can touch by construction.
-  Only a link (matched features or a doorway pair) is evidence. Touching pairs are logged as dropped.
-- **Honest failure.** Photo room sizes are wrong by tens of percent on simulated photos. v4 does not hide this: the
-  intervals widen, a size interval never starts below 0, and the doc says the 8% gate is not met.
-- *Say it in the defense:* "The video plan was one 23 m² room because the TSDF dropped two thirds of the walls.
-  I rebuild a planar surface from the raw depth points, which gives 3 rooms and 17.5 m² against LiDAR's 17.6, with
-  9 of 12 room dimensions within 3%. I also add a 5 cm surface-noise term measured from the residuals, so the
-  interval now contains the LiDAR value. For photos, each folder is one room, named after the folder. Adjacency
-  comes only from photo links (4 of 4 correct on the sample scenes), with no overlaps. Room sizes from photos are still partial, and the
-  intervals say so."
-
 ## v4.10 Photo v3: rooms from each folder's spin layout (added 04:00-05:00, 4 Oct)
 
 **Problem.** v4 photo rooms were the right rooms, joined the right way, but much too small (T-I5). Example:
@@ -1137,12 +956,3 @@ that does not exist. It cannot fire on LiDAR, where every wall exists, as the id
 T-I11: L-shaped rooms are fitted as one rectangle: open (photo_tier v3.6 item 2). T-I12: a layout rectangle overlapped a
 kept v4 room (1.06 m², corners end to end) → kept rooms are now fixed obstacles in the push-apart (fixed).
 T-I13: footprint interval collapsed when no layout was used → the v4 plan is returned unchanged (fixed).
-
-**Proposed commit.** `49 plan(photo): rooms from per-folder spin layouts (neighbour clip, push-apart, doorway-pair
-openings)`, files `floorplan/plan/beta/tiers.py`, `floorplan/plan/beta/extract.py`.
-
-**Defense concepts.** (1) *Space-first fails on thin input.* With 5 photos the floor is wedges; walls seen from the
-middle of the room are a better basis than floor seen from it. (2) *Cross-room constraints.* "A room cannot contain
-another room's camera spot" is a free consistency check, as in loop closure. It catches walls seen through doors.
-(3) *Non-overlap by construction.* Rectangles are pushed apart along the least-penetration axis. The least certain
-room moves, and the move is recorded (`shift_m`), never hidden.

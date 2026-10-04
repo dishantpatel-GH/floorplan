@@ -118,7 +118,7 @@ corner, GT ceilings are plane to plane. Nothing in that method was changed.
 |---|---|---|---|
 | A. LiDAR plan of the same capture as reference | Same rooms and the same moment. LiDAR room dimensions are within 1.2 cm of the laser on ARKitScenes (8/8 within 1.5 cm) | It is not ground truth. It carries LiDAR plan errors, e.g. a room that LiDAR splits differently | **chosen**, and every row is labelled "REFERENCE-BASED, not GT" |
 | B. Video trajectory against ARKit poses only | Already done in video_tier.md | Says nothing about the plan, adjacency or overlaps | not enough |
-| C. Wait for the own capture (tape) | Real ground truth | Not before 08:00, and the defense needs sample numbers too | done as well (section 6 of REPORT) |
+| C. Wait for the own capture (tape) | Real ground truth | Not before 08:00, and the report needs sample numbers too | done as well (section 6 of REPORT) |
 
 **Room matching.** The video plan and the reference live in different frames.
 
@@ -242,43 +242,13 @@ Every photo gate fails on the current code. The footprint and adjacency trend fr
 5. The video tier is not repeatable run to run (BF-5; video_tier.md 13c). One run per capture is a sample, not a
    distribution.
 
-## 7. Proposed commits (replay order)
-
-| # | Message | Files |
-|---|---|---|
-| 1 | `bench: one runner for the final benchmark runs (fingerprint, load, OOM retry)` | `scripts/bench_final_runs.sh` |
-| 2 | `bench: re-run ARKitScenes build+measure on current code (D-027 now in the plans)` | `scripts/bench_final_arkit.py` |
-| 3 | `bench: reference-based scoring of video/photo plans against the LiDAR plan of the same capture` | `scripts/bench_tier_ref.py` |
-| 4 | `bench: final report generator (gates x 3 tiers, repeatability, head-to-head, timing, calibration)` | `scripts/bench_final.py` |
-| 5 | `docs: final benchmark module + generated REPORT.md` | `docs/modules/benchmark_final.md`, `outputs/benchmark/final/REPORT.md` |
-
-## 8. Concepts for the defense
-
-- **Reference-based is not ground truth.** Video and photo are scored against LiDAR because it is the best measured
-  thing in the same rooms. Its absolute error is known separately, from ARKitScenes against a laser. Every such row is
-  labelled.
-- **Why the dimensions proxy.** Matching walls one by one needs a shared frame and the same wall split, and
-  learned-depth plans have neither. For a rectangle, the two room dimensions are the wall lengths.
-- **Fair subset.** Do not blame the pipeline for rooms nobody photographed. Do not hide it either: both rows are
-  shown, and the gate uses the whole flat.
-- **Calibration has two numbers.** Coverage near 95% means the intervals are honest. Coverage near 100% with ±60%
-  half-widths is honest but useless. Coverage of 50% means the tier is confidently wrong.
-- **Determinism is a precondition for repeatability.** The LiDAR command now gives the same plan twice (D-029). The
-  video front end does not, so its failures (BF-5) are partly luck. That is stated, not hidden.
-- **Idempotent report.** It was smoke-tested on a synthetic `own_eval.json` (GT made from the LiDAR plan, a fake app
-  export, in the scratchpad, never in `outputs/own`): sections 2, 3 and 6 fill in, and with no file they show
-  "pending". The report is a function of the run folders: re-running the script never changes a number
-  unless a run changed. Missing runs show as pending, never as zero.
-- **Staleness tracking.** In a multi-agent repo the code moves under the benchmark. Fingerprints and a "changed
-  since" column make a stale number visible instead of silently wrong.
-
-## 9. Final run (2026-10-04, 05:08–06:28 IST, final code)
+## 7. Final run (2026-10-04, 05:08–06:28 IST, final code)
 
 All runs in this section share one code fingerprint (`57bec9dc`, LiDAR path `f6e659b2`, in each run's
 `code_fingerprint.txt`); no pipeline file changed during or after them (REPORT section 4, last column "none").
 Report: `outputs/benchmark/final/REPORT.md`, generated 06:28. The previous report is kept as `REPORT_0505.md`.
 
-### 9.1 What was run
+### 7.1 What was run
 
 One sequential chain on the free GPU, so that no two heavy jobs overlapped (log: `final/runs_final_chain.log`):
 
@@ -304,7 +274,7 @@ Before the LiDAR runs overwrote `drift_on/` and `drift_off/`, those plans were c
 - The LiDAR code-change check also compares against the 04:32 and 04:45 snapshots.
 - The LiDAR internal row shows adjacency pairs and the openings that D-033 dropped.
 
-### 9.2 What changed in the code since the 05:05 report, and its measured effect
+### 7.2 What changed in the code since the 05:05 report, and its measured effect
 
 | Change | Effect in this run | Evidence |
 |---|---|---|
@@ -314,7 +284,7 @@ Before the LiDAR runs overwrote `drift_on/` and `drift_off/`, those plans were c
 | D-034 video sigma floor (20%) + `meta.reliability = "low: ..."` when `whole_scene_consistent` is False | Fired on floor_only (both runs) and with_ceiling. It did not fire on single_room (1 segment, consistent). Long-video interval coverage: floor_only 31% (rerun at 04:41) → **88%** (n 16, median half-width 41%). with_ceiling 38% → **60%** (n 10, half-width 34%). floor_only second run **70%**. The footprint interval now covers LiDAR on floor_only/final (40.91 [8.82, 73.01] against 61.90). It still misses on with_ceiling (19.40 [4.16, 34.64] against 62.50, −69%) and on floor_only/final_rerun (18.95 [4.07, 33.83], −69%) | REPORT §1 and §5 |
 | cuDNN determinism in `dpvo_runner.py` (I-007) | **The floor_only outcome is still not stable.** Run 1: 5 rooms, 40.91 m², 2 segments. Run 2: 3 rooms, 18.95 m², 4 segments (one untrusted). Root cause in 9.4 | REPORT §2, `video/floor_only/final{,_rerun}/stdout.log` |
 
-### 9.3 Numbers before → after (05:05 report → 06:28 report)
+### 7.3 Numbers before → after (05:05 report → 06:28 report)
 
 Gate counts (REPORT §0): LiDAR 3 PASS / 3 FAIL, unchanged. Video 3 / 8 → 2 / 13. Photo 1 / 16, unchanged. The video
 count rose partly because floor_only is now scored on a run with rooms; the 05:05 gate table used its 0-room
@@ -333,7 +303,7 @@ count rose partly because floor_only is now scored on a run with rooms; the 05:0
 | video wall time (s) | 270 (single_room current) / 1130 (floor_only default) / 1996 | 272 / 794 / 1737 (second floor_only run 895) |
 | photo wall time (s) | 27 / 76 / 127 (interim) | 9 / 37 / 45. **Warm cache:** "depth + gravity ... loaded from cache" in every v3 log (the interim runs also hit the cache on with_ceiling). These are not cold-start times |
 
-### 9.4 Residual failures and root causes
+### 7.4 Residual failures and root causes
 
 | # | Failure | Root cause (evidence) | Owner / next step |
 |---|---|---|---|
@@ -344,7 +314,7 @@ count rose partly because floor_only is now scored on a run with rooms; the 05:0
 | — | Photo: every size gate fails; with_ceiling footprint is worse under v3 (−26.9%) than at the interim state (−13.3%) | Simulated spins see part of each room; layout sides over- or under-reach (photo_tier.md v3.6). The interim with_ceiling footprint was closer by luck of fragments (its dimensions were 0/14 as well) | Photo owner; the 08:00 own capture (tape) is the real test |
 | — | LiDAR repeat pair 17.2%, ceilings 3/4 (ARKitScenes) | Unchanged from section 5 (BF-8; repeat pair: different wall splits between captures) | Unchanged |
 
-### 9.5 Verdict for the defense
+### 7.5 Verdict
 
 - **LiDAR** is stable and deterministic on the final code: identical plans across the 04:32 and 06:12 code states and
   across reruns.

@@ -50,6 +50,19 @@ def drop_implausible_openings(plan) -> list[dict]:
 
 
 PHOTO_OVERRIDES: dict = {}
+SEMANTIC_HINT = {"no segmentation env": "build it with setup/seg_env.sh",
+                 "disabled": "turned off with --photo-param semantic_walls=false"}
+
+
+def semantic_warning(info: dict) -> str | None:
+    """D-060: without the wall segmenter, wardrobes and cabinets can become walls (k65 footprint -14.9% instead of
+    -8.3%). The photo tier still runs, so the plan must say it was made from geometry only."""
+    status = (info.get("semantic") or {}).get("status", "not run")
+    if status == "ok":
+        return None
+    hint = SEMANTIC_HINT.get(status, "see 'semantic' in scene/scene_info.json")
+    return (f"no semantic wall masks ({status}; {hint}): photo rooms from geometry only, so wardrobes and "
+            "cabinets can be taken for walls (D-060)")
 
 
 def front_end(inp: Path, tier: str, cfg: Config, out: Path, drift: bool, log):
@@ -88,6 +101,9 @@ def front_end(inp: Path, tier: str, cfg: Config, out: Path, drift: bool, log):
         scene, info = build_scene_from_photos(inp, params=PHOTO_OVERRIDES or None)
         rel = float(info.get("scale_sigma_rel", info.get("scale", {}).get("sigma_rel", 0.05)) or 0.05)
         reason = "photo scale from learned metric depth + priors; no reference object needed (D-067)"
+        warning = semantic_warning(info)
+        if warning:
+            report["warnings"] = [warning]
         return scene, info, report, rel, reason
     raise ValueError(tier)
 
@@ -161,6 +177,9 @@ def main():
     report = dict(input=str(a.input), tier=a.tier, extractor=a.extractor, config=cfg.to_dict())
 
     scene, info, fe_report, rel_sigma, rel_reason = front_end(a.input, a.tier, cfg, out, not a.no_drift, log)
+    run_warnings = fe_report.pop("warnings", [])
+    if run_warnings:
+        report["warnings"] = run_warnings      # top level, so nobody has to dig for them
     report["front_end"] = fe_report
     if info.get("floor_y") is None:
         # D-032: never crash on a missing floor; estimate it, say how, and keep it in the report
@@ -207,6 +226,8 @@ def main():
     widen_plan(plan, rel_sigma, rel_reason)
     if fe_report.get("reliability"):
         plan.meta["reliability"] = fe_report["reliability"]
+    if run_warnings:
+        plan.meta["warnings"] = list(run_warnings)
     report["intervals_clipped_at_zero"] = clip_nonnegative(plan)
     log(f"plan: {len(plan.rooms)} rooms, {len(plan.walls)} walls, {len(plan.openings)} openings")
 
@@ -231,6 +252,8 @@ def main():
     export_dxf(plan, out / "plan.dxf")
     report["runtime_s"] = round(time.time() - t0, 1)
     (out / "run_report.json").write_text(json.dumps(report, indent=1, default=str))
+    for w in run_warnings:
+        log(f"WARNING: {w}")
     log(f"done -> {out}")
 
 

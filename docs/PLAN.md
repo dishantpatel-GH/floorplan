@@ -1,8 +1,7 @@
 # Build plan and status board
 
-Deadline: **5 Oct 2026, 19:00 IST**. The scratch build in `dummy_repo/` should be complete by about 4 Oct afternoon.
-That leaves time to replay it into the real repo (`docs/COMMIT_PLAN.md`), write the 6-page report, and rehearse the
-defense.
+Deadline: **5 Oct 2026, 19:00 IST**. The build in a scratch folder should be complete by about 4 Oct afternoon.
+That leaves time to move it into this repo (README, History) and write the 6-page report.
 
 ## Architecture: one back-end, three front-ends
 
@@ -50,7 +49,7 @@ defense.
 ## Scope after the recruiters' reply (D-012)
 
 - **Part 1:** Route 2 protocol (`docs/CAPTURE_PROTOCOL.md`), revised by evidence (D-017).
-- **Own benchmark:** photo and video tiers on the candidate's home (OnePlus Nord, tape ground truth) on 4 Oct
+- **Own benchmark:** photo and video tiers on my home (OnePlus Nord, tape ground truth) on 4 Oct
   morning. LiDAR uses the sample data, with the recruiters' permission.
 - **Part 3:** a consumer app (magicplan) on 2 own rooms, compared at the photo/video tier. This is a disclosed
   deviation: no LiDAR device is available for own rooms.

@@ -19,7 +19,7 @@ nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,nohead
 
 Copy the files by **USB cable**. Put the phone in "File transfer" mode; the photos and videos are in `DCIM/Camera`.
 Never use WhatsApp, Telegram, email or a cloud share: they strip the EXIF (capture time, focal length) and recompress.
-Use the layout from step 0 of `TakeHome/HOUSE_CAPTURE_GUIDE.md`, one folder per capture date:
+Use the layout from step 0 of `docs/HOUSE_CAPTURE_GUIDE.md`, one folder per capture date:
 
 ```text
 TakeHome/OwnCaptures/<date>/
@@ -133,7 +133,8 @@ reports what the pipeline decided:
 Then open each `outputs/own/<run>/plan.png` next to your sketches: photo, photo_repeat_take1, photo_repeat_take2,
 video_take1, video_take2, video_lowlight. Check that every room is there and that the rooms join into one plan
 without overlaps. Check that the long walls are long and the doors are in the right walls. Write down what is wrong
-before you look at the scores. README §7.1 step 5 lists the flags in each `plan.json` meta.
+before you look at the scores. The flags to read in each `plan.json` meta: `reliability` (D-034), `floor_fallback`
+(D-032), `dropped_openings` (D-033), `coverage_warning`, `warnings` and `damage` (confirmed / review).
 
 ## Step 4. Score against the tape
 

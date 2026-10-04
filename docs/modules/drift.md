@@ -65,7 +65,7 @@ corrected poses.
 
 **What it delivers to other modules.** It also delivers `drift_sigma`: how far two observations of the same surface
 made at different times still disagree after correction. This is the residual-drift term of every interval (the
-error budget in `docs/EXPLAINER.md` section 7).
+error budget in `docs/TECHNICAL_REPORT.md` §4).
 
 ---
 
@@ -330,13 +330,13 @@ Each step builds both scenes (OFF = ARKit as-is, ON = corrected), puts them in o
 - **Root cause.** Open3D's multithreaded ICP sums in a different order between runs.
 - **Fix chosen.** None for now: the conclusions do not change. Every other random choice is seeded (`RNG_SEED = 0`).
   If bit-exact replay is required, run ICP single-threaded (`OMP_NUM_THREADS=1`) at about 3x the runtime.
-- **Defense point.** Differences below ~0.3 mm in wall sharpness should not be read as real.
+- **Consequence.** Differences below ~0.3 mm in wall sharpness should not be read as real.
 
 **Issue 9: rename bug while refactoring.**
 
 - **Symptom.** A global `_yaw` → `yaw_angle` rename also turned `manhattan_yaw(` into `manhattanyaw_angle(`, which
   crashed the run.
-- **Fix chosen.** Fixed by hand. In the real repo, use an IDE rename instead of `str.replace`.
+- **Fix chosen.** Fixed by hand. Lesson: use an IDE rename, not `str.replace`.
 
 ---
 
@@ -554,111 +554,6 @@ heading.
 
 ---
 
-## 7. Proposed commits (replay order for the real repo)
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 1 | `feat(drift): fragments from raw high-confidence LiDAR (1.5 m / 5 s, anchored at the middle keyframe)` | `floorplan/recon/drift.py` (DriftParams, Fragment, split_fragments, build_fragments) | Trust ARKit locally; one node per fragment |
-| 2 | `feat(drift): multi-scale point-to-plane ICP with point-to-plane information and loop verification` | `drift.py` (register, point_to_plane_stats, verify_loop, loop_edges, overlap_fraction) | Loop measurements that know about degenerate corridors |
-| 3 | `feat(drift): Open3D 6-DoF pose graph baseline (Choi et al. 2015) + per-frame correction blending` | `drift.py` (odometry_edges with refine_odometry, solve_open3d6, interpolate_corrections, correct_drift) | Textbook method first, so the comparison is honest |
-| 4 | `feat(drift): ablation script: OFF/ON scenes, overlay, loop residuals, footprint proxies` | `scripts/drift_ablation.py` | The gate's on/off evidence |
-| 5 | `exp(drift): 6-DoF baseline tilts fragments ~1 deg and 34/65 ICP odometry edges fail -> switch plan` | `docs/modules/drift.md` (Issues 1–2) | Records why we left the textbook method |
-| 6 | `feat(drift): plane anchors - per-fragment Manhattan wall direction and floor level` | `drift.py` (measure_plane_anchors, anchor_sets) | Absolute heading/vertical reference without loops |
-| 7 | `feat(drift): robust 4-DoF pose graph (IRLS-Cauchy) with ARKit odometry; loops searched from anchored estimate` | `drift.py` (Graph4, build_graph, solve_4dof, run_graph) | Gravity is observed; floor_only loops need the anchored start |
-| 8 | `feat(drift): surface-separation residual, held-out k-fold loops, ICP noise floor, drift_sigma export` | `drift.py` (edge_residual), `drift_ablation.py` (cross_validate, icp_noise_floor, drift_sigma) | Honest numbers, and the interval term for other modules |
-| 9 | `feat(drift): wall-sharpness metric and variant rows (loops-only, anchors-only, Open3D baseline)` | `drift_ablation.py` | Metrics the solver never saw |
-| 10 | `exp(drift): sigma sweep; wall sharpness exposes yaw jitter -> add second-difference yaw smoothness` | `drift.py` (yaw_smooth_sigma_deg), `drift_ablation.py` (sigma_sweep, `--sweep`) | Issue 5 |
-| 11 | `feat(drift): ceiling level as an independent vertical check (robust MAD)` | `drift.py` (_highest_level, anchor_spread), `drift_ablation.py` (fig_corrections) | Issue 6–7: validates the 10 cm vertical correction |
-| 12 | `fix(drift): keep poses for captures with < 3 fragments` | `drift.py` (run_graph guard) | Walk-in test must never crash on a short capture |
-| 13 | `docs(drift): module document` | `docs/modules/drift.md` | Defense material |
-| 14 | `exp(eval): cross-capture registration with drift on vs off` | (eval's `register_scenes.py`, outputs only) | Repeatability evidence |
-| 15 (after approval) | `feat(pipeline): drift correction on by default in build_scene; --no-drift for the ablation` | `floorplan/pipeline/scene.py`, `floorplan/config.py`, `scripts/prepare_scene.py` | "Poses used as-is" must never be the default |
-
----
-
-## 8. Concepts to explain in the defense
-
-**VIO and drift.**
-
-- Visual-inertial odometry estimates the phone's motion from camera features plus the IMU, frame by frame.
-- Each step has a small error, and the errors add up like a random walk, so the position error grows with distance.
-- Gravity is measured directly by the accelerometer, so tilt does not drift. Heading (yaw) and position do.
-
-**Fragment.** A short piece of the walk (1.5 m), fused into one point cloud using the trusted local poses. It is
-treated as rigid: only its overall pose gets corrected.
-
-**Pose graph.**
-
-- Nodes are poses (one per fragment). Edges are measured relative poses between nodes.
-- Solving means finding node poses that agree with all edges as well as possible (weighted least squares).
-- Odometry edges link neighbours in time. Loop-closure edges link the same place visited twice, and those are what
-  expose and fix drift.
-
-**ICP (Iterative Closest Point), point-to-plane.**
-
-1. Match each point of cloud A to its nearest point in cloud B.
-2. Move A to minimise the distance *along B's surface normal*.
-3. Repeat.
-
-Point-to-plane lets surfaces slide along each other, so it converges faster and is more accurate on walls.
-Coarse-to-fine (8 → 4 → 2 cm) widens the basin of convergence.
-
-**Information matrix and degeneracy.**
-
-- The information matrix (inverse covariance) of an ICP result says which directions are well measured.
-- Two parallel walls measure the distance between them but not the position along them. Point-to-plane information
-  (Σ JᵀJ with J = [q×n, n]) captures exactly that.
-
-**Gauge freedom.** A pose graph only knows relative poses, so the whole solution could slide or rotate freely.
-Fixing fragment 0 removes that freedom.
-
-**4-DoF vs 6-DoF.** We solve only for x, y, z and yaw, because roll and pitch are observed by gravity. That matches
-the physics and prevents ICP noise from tilting the map. VINS-Mono's loop closure does the same.
-
-**Manhattan world and the 4θ trick.**
-
-- Most interior walls meet at 90°, so wall-normal angles cluster at θ, θ+90°, θ+180° and θ+270°.
-- Multiplying angles by 4 maps all four onto one value, so a circular mean of exp(4iθ) gives the building's
-  orientation.
-- A fragment whose walls read 2° off was rotated by heading drift.
-
-**Plane anchors.** Priors that tie each fragment to building-wide planes: the walls' common direction and the floor
-level. They give an absolute reference without any revisit.
-
-**Robust kernels and IRLS.**
-
-- Least squares trusts every measurement equally, so one wrong loop can bend the whole map.
-- A Cauchy kernel gives each measurement a weight w = 1 / (1 + r²/c²), which shrinks as the residual r grows.
-- IRLS alternates two steps: solve with the current weights, then recompute the weights.
-- Open3D's "line process" (Choi et al.) is the same idea.
-
-**Noise model as a random walk.** Odometry σ grows with √(distance). That is the standard deviation of a sum of
-independent per-metre errors.
-
-**Second-difference smoothness.** ψ_{k+1} − 2ψ_k + ψ_{k−1} is zero for a straight line (constant drift rate) and
-large for zig-zags. Gyro bias makes heading drift a slow ramp, so this prior removes jitter without resisting the
-real drift.
-
-**SLERP.** Spherical linear interpolation of rotations: the rotation "halfway between" two rotations, at constant
-angular speed. It is used to blend corrections between fragments without seams.
-
-**k-fold held-out validation.**
-
-1. Split the loops into 5 groups.
-2. For each group, re-solve without it and measure its residual.
-3. Pool the results.
-
-In-sample residuals are what the solver minimised, so they always look good. Held-out residuals show how well the
-correction generalises to geometry it did not see.
-
-**MAD-σ (robust spread).** 1.4826 × the median absolute deviation from the median. It equals σ for Gaussian data but
-ignores a few outliers (for example a fragment that sees another room's ceiling).
-
-**Surface separation.** The component of a misalignment along the surface normal, i.e. how far apart two copies of
-the same wall are. It is what a floor plan cares about.
-
----
-
 ## Requested changes to shared code
 
 1. **`floorplan/pipeline/scene.py` → `build_scene`: run drift correction by default.**
@@ -676,9 +571,6 @@ the same wall are. It is what a floor plan cares about.
    - Use `0.013` vertical when floor and ceiling of a room come from different passes.
    - Better: read `outputs/drift/<capture>/drift_report.json → drift_sigma`.
 5. **`docs/DECISIONS.md`:** add a D-entry summarising DR-1/2/8/11.
-   - *Say it in the defense:* "Trust ARKit locally, correct it globally: a 4-DoF pose graph over 1.5 m LiDAR
-     fragments, with ICP loop closures and Manhattan/floor anchors. Validated on held-out loops and on a ceiling it
-     never saw."
 6. **`docs/COMPLIANCE.md` G4:** point to `outputs/drift/*/fig_overlay.png` and `ablation.json`.
 
 No packages were installed.
@@ -773,26 +665,3 @@ re-time of with_ceiling is still to do.
 
 Unit test: `tests/test_stability.py::test_icp_bit_reproducible_in_parallel_pool` (8 ICPs from 4 Python threads
 give the bit-identical transform) and `test_deterministic_open3d_restores_thread_limit`.
-
-## S.6 Proposed commits
-
-| # | Message | Files |
-|---|---|---|
-| S1 | `fix(drift): bit-reproducible ICP — single-threaded Open3D per registration, candidate pairs in a thread pool` | `floorplan/recon/drift.py` (`deterministic_open3d`, `loop_edges`, `odometry_edges`, `DriftParams.icp_workers`) |
-| S2 | `test(drift): ICP bit-reproducibility under a thread pool` | `tests/test_stability.py` |
-| S3 | `docs(drift): Part S — determinism root cause and evidence` | `docs/modules/drift.md` |
-
-## S.7 Concepts for the defense
-
-- **Non-associative floating point.** (a + b) + c and a + (b + c) differ in the last bit. A parallel reduction adds
-  in an order set by the thread scheduler, so a multi-threaded sum is not reproducible bit for bit. Fixing the
-  order (one thread per reduction) makes it reproducible; running independent reductions side by side keeps the
-  speed.
-- **Determinism vs stability.** Determinism: same input, same output. Stability: a small input change gives a small
-  output change. The drift fix gives determinism. It does not make the plan stable: a second capture always
-  differs by far more than 1e-15, so the extractor's own amplification (0.06 mm → 2.5 m²) had to be fixed separately.
-- **Tolerance ball.** An iterative solver stops anywhere inside a ball of radius set by its tolerances (here
-  ~0.02 mm). Below that size, "different" poses are the same answer.
-- *Say it in the defense:* "The same command gave two plans. I traced it to Open3D's multi-threaded ICP summing in a
-  different order each run, 4e-15 differences that the solver turned into 0.02 mm. Each ICP now runs single-threaded
-  and the pairs run in parallel, so the output is bit-identical and only about 40% slower."

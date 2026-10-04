@@ -1,7 +1,6 @@
 # Own benchmark capture plan
 
-The step-by-step guide the candidate follows is `TakeHome/HOUSE_CAPTURE_GUIDE.md`. It is kept outside the repo so it
-can be opened on a phone. When the real repo is built, copy it to `docs/BENCHMARK_CAPTURE_PLAN.md`.
+The step-by-step guide for the capture is `docs/HOUSE_CAPTURE_GUIDE.md`, a copy of the one used on the phone.
 
 How each case-study benchmark rule (Part 2) is met:
 

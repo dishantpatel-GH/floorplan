@@ -192,9 +192,6 @@ Why it matters for the score:
 | `damage[]`, `scope_items[]` | none | none (magicplan has estimate add-ons) | **our addition** (Part 2 contract) |
 | `coordinate_frame` | ARKit world: right-handed, y up | plan 2-D | ours is the same frame, aligned to the walls |
 
-- **Say it in the defense.** "No schema was published, so I wrote a versioned one shaped like RoomPlan's, with the
-  one thing RoomPlan lacks: an interval and a status on every number."
-
 ### E-2 The measurement object: `ci95: [lo, hi]` plus `status`
 
 - **Options.**
@@ -234,8 +231,6 @@ Why it matters for the score:
   - Looking down from +y with +x to the right, +z = x × y points down the page.
   - So (a) shows the apartment's mirror image.
   - The JSON stores (u, v) unchanged and documents this in `coordinate_frame.view_from_above = {u: right, v: down}`.
-- **Say it in the defense.** "A right-handed y-up frame seen from above has z pointing toward the viewer's feet;
-  plotting it upward mirrors the plan. I checked det = +1 on all three captures."
 
 ### E-5 One rendering path: matplotlib → SVG and PNG
 
@@ -422,59 +417,6 @@ Other limitations, with what we would do next:
    self-contained but larger and not searchable.
 8. **The schema is ours, not the company's.** If they share their published schema, we add a mapping function that
    turns our `Plan` into their JSON; the internal model does not change.
-
-## 7. Proposed commits for the real repo
-
-Replay these in order, after the shared commits for the model and the scene. Each commit runs on its own. The
-`fix` commits are real issues from §4, kept separate because Part 5 reads the history.
-
-| # | Message | Files | Why |
-|---|---|---|---|
-| 1 | `feat(export): versioned JSON schema for the plan contract (every number has a 95% interval)` | `schema/plan.schema.json` | The contract comes first; the code is written against it |
-| 2 | `feat(export): Plan <-> JSON with schema and semantic validation` | `floorplan/export/json_export.py` | Explicit mapping, rounding to 0.1 mm, id and interval checks |
-| 3 | `test(export): synthetic apartment fixture with derived geometry` | `tests/fixtures/make_synthetic_plan.py`, `tests/fixtures/synthetic_plan.json` | Develop the exporters before the extractors exist |
-| 4 | `test(export): schema, round-trip and validator tests` | `tests/test_export.py` (JSON tests only) | Pins the promises in the docs |
-| 5 | `feat(export): top-down plan renderer (rooms, mitred walls, openings)` | `floorplan/export/render.py` (geometry + walls + openings) | Product surface; correct (unmirrored) view from day one |
-| 6 | `fix(export): hatch nominal-thickness corners; keep window labels off the glazing` | `floorplan/export/render.py` | Issues 1 and 2 |
-| 7 | `feat(export): dimension lines with intervals and collision-aware labels` | `floorplan/export/render.py` | Dimensions, room labels, Labeler, render stats |
-| 8 | `fix(export): treat door swings as soft obstacles; keep dimensions on their wall's side` | `floorplan/export/render.py` | Issue 3 (dims_forced 4 → 0 without side flips) |
-| 9 | `fix(export): measured junction squares; correct room-label stats` | `floorplan/export/render.py`, `tests/fixtures/make_synthetic_plan.py` (stress plan) | Issues 4 and 5 |
-| 10 | `feat(export): DXF export in metres with real DIMENSION entities` | `floorplan/export/dxf.py` | CAD hand-off like magicplan / poly.cam |
-| 11 | `fix(export): keep DXF dimension text upright` | `floorplan/export/dxf.py` | Issue 6 |
-| 12 | `feat(scripts): render_plan CLI (validate, svg/png/dxf, report)` | `scripts/render_plan.py` | One command to redraw any plan.json |
-| 13 | `test(export): determinism, robustness and DXF read-back tests` | `tests/test_export.py` | Regenerable before/after runs for Part 4 |
-| 14 | `docs(export): module doc with decisions, issues and RoomPlan/magicplan mapping` | `docs/modules/export.md` | Defence material |
-
-Do not commit `outputs/export/` (generated); the commands in §5 regenerate it.
-
-## 8. Concepts to explain in the defense
-
-- **JSON Schema (draft 2020-12).** A JSON document that describes what other JSON documents may look like: types,
-  required keys, allowed values, and conditional rules ("if status is not_observed, then value must be null"). A
-  validator checks a file against it automatically. It is the "published schema" a customer integrates against.
-- **95% confidence interval.** A range `[lo, hi]` that should contain the true value 95% of the time. "±0.8 cm" on
-  the plan is half the interval's width. *Calibrated* means that across many measurements about 95% really do fall
-  inside. Too narrow is "confident garbage"; too wide is useless.
-- **Measured / inferred / not observed.** Measured = from sensor data on that element. Inferred = from a prior or
-  neighbouring geometry (for example a wall hidden behind a toilet, length taken from its corners). Not observed =
-  no data, so no number. We never print a number we do not have.
-- **Handedness and mirroring.** In a right-handed frame, x × y = z. With y pointing up at the viewer and x to the
-  right, z points down the page. Drawing z upward reflects the plan, a mirror image. `det(R) = +1` means a rotation
-  without a reflection.
-- **Polygon offsetting with mitred corners.** Shift each wall-face line outward by its thickness; the outer corner
-  is where neighbouring shifted lines cross. If the lines are nearly parallel, or the crossing is very far away (a
-  sharp spike), cut the corner instead (bevel).
-- **Boolean polygon operations (shapely).** Union (merge the walls of all rooms), difference (remove room interiors
-  and door openings). They make the wall drawing exact, without special cases.
-- **Pole of inaccessibility (polylabel).** The point inside a polygon that is farthest from its edges. It is the best
-  spot for a label: in an L-shaped room the centroid can lie outside the room, but this point never does.
-- **Greedy label placement.** For each label, try candidate positions and sizes from best to worst and take the
-  first that overlaps nothing. It is simple, fast and deterministic, and we count every compromise.
-- **DXF, INSUNITS and DIMENSION entities.** DXF is AutoCAD's exchange format. `$INSUNITS = 6` declares metres, so 1
-  drawing unit = 1 m. A DIMENSION entity is a real CAD dimension object: it knows its endpoints, style and text.
-  `render()` builds the graphic block that viewers display.
-- **Deterministic output.** Same input, same bytes out: fixed SVG id salt, no timestamps, rounding. This makes
-  before/after runs (Part 4) comparable with a plain diff.
 
 ## Requested changes to shared code
 
