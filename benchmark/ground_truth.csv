@@ -1,0 +1,10 @@
+room_id,item_type,item_id,description,value_m,measured_with,notes
+# One row per measurement, in metres (e.g. 3.425). Walls are named W1, W2, ... clockwise, starting with the wall that has the main door.
+# item_type: wall | ceiling_height | door_width | door_height | window_width | window_height | window_sill | diagonal | damage_width | damage_height | damage_from_floor | damage_from_corner
+# Example rows (delete them and add your own):
+bedroom1,wall,W1,wall with the main door,3.412,tape,measured at 1 m height
+bedroom1,wall,W2,,2.987,tape,
+bedroom1,ceiling_height,C1,near the room centre,2.705,tape,
+bedroom1,door_width,D1,main door clear width between jambs,0.812,tape,at 1 m height
+bedroom1,window_width,N1,window on W3,1.204,tape,
+bedroom1,damage_width,DMG1,class A water stain on W2,0.31,tape,staged paper decal
