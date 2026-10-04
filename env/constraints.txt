@@ -1,0 +1,4 @@
+torch==2.14.1+cu130
+torchvision==0.29.1+cu130
+# numpy must stay >= 2 (several repos pin numpy<2: install those with --no-deps)
+numpy>=2

@@ -1,0 +1,36 @@
+# runs, data, weights and environments stay out of git (scripts fetch or regenerate them)
+/outputs
+/off/
+/data/
+/weights/
+/envs/
+/.venv/
+/third_party/
+/captures/
+photo_work/
+*.ply
+*.npz
+*.mp4
+*.mov
+*.MOV
+*.heic
+*.HEIC
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# simulator caches
+.simcache/
+
+# images and model files: runs write them under outputs/; figures for the docs go in docs/img/
+*.png
+*.jpg
+*.jpeg
+!docs/img/*
+*.pkl
+*.h5
+*.pt
+*.pth
+*.safetensors

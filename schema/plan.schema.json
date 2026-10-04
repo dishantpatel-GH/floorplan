@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/floorplan/plan.schema.json",
+  "title": "Dimensioned, stitched floor plan with 95% intervals on every measurement",
+  "description": "Output contract of the floor-plan pipeline (Part 2). One document per capture. Every measured number is a Measurement object: value, 95% interval, unit, method and status. A value that was not observed is null with no interval; the pipeline never invents a number. Modelled on Apple RoomPlan's CapturedRoom (walls / doors / windows / openings / sections) and on magicplan's export (floor -> rooms -> walls with doors/windows attached), extended with uncertainty, provenance and damage/scope records. See docs/modules/export.md for the field mapping.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "units", "coordinate_frame", "capture_id", "tier", "footprint_area",
+               "rooms", "walls", "openings", "adjacency", "damage", "scope_items", "meta"],
+  "properties": {
+    "schema": {"const": "floorplan.plan"},
+    "schema_version": {"type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$",
+                       "description": "Semantic version. Consumers accept any 1.x; a breaking change bumps the major."},
+    "units": {
+      "type": "object",
+      "required": ["length", "area", "angle", "height"],
+      "properties": {
+        "length": {"const": "m"}, "area": {"const": "m2"}, "angle": {"const": "deg"}, "height": {"const": "m"}
+      }
+    },
+    "coordinate_frame": {
+      "type": "object",
+      "required": ["name", "description", "plan_axes", "up_axis", "handedness", "view_from_above"],
+      "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "plan_axes": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+        "up_axis": {"type": "string"},
+        "handedness": {"enum": ["right", "left"]},
+        "view_from_above": {"type": "object"},
+        "heights": {"type": "string"}
+      }
+    },
+    "capture_id": {"type": "string", "minLength": 1},
+    "tier": {"enum": ["lidar", "video", "photo"]},
+    "footprint_area": {"$ref": "#/$defs/measurement",
+                       "description": "Union of all room floor areas (m2) of the stitched plan."},
+    "rooms": {"type": "array", "items": {"$ref": "#/$defs/room"}},
+    "walls": {"type": "array", "items": {"$ref": "#/$defs/wall"}},
+    "openings": {"type": "array", "items": {"$ref": "#/$defs/opening"}},
+    "adjacency": {"type": "array", "items": {"$ref": "#/$defs/adjacency"}},
+    "damage": {"type": "array", "items": {"$ref": "#/$defs/damage"}},
+    "scope_items": {"type": "array", "items": {"$ref": "#/$defs/scope_item"}},
+    "meta": {"type": "object",
+             "description": "Free-form provenance: pipeline version, config, models used (with licences), runtimes, warnings."}
+  },
+  "$defs": {
+    "point": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2,
+              "description": "Plan point (u, v) in metres."},
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "ci95", "unit", "method", "status"],
+      "properties": {
+        "value": {"type": ["number", "null"]},
+        "ci95": {"anyOf": [{"type": "null"},
+                           {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}],
+                 "description": "[lo, hi] 95% interval. lo <= value <= hi is checked semantically."},
+        "unit": {"type": "string", "minLength": 1},
+        "method": {"type": "string", "description": "How the number was produced (auditable)."},
+        "status": {"enum": ["measured", "inferred", "not_observed"],
+                   "description": "measured = from sensor data on this element; inferred = from a model, prior or neighbouring evidence; not_observed = no data, no number."}
+      },
+      "if": {"properties": {"status": {"const": "not_observed"}}},
+      "then": {"properties": {"value": {"type": "null"}, "ci95": {"type": "null"}}},
+      "else": {"properties": {"value": {"type": "number"}, "ci95": {"type": "array"}}}
+    },
+    "optional_measurement": {
+      "description": "null = not applicable to this element (e.g. sill height of a door) or not produced by this tier.",
+      "anyOf": [{"type": "null"}, {"$ref": "#/$defs/measurement"}]
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "polygon", "wall_ids", "floor_area", "perimeter", "ceiling_height", "bbox_dims",
+                   "floor_level"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "label": {"type": "string"},
+        "polygon": {"type": "array", "items": {"$ref": "#/$defs/point"}, "minItems": 3,
+                    "description": "Interior (wall-face) polygon, counter-clockwise in (u, v)."},
+        "wall_ids": {"type": "array", "items": {"type": "string"}},
+        "floor_area": {"$ref": "#/$defs/measurement"},
+        "perimeter": {"$ref": "#/$defs/measurement"},
+        "ceiling_height": {"$ref": "#/$defs/measurement"},
+        "bbox_dims": {
+          "anyOf": [{"type": "null"},
+                    {"type": "object", "additionalProperties": false, "required": ["length", "width"],
+                     "properties": {"length": {"$ref": "#/$defs/measurement"},
+                                    "width": {"$ref": "#/$defs/measurement"}}}]
+        },
+        "floor_level": {"type": ["number", "null"]}
+      }
+    },
+    "wall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "room_id", "p0", "p1", "length", "normal", "thickness", "opening_ids", "support_points",
+                   "fit_rmse_m"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "room_id": {"type": "string"},
+        "p0": {"$ref": "#/$defs/point"},
+        "p1": {"$ref": "#/$defs/point"},
+        "length": {"$ref": "#/$defs/measurement",
+                   "description": "Interior wall-face length, corner to corner."},
+        "normal": {"$ref": "#/$defs/point", "description": "Unit normal pointing into the room."},
+        "thickness": {"$ref": "#/$defs/optional_measurement"},
+        "opening_ids": {"type": "array", "items": {"type": "string"}},
+        "support_points": {"type": "integer", "minimum": 0},
+        "fit_rmse_m": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "opening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "wall_ids", "room_ids", "center", "width", "height", "sill_height", "confidence",
+                   "evidence"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["door", "window", "passage"]},
+        "wall_ids": {"type": "array", "items": {"type": "string"}},
+        "room_ids": {"type": "array", "items": {"type": "string"}},
+        "center": {"$ref": "#/$defs/point"},
+        "width": {"$ref": "#/$defs/measurement"},
+        "height": {"$ref": "#/$defs/optional_measurement"},
+        "sill_height": {"$ref": "#/$defs/optional_measurement"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1,
+                       "description": "Detection confidence (is there really an opening here?), separate from the width interval."},
+        "evidence": {"type": "string"}
+      }
+    },
+    "adjacency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["room_a", "room_b", "via"],
+      "properties": {
+        "room_a": {"type": "string"}, "room_b": {"type": "string"},
+        "via": {"type": "string", "description": "Opening id, or 'shared_wall'."}
+      }
+    },
+    "damage": {
+      "type": "object",
+      "description": "One damage region on one surface, or a concealed-damage flag. Open object: producers may add fields.",
+      "required": ["id", "class", "surface_id"],
+      "properties": {
+        "id": {"type": "string"},
+        "class": {"type": "string", "description": "e.g. water_stain, crack, mould, hole, concealed_moisture"},
+        "surface_id": {"type": "string", "description": "Wall id, or '<room_id>:floor' / '<room_id>:ceiling'."},
+        "room_id": {"type": "string"},
+        "extent": {"type": "object",
+                   "description": "Metric extent on the surface, each entry a measurement (area m2, width m, height m).",
+                   "additionalProperties": {"$ref": "#/$defs/measurement"}},
+        "plan_polygon": {"type": "array", "items": {"$ref": "#/$defs/point"},
+                         "description": "Optional footprint in plan coordinates (floor damage), drawn by the renderer."},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "concealed": {"type": "boolean"},
+        "rule": {"type": "string", "description": "For concealed flags: the rule that fired."}
+      },
+      "if": {"properties": {"concealed": {"const": true}}, "required": ["concealed"]},
+      "then": {"required": ["rule"]}
+    },
+    "scope_item": {
+      "type": "object",
+      "description": "A repair line item keyed to a surface. Open object: producers may add fields (e.g. trade, cost code).",
+      "required": ["id", "surface_id", "description", "quantity"],
+      "properties": {
+        "id": {"type": "string"},
+        "surface_id": {"type": "string"},
+        "damage_ids": {"type": "array", "items": {"type": "string"}},
+        "description": {"type": "string"},
+        "quantity": {"$ref": "#/$defs/measurement"}
+      }
+    }
+  }
+}

@@ -1,0 +1,1488 @@
+{
+  "schema": "floorplan.plan",
+  "schema_version": "1.0.0",
+  "units": {
+    "length": "m",
+    "area": "m2",
+    "angle": "deg",
+    "height": "m"
+  },
+  "coordinate_frame": {
+    "name": "aligned_plan",
+    "description": "Metric 2-D plan coordinates (u, v) = (x, z) of the capture's gravity- and Manhattan-aligned world frame. The 3-D frame is right-handed with +y up, so when the plan is viewed from above, +u points right and +v points DOWN the page (drawing +v upward mirrors the plan). The origin and heading are arbitrary per capture (wherever the phone started, rotated so the dominant walls run along u and v).",
+    "plan_axes": [
+      "u = x (m)",
+      "v = z (m)"
+    ],
+    "up_axis": "+y",
+    "handedness": "right",
+    "view_from_above": {
+      "u": "right",
+      "v": "down"
+    },
+    "heights": "metres above the room's own floor; floor_level is the floor height in the aligned frame"
+  },
+  "capture_id": "synthetic_apartment",
+  "tier": "lidar",
+  "footprint_area": {
+    "value": 55.63,
+    "ci95": [55.4972, 55.7628],
+    "unit": "m2",
+    "method": "sum of room areas",
+    "status": "measured"
+  },
+  "rooms": [
+    {
+      "id": "corridor",
+      "label": "Corridor",
+      "polygon": [
+        [0.0, 0.0],
+        [1.2, 0.0],
+        [1.2, 4.0],
+        [5.0, 4.0],
+        [5.0, 5.2],
+        [0.0, 5.2]
+      ],
+      "wall_ids": [
+        "corridor_w0",
+        "corridor_w1",
+        "corridor_w2",
+        "corridor_w3",
+        "corridor_w4",
+        "corridor_w5"
+      ],
+      "floor_area": {
+        "value": 10.8,
+        "ci95": [10.72, 10.88],
+        "unit": "m2",
+        "method": "polygon area",
+        "status": "measured"
+      },
+      "perimeter": {
+        "value": 20.4,
+        "ci95": [20.3808, 20.4192],
+        "unit": "m",
+        "method": "sum of wall lengths",
+        "status": "measured"
+      },
+      "ceiling_height": {
+        "value": 2.62,
+        "ci95": [2.6122, 2.6278],
+        "unit": "m",
+        "method": "floor/ceiling plane fit",
+        "status": "measured"
+      },
+      "bbox_dims": {
+        "length": {
+          "value": 5.2,
+          "ci95": [5.1922, 5.2078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        },
+        "width": {
+          "value": 5.0,
+          "ci95": [4.9922, 5.0078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        }
+      },
+      "floor_level": -1.5
+    },
+    {
+      "id": "living",
+      "label": "Living room",
+      "polygon": [
+        [1.3, 0.0],
+        [4.6, 0.0],
+        [5.6, 1.0],
+        [5.6, 3.9],
+        [1.3, 3.9]
+      ],
+      "wall_ids": [
+        "living_w0",
+        "living_w1",
+        "living_w2",
+        "living_w3",
+        "living_w4"
+      ],
+      "floor_area": {
+        "value": 16.27,
+        "ci95": [16.208, 16.332],
+        "unit": "m2",
+        "method": "polygon area",
+        "status": "measured"
+      },
+      "perimeter": {
+        "value": 15.8142,
+        "ci95": [15.7967, 15.8317],
+        "unit": "m",
+        "method": "sum of wall lengths",
+        "status": "measured"
+      },
+      "ceiling_height": {
+        "value": 2.71,
+        "ci95": [2.7022, 2.7178],
+        "unit": "m",
+        "method": "floor/ceiling plane fit",
+        "status": "measured"
+      },
+      "bbox_dims": {
+        "length": {
+          "value": 4.3,
+          "ci95": [4.2922, 4.3078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        },
+        "width": {
+          "value": 3.9,
+          "ci95": [3.8922, 3.9078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        }
+      },
+      "floor_level": -1.5
+    },
+    {
+      "id": "kitchen",
+      "label": "Kitchen",
+      "polygon": [
+        [5.1, 4.0],
+        [7.6, 4.0],
+        [7.6, 8.8],
+        [5.1, 8.8]
+      ],
+      "wall_ids": [
+        "kitchen_w0",
+        "kitchen_w1",
+        "kitchen_w2",
+        "kitchen_w3"
+      ],
+      "floor_area": {
+        "value": 12.0,
+        "ci95": [11.9428, 12.0572],
+        "unit": "m2",
+        "method": "polygon area",
+        "status": "measured"
+      },
+      "perimeter": {
+        "value": 14.6,
+        "ci95": [14.5843, 14.6157],
+        "unit": "m",
+        "method": "sum of wall lengths",
+        "status": "measured"
+      },
+      "ceiling_height": {
+        "value": 2.7,
+        "ci95": [2.6922, 2.7078],
+        "unit": "m",
+        "method": "floor/ceiling plane fit",
+        "status": "measured"
+      },
+      "bbox_dims": {
+        "length": {
+          "value": 4.8,
+          "ci95": [4.7922, 4.8078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        },
+        "width": {
+          "value": 2.5,
+          "ci95": [2.4922, 2.5078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        }
+      },
+      "floor_level": -1.5
+    },
+    {
+      "id": "bedroom",
+      "label": "Bedroom",
+      "polygon": [
+        [0.0, 5.3],
+        [3.4, 5.3],
+        [3.4, 8.8],
+        [0.0, 8.8]
+      ],
+      "wall_ids": [
+        "bedroom_w0",
+        "bedroom_w1",
+        "bedroom_w2",
+        "bedroom_w3"
+      ],
+      "floor_area": {
+        "value": 11.9,
+        "ci95": [11.8459, 11.9541],
+        "unit": "m2",
+        "method": "polygon area",
+        "status": "measured"
+      },
+      "perimeter": {
+        "value": 13.8,
+        "ci95": [13.7843, 13.8157],
+        "unit": "m",
+        "method": "sum of wall lengths",
+        "status": "measured"
+      },
+      "ceiling_height": {
+        "value": 2.7,
+        "ci95": [2.6922, 2.7078],
+        "unit": "m",
+        "method": "floor/ceiling plane fit",
+        "status": "measured"
+      },
+      "bbox_dims": {
+        "length": {
+          "value": 3.5,
+          "ci95": [3.4922, 3.5078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        },
+        "width": {
+          "value": 3.4,
+          "ci95": [3.3922, 3.4078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        }
+      },
+      "floor_level": -1.5
+    },
+    {
+      "id": "bathroom",
+      "label": "Bathroom",
+      "polygon": [
+        [3.5, 5.3],
+        [5.0, 5.3],
+        [5.0, 7.6],
+        [3.5, 7.6]
+      ],
+      "wall_ids": [
+        "bathroom_w0",
+        "bathroom_w1",
+        "bathroom_w2",
+        "bathroom_w3"
+      ],
+      "floor_area": {
+        "value": 3.45,
+        "ci95": [3.4202, 3.4798],
+        "unit": "m2",
+        "method": "polygon area",
+        "status": "measured"
+      },
+      "perimeter": {
+        "value": 7.6,
+        "ci95": [7.5843, 7.6157],
+        "unit": "m",
+        "method": "sum of wall lengths",
+        "status": "measured"
+      },
+      "ceiling_height": {
+        "value": 2.45,
+        "ci95": [2.4422, 2.4578],
+        "unit": "m",
+        "method": "floor/ceiling plane fit",
+        "status": "measured"
+      },
+      "bbox_dims": {
+        "length": {
+          "value": 2.3,
+          "ci95": [2.2922, 2.3078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        },
+        "width": {
+          "value": 1.5,
+          "ci95": [1.4922, 1.5078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        }
+      },
+      "floor_level": -1.5
+    },
+    {
+      "id": "wc",
+      "label": "WC",
+      "polygon": [
+        [3.5, 7.7],
+        [4.6, 7.7],
+        [4.6, 8.8],
+        [3.5, 8.8]
+      ],
+      "wall_ids": [
+        "wc_w0",
+        "wc_w1",
+        "wc_w2",
+        "wc_w3"
+      ],
+      "floor_area": {
+        "value": 1.21,
+        "ci95": [1.1928, 1.2272],
+        "unit": "m2",
+        "method": "polygon area",
+        "status": "measured"
+      },
+      "perimeter": {
+        "value": 4.4,
+        "ci95": [4.3843, 4.4157],
+        "unit": "m",
+        "method": "sum of wall lengths",
+        "status": "measured"
+      },
+      "ceiling_height": {
+        "value": null,
+        "ci95": null,
+        "unit": "m",
+        "method": "floor/ceiling plane fit; ceiling not in view",
+        "status": "not_observed"
+      },
+      "bbox_dims": {
+        "length": {
+          "value": 1.1,
+          "ci95": [1.0922, 1.1078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        },
+        "width": {
+          "value": 1.1,
+          "ci95": [1.0922, 1.1078],
+          "unit": "m",
+          "method": "aligned bbox",
+          "status": "measured"
+        }
+      },
+      "floor_level": -1.5
+    }
+  ],
+  "walls": [
+    {
+      "id": "corridor_w0",
+      "room_id": "corridor",
+      "p0": [0.0, 0.0],
+      "p1": [1.2, 0.0],
+      "length": {
+        "value": 1.2,
+        "ci95": [1.1922, 1.2078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, 1.0],
+      "thickness": null,
+      "opening_ids": [
+        "o_entry"
+      ],
+      "support_points": 4800,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "corridor_w1",
+      "room_id": "corridor",
+      "p0": [1.2, 0.0],
+      "p1": [1.2, 4.0],
+      "length": {
+        "value": 4.0,
+        "ci95": [3.9922, 4.0078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-1.0, 0.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_living"
+      ],
+      "support_points": 16000,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "corridor_w2",
+      "room_id": "corridor",
+      "p0": [1.2, 4.0],
+      "p1": [5.0, 4.0],
+      "length": {
+        "value": 3.8,
+        "ci95": [3.7922, 3.8078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, 1.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [],
+      "support_points": 15200,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "corridor_w3",
+      "room_id": "corridor",
+      "p0": [5.0, 4.0],
+      "p1": [5.0, 5.2],
+      "length": {
+        "value": 1.2,
+        "ci95": [1.1922, 1.2078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-1.0, 0.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_kitchen"
+      ],
+      "support_points": 4800,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "corridor_w4",
+      "room_id": "corridor",
+      "p0": [5.0, 5.2],
+      "p1": [0.0, 5.2],
+      "length": {
+        "value": 5.0,
+        "ci95": [4.9922, 5.0078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, -1.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_bed",
+        "o_bath"
+      ],
+      "support_points": 20000,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "corridor_w5",
+      "room_id": "corridor",
+      "p0": [0.0, 5.2],
+      "p1": [0.0, 0.0],
+      "length": {
+        "value": 5.2,
+        "ci95": [5.1922, 5.2078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [1.0, 0.0],
+      "thickness": null,
+      "opening_ids": [],
+      "support_points": 20800,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "living_w0",
+      "room_id": "living",
+      "p0": [1.3, 0.0],
+      "p1": [4.6, 0.0],
+      "length": {
+        "value": 3.3,
+        "ci95": [3.2922, 3.3078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, 1.0],
+      "thickness": null,
+      "opening_ids": [
+        "o_win_living"
+      ],
+      "support_points": 13200,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "living_w1",
+      "room_id": "living",
+      "p0": [4.6, 0.0],
+      "p1": [5.6, 1.0],
+      "length": {
+        "value": 1.4142,
+        "ci95": [1.4064, 1.4221],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.7071, 0.7071],
+      "thickness": null,
+      "opening_ids": [
+        "o_win_bay"
+      ],
+      "support_points": 5656,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "living_w2",
+      "room_id": "living",
+      "p0": [5.6, 1.0],
+      "p1": [5.6, 3.9],
+      "length": {
+        "value": 2.9,
+        "ci95": [2.8922, 2.9078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-1.0, 0.0],
+      "thickness": null,
+      "opening_ids": [],
+      "support_points": 11600,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "living_w3",
+      "room_id": "living",
+      "p0": [5.6, 3.9],
+      "p1": [1.3, 3.9],
+      "length": {
+        "value": 4.3,
+        "ci95": [4.2922, 4.3078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, -1.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [],
+      "support_points": 17200,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "living_w4",
+      "room_id": "living",
+      "p0": [1.3, 3.9],
+      "p1": [1.3, 0.0],
+      "length": {
+        "value": 3.9,
+        "ci95": [3.8922, 3.9078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [1.0, 0.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_living"
+      ],
+      "support_points": 15600,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "kitchen_w0",
+      "room_id": "kitchen",
+      "p0": [5.1, 4.0],
+      "p1": [7.6, 4.0],
+      "length": {
+        "value": 2.5,
+        "ci95": [2.4922, 2.5078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, 1.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [],
+      "support_points": 10000,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "kitchen_w1",
+      "room_id": "kitchen",
+      "p0": [7.6, 4.0],
+      "p1": [7.6, 8.8],
+      "length": {
+        "value": 4.8,
+        "ci95": [4.7922, 4.8078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-1.0, 0.0],
+      "thickness": null,
+      "opening_ids": [
+        "o_win_kitchen"
+      ],
+      "support_points": 19200,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "kitchen_w2",
+      "room_id": "kitchen",
+      "p0": [7.6, 8.8],
+      "p1": [5.1, 8.8],
+      "length": {
+        "value": 2.5,
+        "ci95": [2.4922, 2.5078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, -1.0],
+      "thickness": null,
+      "opening_ids": [],
+      "support_points": 10000,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "kitchen_w3",
+      "room_id": "kitchen",
+      "p0": [5.1, 8.8],
+      "p1": [5.1, 4.0],
+      "length": {
+        "value": 4.8,
+        "ci95": [4.7922, 4.8078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [1.0, 0.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_kitchen"
+      ],
+      "support_points": 19200,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "bedroom_w0",
+      "room_id": "bedroom",
+      "p0": [0.0, 5.3],
+      "p1": [3.4, 5.3],
+      "length": {
+        "value": 3.4,
+        "ci95": [3.3922, 3.4078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, 1.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_bed"
+      ],
+      "support_points": 13600,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "bedroom_w1",
+      "room_id": "bedroom",
+      "p0": [3.4, 5.3],
+      "p1": [3.4, 8.8],
+      "length": {
+        "value": 3.5,
+        "ci95": [3.4922, 3.5078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-1.0, 0.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [],
+      "support_points": 14000,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "bedroom_w2",
+      "room_id": "bedroom",
+      "p0": [3.4, 8.8],
+      "p1": [0.0, 8.8],
+      "length": {
+        "value": 3.4,
+        "ci95": [3.3922, 3.4078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, -1.0],
+      "thickness": null,
+      "opening_ids": [],
+      "support_points": 13600,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "bedroom_w3",
+      "room_id": "bedroom",
+      "p0": [0.0, 8.8],
+      "p1": [0.0, 5.3],
+      "length": {
+        "value": 3.5,
+        "ci95": [3.4922, 3.5078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [1.0, 0.0],
+      "thickness": null,
+      "opening_ids": [
+        "o_win_bed"
+      ],
+      "support_points": 14000,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "bathroom_w0",
+      "room_id": "bathroom",
+      "p0": [3.5, 5.3],
+      "p1": [5.0, 5.3],
+      "length": {
+        "value": 1.5,
+        "ci95": [1.4922, 1.5078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, 1.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_bath"
+      ],
+      "support_points": 6000,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "bathroom_w1",
+      "room_id": "bathroom",
+      "p0": [5.0, 5.3],
+      "p1": [5.0, 7.6],
+      "length": {
+        "value": 2.3,
+        "ci95": [2.2922, 2.3078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-1.0, 0.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [],
+      "support_points": 9200,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "bathroom_w2",
+      "room_id": "bathroom",
+      "p0": [5.0, 7.6],
+      "p1": [3.5, 7.6],
+      "length": {
+        "value": 1.5,
+        "ci95": [1.4922, 1.5078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, -1.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_wc"
+      ],
+      "support_points": 6000,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "bathroom_w3",
+      "room_id": "bathroom",
+      "p0": [3.5, 7.6],
+      "p1": [3.5, 5.3],
+      "length": {
+        "value": 2.3,
+        "ci95": [2.2922, 2.3078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [1.0, 0.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [],
+      "support_points": 9200,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "wc_w0",
+      "room_id": "wc",
+      "p0": [3.5, 7.7],
+      "p1": [4.6, 7.7],
+      "length": {
+        "value": 1.1,
+        "ci95": [1.0922, 1.1078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-0.0, 1.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [
+        "o_wc"
+      ],
+      "support_points": 4399,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "wc_w1",
+      "room_id": "wc",
+      "p0": [4.6, 7.7],
+      "p1": [4.6, 8.8],
+      "length": {
+        "value": 1.1,
+        "ci95": [1.0922, 1.1078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [-1.0, 0.0],
+      "thickness": null,
+      "opening_ids": [],
+      "support_points": 4400,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "wc_w2",
+      "room_id": "wc",
+      "p0": [4.6, 8.8],
+      "p1": [3.5, 8.8],
+      "length": {
+        "value": 1.1,
+        "ci95": [1.0412, 1.1588],
+        "unit": "m",
+        "method": "occluded by toilet; corner to corner from neighbouring walls",
+        "status": "inferred"
+      },
+      "normal": [-0.0, -1.0],
+      "thickness": null,
+      "opening_ids": [
+        "o_win_wc"
+      ],
+      "support_points": 4399,
+      "fit_rmse_m": 0.003
+    },
+    {
+      "id": "wc_w3",
+      "room_id": "wc",
+      "p0": [3.5, 8.8],
+      "p1": [3.5, 7.7],
+      "length": {
+        "value": 1.1,
+        "ci95": [1.0922, 1.1078],
+        "unit": "m",
+        "method": "plane-fit corner to corner",
+        "status": "measured"
+      },
+      "normal": [1.0, 0.0],
+      "thickness": {
+        "value": 0.1,
+        "ci95": [0.0882, 0.1118],
+        "unit": "m",
+        "method": "distance between the two wall faces",
+        "status": "measured"
+      },
+      "opening_ids": [],
+      "support_points": 4400,
+      "fit_rmse_m": 0.003
+    }
+  ],
+  "openings": [
+    {
+      "id": "o_entry",
+      "kind": "door",
+      "wall_ids": [
+        "corridor_w0"
+      ],
+      "room_ids": [
+        "corridor"
+      ],
+      "center": [0.6, 0.0],
+      "width": {
+        "value": 0.9,
+        "ci95": [0.8902, 0.9098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 2.05,
+        "ci95": [2.0382, 2.0618],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": null,
+      "confidence": 0.97,
+      "evidence": "frame edges + depth gap"
+    },
+    {
+      "id": "o_living",
+      "kind": "door",
+      "wall_ids": [
+        "corridor_w1",
+        "living_w4"
+      ],
+      "room_ids": [
+        "corridor",
+        "living"
+      ],
+      "center": [1.25, 2.0],
+      "width": {
+        "value": 0.82,
+        "ci95": [0.8102, 0.8298],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 2.04,
+        "ci95": [2.0282, 2.0518],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": null,
+      "confidence": 0.95,
+      "evidence": "depth gap through wall"
+    },
+    {
+      "id": "o_bed",
+      "kind": "door",
+      "wall_ids": [
+        "corridor_w4",
+        "bedroom_w0"
+      ],
+      "room_ids": [
+        "corridor",
+        "bedroom"
+      ],
+      "center": [2.0, 5.25],
+      "width": {
+        "value": 0.8,
+        "ci95": [0.7902, 0.8098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 2.03,
+        "ci95": [2.0182, 2.0418],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": null,
+      "confidence": 0.94,
+      "evidence": "depth gap through wall"
+    },
+    {
+      "id": "o_bath",
+      "kind": "door",
+      "wall_ids": [
+        "corridor_w4",
+        "bathroom_w0"
+      ],
+      "room_ids": [
+        "corridor",
+        "bathroom"
+      ],
+      "center": [4.2, 5.25],
+      "width": {
+        "value": 0.7,
+        "ci95": [0.6902, 0.7098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 2.02,
+        "ci95": [2.0082, 2.0318],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": null,
+      "confidence": 0.93,
+      "evidence": "depth gap through wall"
+    },
+    {
+      "id": "o_wc",
+      "kind": "door",
+      "wall_ids": [
+        "bathroom_w2",
+        "wc_w0"
+      ],
+      "room_ids": [
+        "wc",
+        "bathroom"
+      ],
+      "center": [4.05, 7.65],
+      "width": {
+        "value": 0.62,
+        "ci95": [0.6102, 0.6298],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 2.0,
+        "ci95": [1.9882, 2.0118],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": null,
+      "confidence": 0.88,
+      "evidence": "depth gap through wall"
+    },
+    {
+      "id": "o_kitchen",
+      "kind": "passage",
+      "wall_ids": [
+        "corridor_w3",
+        "kitchen_w3"
+      ],
+      "room_ids": [
+        "corridor",
+        "kitchen"
+      ],
+      "center": [5.05, 4.6],
+      "width": {
+        "value": 1.0,
+        "ci95": [0.9902, 1.0098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 2.3,
+        "ci95": [2.2882, 2.3118],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": null,
+      "confidence": 0.96,
+      "evidence": "full-height gap"
+    },
+    {
+      "id": "o_win_living",
+      "kind": "window",
+      "wall_ids": [
+        "living_w0"
+      ],
+      "room_ids": [
+        "living"
+      ],
+      "center": [2.8, 0.0],
+      "width": {
+        "value": 1.6,
+        "ci95": [1.5902, 1.6098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 1.4,
+        "ci95": [1.3882, 1.4118],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": {
+        "value": 0.9,
+        "ci95": [0.8882, 0.9118],
+        "unit": "m",
+        "method": "sill height above floor",
+        "status": "measured"
+      },
+      "confidence": 0.92,
+      "evidence": "frame + glass hole"
+    },
+    {
+      "id": "o_win_bay",
+      "kind": "window",
+      "wall_ids": [
+        "living_w1"
+      ],
+      "room_ids": [
+        "living"
+      ],
+      "center": [5.1, 0.5],
+      "width": {
+        "value": 0.9,
+        "ci95": [0.8902, 0.9098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 1.4,
+        "ci95": [1.3882, 1.4118],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": {
+        "value": 0.9,
+        "ci95": [0.8882, 0.9118],
+        "unit": "m",
+        "method": "sill height above floor",
+        "status": "measured"
+      },
+      "confidence": 0.85,
+      "evidence": "frame + glass hole"
+    },
+    {
+      "id": "o_win_bed",
+      "kind": "window",
+      "wall_ids": [
+        "bedroom_w3"
+      ],
+      "room_ids": [
+        "bedroom"
+      ],
+      "center": [0.0, 7.0],
+      "width": {
+        "value": 1.4,
+        "ci95": [1.3902, 1.4098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 1.3,
+        "ci95": [1.2882, 1.3118],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": {
+        "value": 0.95,
+        "ci95": [0.9382, 0.9618],
+        "unit": "m",
+        "method": "sill height above floor",
+        "status": "measured"
+      },
+      "confidence": 0.91,
+      "evidence": "frame + glass hole"
+    },
+    {
+      "id": "o_win_kitchen",
+      "kind": "window",
+      "wall_ids": [
+        "kitchen_w1"
+      ],
+      "room_ids": [
+        "kitchen"
+      ],
+      "center": [7.6, 6.4],
+      "width": {
+        "value": 1.2,
+        "ci95": [1.1902, 1.2098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 1.1,
+        "ci95": [1.0882, 1.1118],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": {
+        "value": 1.05,
+        "ci95": [1.0382, 1.0618],
+        "unit": "m",
+        "method": "sill height above floor",
+        "status": "measured"
+      },
+      "confidence": 0.9,
+      "evidence": "frame + glass hole"
+    },
+    {
+      "id": "o_win_wc",
+      "kind": "window",
+      "wall_ids": [
+        "wc_w2"
+      ],
+      "room_ids": [
+        "wc"
+      ],
+      "center": [4.05, 8.8],
+      "width": {
+        "value": 0.5,
+        "ci95": [0.4902, 0.5098],
+        "unit": "m",
+        "method": "jamb-to-jamb gap",
+        "status": "measured"
+      },
+      "height": {
+        "value": 0.6,
+        "ci95": [0.5882, 0.6118],
+        "unit": "m",
+        "method": "head height above floor",
+        "status": "measured"
+      },
+      "sill_height": {
+        "value": 1.5,
+        "ci95": [1.4882, 1.5118],
+        "unit": "m",
+        "method": "sill height above floor",
+        "status": "measured"
+      },
+      "confidence": 0.4,
+      "evidence": "frosted glass: no LiDAR returns, colour edge only"
+    }
+  ],
+  "adjacency": [
+    {
+      "room_a": "corridor",
+      "room_b": "living",
+      "via": "o_living"
+    },
+    {
+      "room_a": "corridor",
+      "room_b": "bedroom",
+      "via": "o_bed"
+    },
+    {
+      "room_a": "corridor",
+      "room_b": "bathroom",
+      "via": "o_bath"
+    },
+    {
+      "room_a": "wc",
+      "room_b": "bathroom",
+      "via": "o_wc"
+    },
+    {
+      "room_a": "corridor",
+      "room_b": "kitchen",
+      "via": "o_kitchen"
+    },
+    {
+      "room_a": "bedroom",
+      "room_b": "bathroom",
+      "via": "shared_wall"
+    },
+    {
+      "room_a": "living",
+      "room_b": "kitchen",
+      "via": "shared_wall"
+    }
+  ],
+  "damage": [
+    {
+      "id": "d1",
+      "class": "water_stain",
+      "surface_id": "bathroom:ceiling",
+      "room_id": "bathroom",
+      "extent": {
+        "area": {
+          "value": 0.36,
+          "ci95": [0.3012, 0.4188],
+          "unit": "m2",
+          "method": "segmentation mask on ceiling plane",
+          "status": "measured"
+        }
+      },
+      "confidence": 0.86,
+      "concealed": false
+    },
+    {
+      "id": "d2",
+      "class": "crack",
+      "surface_id": "living_w4",
+      "room_id": "living",
+      "extent": {
+        "length": {
+          "value": 0.85,
+          "ci95": [0.8108, 0.8892],
+          "unit": "m",
+          "method": "skeleton length on wall plane",
+          "status": "measured"
+        }
+      },
+      "confidence": 0.78,
+      "concealed": false
+    },
+    {
+      "id": "d3",
+      "class": "floor_water_damage",
+      "surface_id": "kitchen:floor",
+      "room_id": "kitchen",
+      "extent": {
+        "area": {
+          "value": 0.84,
+          "ci95": [0.742, 0.938],
+          "unit": "m2",
+          "method": "segmentation mask on floor plane",
+          "status": "measured"
+        }
+      },
+      "plan_polygon": [
+        [6.4, 7.6],
+        [7.5, 7.6],
+        [7.5, 8.7],
+        [6.6, 8.7]
+      ],
+      "confidence": 0.7,
+      "concealed": false
+    },
+    {
+      "id": "d4",
+      "class": "concealed_moisture",
+      "surface_id": "bathroom_w1",
+      "room_id": "bathroom",
+      "concealed": true,
+      "rule": "R-02: ceiling stain within 1 m of a wet-room wall -> inspect wall cavity",
+      "confidence": 0.5
+    }
+  ],
+  "scope_items": [
+    {
+      "id": "s1",
+      "surface_id": "bathroom:ceiling",
+      "damage_ids": [
+        "d1"
+      ],
+      "description": "Stain-block primer and repaint ceiling (2 coats)",
+      "quantity": {
+        "value": 3.45,
+        "ci95": [3.4108, 3.4892],
+        "unit": "m2",
+        "method": "ceiling area",
+        "status": "measured"
+      }
+    },
+    {
+      "id": "s2",
+      "surface_id": "living_w4",
+      "damage_ids": [
+        "d2"
+      ],
+      "description": "Rake out and fill crack",
+      "quantity": {
+        "value": 0.85,
+        "ci95": [0.8108, 0.8892],
+        "unit": "m",
+        "method": "crack length",
+        "status": "measured"
+      }
+    },
+    {
+      "id": "s3",
+      "surface_id": "bathroom_w1",
+      "damage_ids": [
+        "d4"
+      ],
+      "description": "Moisture-meter inspection of wall cavity",
+      "quantity": {
+        "value": 1.0,
+        "ci95": [1.0, 1.0],
+        "unit": "ea",
+        "method": "count",
+        "status": "measured"
+      }
+    }
+  ],
+  "meta": {
+    "synthetic": true,
+    "generator": "tests/fixtures/make_synthetic_plan.py",
+    "note": "hand-designed fixture with known geometry; not a real capture"
+  }
+}

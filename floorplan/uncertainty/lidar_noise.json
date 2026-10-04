@@ -1,0 +1,150 @@
+{
+ "description": "Single-sample LiDAR depth noise (1 sigma, mm) vs range, ARKit confidence=2, measured by multi-view re-projection on the three sample captures (scripts/noise_model.py). Conservative: the maximum over captures per range bin; includes small pose errors, so it is an upper bound.",
+ "source": "outputs/noise_model/noise_model.json",
+ "table": [
+  {
+   "r_mid": 0.35,
+   "r_lo": 0.2,
+   "r_hi": 0.5,
+   "sigma_mm": 6.08,
+   "sigma_mm_per_capture": [
+    3.07,
+    6.08,
+    4.05
+   ],
+   "n": [
+    22826,
+    17279,
+    3851
+   ]
+  },
+  {
+   "r_mid": 0.75,
+   "r_lo": 0.5,
+   "r_hi": 1.0,
+   "sigma_mm": 6.91,
+   "sigma_mm_per_capture": [
+    4.66,
+    6.91,
+    5.08
+   ],
+   "n": [
+    295020,
+    220078,
+    206450
+   ]
+  },
+  {
+   "r_mid": 1.25,
+   "r_lo": 1.0,
+   "r_hi": 1.5,
+   "sigma_mm": 7.05,
+   "sigma_mm_per_capture": [
+    6.41,
+    7.05,
+    5.83
+   ],
+   "n": [
+    453989,
+    372282,
+    347224
+   ]
+  },
+  {
+   "r_mid": 1.75,
+   "r_lo": 1.5,
+   "r_hi": 2.0,
+   "sigma_mm": 7.16,
+   "sigma_mm_per_capture": [
+    7.16,
+    6.49,
+    6.81
+   ],
+   "n": [
+    369307,
+    315378,
+    309891
+   ]
+  },
+  {
+   "r_mid": 2.25,
+   "r_lo": 2.0,
+   "r_hi": 2.5,
+   "sigma_mm": 9.71,
+   "sigma_mm_per_capture": [
+    9.71,
+    9.2,
+    9.67
+   ],
+   "n": [
+    171872,
+    135824,
+    146379
+   ]
+  },
+  {
+   "r_mid": 2.75,
+   "r_lo": 2.5,
+   "r_hi": 3.0,
+   "sigma_mm": 15.63,
+   "sigma_mm_per_capture": [
+    14.39,
+    11.42,
+    15.63
+   ],
+   "n": [
+    40854,
+    64988,
+    73120
+   ]
+  },
+  {
+   "r_mid": 3.25,
+   "r_lo": 3.0,
+   "r_hi": 3.5,
+   "sigma_mm": 18.16,
+   "sigma_mm_per_capture": [
+    18.16,
+    16.73,
+    15.52
+   ],
+   "n": [
+    12486,
+    29701,
+    35777
+   ]
+  },
+  {
+   "r_mid": 3.75,
+   "r_lo": 3.5,
+   "r_hi": 4.0,
+   "sigma_mm": 18.65,
+   "sigma_mm_per_capture": [
+    16.59,
+    18.65,
+    16.99
+   ],
+   "n": [
+    7434,
+    19336,
+    25852
+   ]
+  },
+  {
+   "r_mid": 4.5,
+   "r_lo": 4.0,
+   "r_hi": 5.0,
+   "sigma_mm": 19.61,
+   "sigma_mm_per_capture": [
+    15.32,
+    17.65,
+    19.61
+   ],
+   "n": [
+    8295,
+    17082,
+    12820
+   ]
+  }
+ ]
+}
