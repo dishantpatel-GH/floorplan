@@ -70,6 +70,9 @@ class Room:
     ceiling_height: Measurement
     bbox_dims: tuple[Measurement, Measurement] | None = None   # length x width of the aligned bounding box
     floor_level: float = 0.0               # floor height in the aligned world (m)
+    name: Optional[str] = None             # floor-plan name (Bedroom, Kitchen, ...); None = not named
+    room_type: Optional[str] = None        # plan/room_types.py TYPES
+    type_evidence: Optional[dict] = None   # classes seen in the room, scores, the rule that decided
 
 
 @dataclass

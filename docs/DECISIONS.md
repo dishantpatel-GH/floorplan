@@ -1621,3 +1621,63 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     only in a gap between two pieces of furniture, and furniture less than 0.5 m deep.
   - k38's plan step crashes in some runs (GEOS TopologyException in `plan/beta/extract.py` `_canonical_outlines`, not
     caught): 1 of 6 runs without the rule, 1 of 4 with it. Not this change.
+
+## D-078 Room names from what is in each room
+
+- **Context.** Plans called every room "room" or "corridor"; photo rooms carried their folder name. A floor plan
+  names its rooms: CubiCasa's plan of my home says Living room, Eat-in kitchen, Bedroom, Foyer.
+- **Options.**
+  - (a) Shape only (size, aspect). It cannot tell a bedroom from a living room.
+  - (b) A scene classifier on whole images (Places365). One more model; a view through a doorway votes for the wrong
+    room.
+  - (c) The ADE20K classes the photo tier already computes (SegFormer-B5, D-060): bed, sofa, stove, toilet, ... in the
+    images of each room, then shape for what objects cannot tell.
+- **Decision.** (c), in `floorplan/plan/room_types.py`, on by default in `run_capture.py` (`--no-room-names` turns
+  it off); `scripts/name_rooms.py` names a finished run and scores the names. plan.json schema 1.1: optional `name`,
+  `type` and `type_evidence` per room (the rule, images, top classes with pixel shares, score per type, shape). Both
+  drawings print the name.
+  - Images of a room. Photo: the photos of its folder; a folder named after a type (`01_living_room`) keeps that
+    name. Video and LiDAR: up to 60 frames with the camera in each room plus 200 spread over the capture. Each pixel
+    votes for the room its 3D point lies in (depth + pose), so a kitchen seen from the hall counts for the kitchen.
+    Self-check: pixels the segmenter calls floor must land within 25 cm of the plan's floor, else each frame votes
+    for the room its camera is in. Glass and sky have no depth, so the balcony test uses that camera-in-room view.
+  - Score of a type = weighted pixel share of its objects: bed 1, pillow 0.3; stove, oven, hood 1, refrigerator 0.6,
+    countertop 0.4; sofa, coffee table 1, TV 0.8; toilet, bathtub, shower 1, mirror 0.25. A sink (0.6) is the
+    bathroom's when a toilet, bathtub or shower covers 0.5% of the pixels, else the kitchen's. A type needs 0.8%.
+  - Shape. Under 2 m wide: bedroom or living room evidence must be 3x stronger; glass and outdoors >= 10% and 3x the
+    best object score, with no kitchen or bathroom objects, is a balcony; 1.8x as long as wide (or at most 1.2 m wide
+    and 1.5x as long) is a passage. A room of 4 m² or less with the entrance is a foyer. Else "Room".
+  - One kitchen and one living room per home. A second claim within 0.5 m of the first is the same room split by the
+    plan; elsewhere it takes its next type. With no sofa, TV or coffee table anywhere, the largest room of 9 m² or
+    more (at the entrance when one has it) is the living room; a room with a bed qualifies only when another room's
+    bed scores 2.5x more. My hall has a cot in it (bed 0.6% of its pixels, bedroom 5.6%).
+- **Evidence** (`outputs/room_names/`, `summary.txt`; true types from `sim_gt.json`, own home hall = living room,
+  room = bedroom; plan rooms paired with the GT room that covers most of them under the scorer's whole-plan fit,
+  IoU >= 0.3):
+
+  | Runs | Paired rooms | Right | Camera-in-room vote |
+  |---|---|---|---|
+  | Photo, sim k22, k38, k65 (folder names ignored) | 15 | 15 | |
+  | Photo, own Room lit and dim | 2 | 2 (Bedroom) | |
+  | LiDAR, sim k22, k38, k65, k65_s0 | 21 | 20 | 19 |
+  | Video, own take1: after r1, old 8-room run | 5 | 5 | 5 |
+  | Video, own r2 (one 6.35 m² room, fit IoU 0.23) | 0 | named Room | Kitchen |
+  | Video, sim k65 (fit IoU 0.30; rooms of 59 and 49 m² in a 59 m² flat) | 2 | 0 | 0 |
+
+  - The miss: k38's kitchen is split in two (3.74 + 1.95 m²); the small part has no stove pixels but 1.1% "shower"
+    and becomes Bathroom 2. With camera votes the other part got no frames ("Room"). k22's kitchen is split too: the
+    camera vote called the part without frames a passage; pixel projection names both parts Kitchen.
+  - Self-check: LiDAR floor pixels land 1.2-1.8 cm from the floor; own r1 6.3 cm. The own 8-room run (26.7 cm) and
+    sim k65 video (40.4 cm) fell back to camera votes.
+  - Cost: about 40 s per LiDAR run (decoding and segmenting about 475 frames), 2-6 s once the class maps are cached.
+  - No truth types, checked by eye on the frames of each room (`outputs/room_names/`): the recruiters' single_room
+    LiDAR plan gives Living room (sofa 18%), Bathroom (toilet 3.9%), Passage (1.06 m wide); floor_only gives Living
+    room (sofa 10%), Bathroom 1 and 2, Foyer, Passage and three "Room" (a landing with stairs, a hall, a desk room).
+    Today's own-video runs (`outputs/presentable/`): pnp r1 Living room 22.1 m² and Bedroom 9.0 m²; default r1 one
+    Bedroom (bed 8.2%); default r2 one 19.4 m² room called Bedroom (cabinet 15.7%, bed 3.0%, TV 0.7%): a plan of one
+    room keeps what its objects say.
+- **Limits.**
+  - The weights and rules were set on these same runs (no held-out set). k65_s0 (4 of 4) was only scored.
+  - A plan that merges rooms gets one name: own r1's hall, kitchen and passage are one "Living room".
+  - "Eat-in kitchen", dining and study are not types; ADE20K has no class that separates them.
+  - The foyer rule needs a separate room of 4 m² or less at the entrance. No plan here has one.

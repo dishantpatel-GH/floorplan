@@ -86,6 +86,11 @@ def fmt_ceiling(m: Optional[Measurement], short: bool = False) -> str:
     return f"{'h' if short else 'ceiling'} {approx}{m.value:.2f} m {fmt_interval(m)}".strip()
 
 
+def room_title(room: Room) -> str:
+    """The room's floor-plan name (Bedroom, Kitchen, ...; plan/room_types.py) when it has one, else its label."""
+    return room.name or room.label
+
+
 def text_style(m: Optional[Measurement]) -> dict:
     if m is None or m.value is None or m.status == "not_observed":
         return {"color": "#8a8a8a", "style": "italic"}
@@ -635,11 +640,12 @@ class PlanRenderer:
 
     def _room_label_candidates(self, room: Room, poly: Polygon) -> list[dict]:
         anchors = self._label_anchors(poly)
+        title = room_title(room)
         variants = [
-            [room.label, fmt_area(room.floor_area), fmt_ceiling(room.ceiling_height)],
-            [room.label, fmt_area(room.floor_area), fmt_ceiling(room.ceiling_height, short=True)],
-            [room.label, fmt_area(room.floor_area)],
-            [room.label],
+            [title, fmt_area(room.floor_area), fmt_ceiling(room.ceiling_height)],
+            [title, fmt_area(room.floor_area), fmt_ceiling(room.ceiling_height, short=True)],
+            [title, fmt_area(room.floor_area)],
+            [title],
         ]
         sizes = (self.s.room_font_pt, 0.8 * self.s.room_font_pt, self.s.min_font_pt)
         out = []
@@ -783,6 +789,6 @@ def render_plan(plan: Plan, out_stem: str | Path, style: Style = Style()) -> Ren
     return r.stats
 
 
-__all__ = ["render_plan", "build_wall_geometry", "WallGeometry", "OpeningPlacement", "Style", "RenderStats",
+__all__ = ["render_plan", "room_title", "build_wall_geometry", "WallGeometry", "OpeningPlacement", "Style", "RenderStats",
            "to_view", "view_angle", "room_polygon", "wall_thickness", "exterior_side", "iter_polygons", "fmt_length", "fmt_area", "fmt_ceiling",
            "NOMINAL_THICKNESS_M"]

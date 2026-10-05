@@ -89,7 +89,13 @@
                      "properties": {"length": {"$ref": "#/$defs/measurement"},
                                     "width": {"$ref": "#/$defs/measurement"}}}]
         },
-        "floor_level": {"type": ["number", "null"]}
+        "floor_level": {"type": ["number", "null"]},
+        "name": {"type": "string", "minLength": 1,
+                 "description": "Floor-plan name: Bedroom, Kitchen, Living room, Bathroom, Foyer, Passage, Balcony, or Room when unknown; numbered when a type repeats (Bedroom 1, Bedroom 2). Optional (schema 1.1)."},
+        "type": {"enum": ["bedroom", "kitchen", "living_room", "bathroom", "foyer", "passage", "balcony", "room"],
+                 "description": "Room type behind the name. Optional (schema 1.1)."},
+        "type_evidence": {"type": "object",
+                          "description": "Why: the rule that decided, the images used, the top object classes with their pixel shares, the score of each type, the room's shape. Optional (schema 1.1)."}
       }
     },
     "wall": {

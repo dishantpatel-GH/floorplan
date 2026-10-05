@@ -25,7 +25,7 @@ from shapely.ops import polylabel
 
 from floorplan.export.render import (MIN_DIM_LENGTH_M, NOMINAL_THICKNESS_M, OpeningPlacement, build_wall_geometry,
                                      exterior_side, fmt_area, fmt_ceiling, fmt_length, iter_polygons, room_polygon,
-                                     to_view, view_angle, wall_thickness)
+                                     room_title, to_view, view_angle, wall_thickness)
 from floorplan.model import Plan
 
 LAYERS = {  # name: (AutoCAD colour index, description)
@@ -83,7 +83,7 @@ def _add_rooms(msp, plan: Plan) -> None:
             continue
         msp.add_lwpolyline([_xy(p) for p in poly.exterior.coords[:-1]], close=True,
                            dxfattribs={"layer": "ROOMS"})
-        lines = [room.label, fmt_area(room.floor_area), fmt_ceiling(room.ceiling_height)]
+        lines = [room_title(room), fmt_area(room.floor_area), fmt_ceiling(room.ceiling_height)]
         x, y = _xy(polylabel(poly, tolerance=0.02).coords[0])
         mt = msp.add_mtext("\\P".join(lines), dxfattribs={"layer": "TEXT", "char_height": TEXT_H})
         mt.set_location((x, y), attachment_point=5)        # 5 = middle centre

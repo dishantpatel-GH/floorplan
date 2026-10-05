@@ -8,7 +8,8 @@
   photo : <input> = a folder with one sub-folder of 2-8 photos per room
 
 Outputs in --out (default outputs/runs/<name>/<tier>/): plan.json (schema/plan.schema.json), plan.svg / plan.png
-(rendered plan), plan.dxf, scene/ (the aligned 3D scene, for audit), run_report.json (timings, every stage's report).
+(technical drawing: every wall dimensioned with its interval), plan_presentation.svg / .png (clean drawing to show a
+homeowner), plan.dxf, scene/ (the aligned 3D scene, for audit), run_report.json (timings, every stage's report).
 """
 from __future__ import annotations
 
@@ -164,6 +165,8 @@ def main():
                     help="override a photo-tier parameter (floorplan/photo/params.py), e.g. f35_rule=diagonal")
     ap.add_argument("--video-scale", choices=["depth_agreement", "pnp"],
                     help="video tier: local scale method (D-076); default from floorplan/video/params.py")
+    ap.add_argument("--no-room-names", action="store_true",
+                    help="skip room names (Bedroom, Kitchen, ...) from the classes seen in each room (D-078)")
     a = ap.parse_args()
     global VIDEO_SCALE
     VIDEO_SCALE = a.video_scale
@@ -249,12 +252,30 @@ def main():
             report["damage"] = f"skipped: exceeded {a.damage_timeout} s (the plan is complete without it)"
             log(f"DAMAGE STEP TIMED OUT after {a.damage_timeout} s; plan written without damage annotations")
 
+    if not a.no_room_names:
+        # D-078: Bedroom, Kitchen, ... from the ADE20K classes of each room's images, then shape. Photo: the class
+        # maps of the photo work dir; video: the keyframes in work/; LiDAR: frames decoded from rgb.mp4. Video and
+        # LiDAR pixels vote for the room their 3D point lies in (depth + pose).
+        from floorplan.plan.room_types import name_rooms
+        work = a.input.parent / f"photo_work__{a.input.name}" if a.tier == "photo" else out / "work"
+        cache = {"photo": work, "video": out / "work", "lidar": out / "names"}[a.tier]
+        rep = name_rooms(plan, scene, info, a.tier, a.input, work, cache, log=log)
+        report["room_names"] = {k: v for k, v in rep.items() if k != "rooms"}
+
     from floorplan.export.dxf import export_dxf
     from floorplan.export.json_export import save_plan_json
     from floorplan.export.render import render_plan
     problems = save_plan_json(plan, out / "plan.json")
     report["schema_problems"] = problems
     render_plan(plan, out / "plan")
+    try:
+        from floorplan.export.presentation import render_presentation
+        st = render_presentation(plan, out / "plan_presentation")
+        report["presentation"] = {"doors": st.doors, "windows": st.windows, "passages": st.passages,
+                                  "labels_forced": st.labels_forced, "warnings": st.warnings}
+    except Exception as e:  # noqa: BLE001 - a drawing failure must not cost the run its plan files
+        report["presentation"] = f"failed: {type(e).__name__}: {e}"
+        log(f"WARNING: presentation drawing failed: {type(e).__name__}: {e}")
     export_dxf(plan, out / "plan.dxf")
     report["runtime_s"] = round(time.time() - t0, 1)
     (out / "run_report.json").write_text(json.dumps(report, indent=1, default=str))

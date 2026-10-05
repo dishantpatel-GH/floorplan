@@ -6,12 +6,14 @@ Files:
 |---|---|
 | `schema/plan.schema.json` | Our published output schema (JSON Schema draft 2020-12), version 1.0.0 |
 | `floorplan/export/json_export.py` | `Plan` → JSON (and back), two-layer validation |
-| `floorplan/export/render.py` | `Plan` → `plan.svg` + `plan.png` (homeowner-style floor plan); also the shared drawing geometry |
+| `floorplan/export/render.py` | `Plan` → `plan.svg` + `plan.png` (technical drawing: every wall dimensioned with its interval); also the shared drawing geometry |
+| `floorplan/export/presentation.py` | `Plan` → `plan_presentation.svg` + `.png` (clean drawing to show a homeowner, CubiCasa style) |
 | `floorplan/export/dxf.py` | `Plan` → `plan.dxf` (CAD, metres, real DIMENSION entities) + an independent read-back preview |
-| `scripts/render_plan.py` | CLI: `plan.json` → validate → svg/png/dxf + `render_report.json` |
+| `scripts/render_plan.py` | CLI: `plan.json` → validate → svg/png/dxf and the presentation drawing (`--style technical\|presentation\|both`) + `render_report.json` |
 | `tests/fixtures/make_synthetic_plan.py` | Generator for the synthetic apartment fixture and the stress plan |
 | `tests/fixtures/synthetic_plan.json` | The fixture (6 rooms, 27 walls, 11 openings, damage, scope items) |
 | `tests/test_export.py` | 14 tests: schema, round trip, validator catches mistakes, determinism, robustness, DXF |
+| `tests/test_presentation.py` | 16 tests: presentation drawing deterministic, every opening drawn, no intervals, names, W x L, turning, partitions, CLI |
 
 How to run (from the repo root):
 
@@ -19,6 +21,8 @@ How to run (from the repo root):
 PY=../.venv/bin/python
 $PY tests/fixtures/make_synthetic_plan.py                         # (re)generate the fixture
 $PY scripts/render_plan.py tests/fixtures/synthetic_plan.json --out outputs/export/synthetic --dxf-preview
+$PY scripts/render_plan.py <plan.json> --style presentation       # only plan_presentation.svg / .png
+$PY scripts/render_plan.py <plan.json> --style presentation --rotate -90   # turned a quarter clockwise
 PYTHONPATH=. $PY -m pytest tests/test_export.py -q                 # 14 passed in ~13 s
 ```
 
@@ -140,7 +144,47 @@ Why it matters for the score:
    (200 dpi). Output is deterministic: SVG ids use a fixed salt and no timestamps are written. A test checks the
    SVG is byte-identical across runs.
 
-### 2.3 DXF (`dxf.py`)
+### 2.3 Presentation drawing (`presentation.py`)
+
+The technical drawing is for checking a plan. The presentation drawing shows the same plan the way a real-estate
+plan does. The reference is CubiCasa's plan of the own house (`cubicasa/NearMaheshwariBhawan_dim_0.jpg`). Every run
+writes it as `plan_presentation.svg` / `.png` beside `plan.png`.
+
+1. **What it shows.** Dark grey solid walls. A light warm fill per room; rooms closer than 0.6 m get different
+   tints. The room name in capitals and its size "W x L m" under it. Doors as a gap with a leaf and a quarter arc;
+   a door wider than 1.2 m gets two leaves. Windows as a light gap with a double line in the middle of the wall.
+   Doorless openings as plain gaps. A footer with "Total: N m²", the room count and tier, and a small scale bar.
+2. **What it leaves out.** Intervals, per-wall dimensions, hatching, colour codes for confidence, damage. They stay
+   in `plan.png`. The fine print says so.
+3. **Geometry is the plan's.** Outlines, notches, wall positions, opening positions and widths come from
+   `plan.json` unchanged. "W x L" is the room's bounding box in its own wall directions, from the plan's own
+   outline, rounded to cm. The first number is the side that runs across the page. The total is the plan's
+   `footprint_area`.
+4. **Room name.** The room's `name` (room classifier) or `type` when present, else its `label`. Numbered photo
+   folders lose the number (`02_bedroom` → `BEDROOM`), a trailing number gets a space (`BEDROOM 2`), a note in
+   brackets is dropped (`corridor (not entered; ...)` → `CORRIDOR`). Generic labels (`room`, `R3`) become `ROOM`.
+5. **Walls.** Each room gets a mitred ring, like the technical drawing. Thickness is measured where known (kept
+   within 0.08-0.35 m), else nominal: 0.15 m on the building's outside, 0.10 m between rooms. Then:
+   - a slit narrower than 0.30 m between two rooms' walls is filled (the space between two wall faces is the
+     partition);
+   - a hole under 0.6 m² closed in by walls is filled;
+   - where two rooms touch (outlines within 5 cm), a 0.10 m partition is drawn centred on the shared line. Without
+     it, touching rooms show no wall at all. 329 of the 462 multi-room `plan.json` files under `outputs/` have two
+     rooms whose outlines touch over more than 0.3 m.
+6. **Openings.** The cut goes through the whole wall: up to the other room's face for a door between two rooms,
+   else the median wall depth over three lines across the opening. The door frame is outlined in the cut.
+7. **Labels.** Text is drawn as outlines (the SVG needs no fonts), in URW Gothic when installed (closest to
+   CubiCasa's geometric font), else Lato or DejaVu Sans. The label is placed by the same greedy idea as the
+   technical drawing: largest size first, horizontal before turned, never over a door swing unless nothing else
+   fits, then the name alone.
+8. **Turning.** `--rotate DEG` turns the drawing counter-clockwise. The plan's heading is wherever the phone
+   started, so this changes nothing measured; it helps compare with a sketch drawn the other way round.
+9. **Speed and robustness.** 0.2-0.4 s per plan (own-house video plan 0.2 s, synthetic apartment 0.4 s). All 460
+   `plan.json` files under `outputs/` that load were drawn: no failure, every opening placed, a label forced in 2
+   plans, at most 3.1 s. (185 older files have `bbox_dims` as a list and do not load; that is the loader, not the
+   drawing.)
+
+### 2.4 DXF (`dxf.py`)
 
 1. The file is AutoCAD R2010 with `$INSUNITS = 6` (metres), `$MEASUREMENT = 1` (metric) and decimal units, so a
    distance measured in CAD equals the real distance.
@@ -332,6 +376,19 @@ Why it matters for the score:
   A second `stress_plan()` (16 rooms of 0.8–4 m, rotated 30°, missing lengths) checks robustness, not realism.
 - **Evidence.** The fixture validates. `floorplan/eval/match.py` matches it to itself with 6/6 rooms, 27/27 walls
   and 11/11 openings, which shows the JSON format interoperates with the evaluation harness.
+
+### E-12 A second, clean drawing beside the technical one
+
+- **Context.** The user compared our `plan.png` with CubiCasa's plan of the same house: "not presentable". The
+  technical drawing carries every interval and dimension chain, hatching and colour codes. That is right for
+  checking and wrong for showing.
+- **Options.** (a) Restyle `plan.png`. (b) A second drawing from the same `plan.json`.
+- **Choice.** (b), in its own module. This change does not touch `render.py`, so the technical drawing and its
+  tests stay as they were.
+- **Why.** The two readers need different drawings. The presentation drawing drops numbers that the technical one
+  must keep, so one drawing cannot serve both.
+- **What it cannot fix.** It draws only what the plan has. A plan with no detected door shows no door. A room the
+  extractor merged (hall, kitchen and passage in the own-house video run) is drawn as one room.
 
 ## 4. Issues log
 

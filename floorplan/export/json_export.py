@@ -25,7 +25,7 @@ from typing import Any, Optional
 from floorplan.model import Adjacency, Measurement, Opening, Plan, Room, Wall
 
 SCHEMA_ID = "floorplan.plan"
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema" / "plan.schema.json"
 DECIMALS = 4
 
@@ -87,12 +87,15 @@ def _room_to_json(r: Room) -> dict:
     bbox = None
     if r.bbox_dims is not None:
         bbox = {"length": measurement_to_json(r.bbox_dims[0]), "width": measurement_to_json(r.bbox_dims[1])}
-    return {
+    out = {
         "id": r.id, "label": r.label, "polygon": [_pt(p) for p in r.polygon], "wall_ids": list(r.wall_ids),
         "floor_area": measurement_to_json(r.floor_area), "perimeter": measurement_to_json(r.perimeter),
         "ceiling_height": measurement_to_json(r.ceiling_height), "bbox_dims": bbox,
         "floor_level": _num(r.floor_level),
     }
+    if r.name is not None:                     # schema 1.1: room names (plan/room_types.py), optional
+        out.update(name=r.name, type=r.room_type or "room", type_evidence=_free_to_json(r.type_evidence or {}))
+    return out
 
 
 def _opening_to_json(o: Opening) -> dict:
@@ -176,7 +179,8 @@ def plan_from_json(doc: dict) -> Plan:
         id=r["id"], label=r["label"], polygon=[tuple(p) for p in r["polygon"]], wall_ids=list(r["wall_ids"]),
         floor_area=m(r["floor_area"]), perimeter=m(r["perimeter"]), ceiling_height=m(r["ceiling_height"]),
         bbox_dims=(m(r["bbox_dims"]["length"]), m(r["bbox_dims"]["width"])) if r.get("bbox_dims") else None,
-        floor_level=r.get("floor_level") or 0.0) for r in doc["rooms"]]
+        floor_level=r.get("floor_level") or 0.0, name=r.get("name"), room_type=r.get("type"),
+        type_evidence=r.get("type_evidence")) for r in doc["rooms"]]
     walls = [Wall(
         id=w["id"], room_id=w["room_id"], p0=tuple(w["p0"]), p1=tuple(w["p1"]), length=m(w["length"]),
         normal=tuple(w["normal"]), thickness=m(w.get("thickness")), opening_ids=list(w.get("opening_ids", [])),
