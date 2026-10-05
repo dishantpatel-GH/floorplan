@@ -181,7 +181,7 @@ class PhotoParams:
     door_height_sigma_rel: float = 0.035  # ... 1-sigma across homes; systematic within one home (all doors alike)
 
     # --- door-anchored stitching (door_stitch.py, D-081): rooms snap together at the doors they share ---
-    door_stitch: bool = False            # D-081: off: k65 and k22 gain 0.19-0.29 IoU, k38 does not (-0.003)
+    door_stitch: bool = True             # D-088: on: k65 +0.035, k22 +0.10 IoU, k38 -0.001 (paired, 3 runs each)
     door_bin_m: float = 0.05             # door intervals are built from 5 cm cells along each wall
     door_stride: int = 2                 # every 2nd depth pixel (518 px photos: ~33k points per photo)
     door_beyond_m: float = 0.25          # a point this far past a wall face was seen through an opening in it

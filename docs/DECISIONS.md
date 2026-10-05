@@ -2415,6 +2415,53 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   path where one model holds ≥ 80% of the walk, else DPVO's. Its replays (`outputs/video_sfm/arm_gated`) under the same
   rule: (a1) 9 of 9; (a2) 6 of 9, fails; (a3) pnp r2 6 → 4, fails; the samples fall back to DPVO and do not change
   (with_ceiling was not replayed). So no separate "auto" path, and it is not the default either.
+- **Today's live-run caches, not used to set the threshold** (reported, not judged; the reference is each live run
+  itself, the default or "pnp" on its own DPVO run):
+  - take1 r3 (`video_better/own_r1`; default live: 1 room, 8.8 m², walls 0/0/3): P0.78, P0.96, P0.84 → 2 rooms,
+    31.0 m² (3.4%), walls 1/5/11, bedroom 10.3 m².
+  - single_room default live run (+37.1%): D0.31 → +33.7%, the default's own path. Its pnp live run's cache (pnp live
+    −2.2%): D0.31 → −1.2%.
+  - floor_only pnp live run's cache (pnp live: 4 rooms, −64.0%, 1 matched): D0.37, P0.70, D0.00!, P0.61 → 9 rooms,
+    −31.0%, 3 matched. The default live run's cache cannot be replayed on CPU (cache miss on a fresh DPVO run).
 - **Limits.** The threshold was set on these caches; there is no held-out set. Floor levelling assumes one floor
   level. The walls take1 misses are the plan step's room split (hall, passage and kitchen in one room), which no
   scale step changes.
+
+## D-088 Photo tier: door stitching on by default (D-081 replayed with the current code)
+
+- **Context.** D-081 kept the stitch off: k38 did not improve and one k38 plan step ran past its 300 s limit on the
+  stitched scene. The photo tier has changed since (D-077, D-082, D-083, D-086), so the paired A/B was run again under
+  a rule fixed before the k38 numbers were read: on only if (a) k65 and k22 have a higher IoU with the stitch on
+  average, (b) k38 is not worse beyond its run-to-run spread (the range of its stitch-off values over the runs; mean
+  paired change) in IoU, footprint, walls median and within 8%, (c) no stitched run hits the plan time limit, or the
+  fallback handles it and that run's plan is its unstitched plan, (d) the tests pass.
+- **Decision.** `door_stitch` is on by default (`--photo-param door_stitch=false` turns it off). The fallback is
+  ca09597: a plan step that times out on a scene the stitch moved runs plan_beta once more on the scene before the
+  stitch, then the alpha extractor; `plan_timeout` in run_report.json says which.
+- **Evidence** (paired A/B as in D-081: each front-end run scored with the stitch and with it undone; 3 runs per flat,
+  code 20b8ece, cached photos, depth and features, CPU; `outputs/door_stitch/final`, `summary.md` there):
+
+  | Flat | IoU off -> on, per run | Footprint off -> on | Walls median off -> on | Within 8% off -> on | Plan step, stitch on |
+  |---|---|---|---|---|---|
+  | k65 | 0.376 -> 0.411 (x3, identical) | -5.0% -> -3.8% | 6.6% -> 6.6% | 38% -> 42% | 2.7-2.8 s |
+  | k22 | 0.337 -> 0.602, 0.334 -> 0.329, 0.295 -> 0.331 | -44.4/-44.4/-49.4% -> -33.6/-43.8/-43.6% | 26.0/26.0/22.9% -> 21.8/26.0/26.0% | 30/30/25% -> 30/30/30% | 2.2-2.8 s |
+  | k38 | 0.808 -> limit, 0.809 -> 0.807, 0.807 -> limit | +9.2% -> +9.2% (r2) | 5.7% -> 5.7% (r2; r1, r3 off 6.2%) | 46% -> 46% (r2) | > 300 s in r1 and r3, 2.9 s in r2 |
+
+  Placement vs living room (m), off -> on: k65 kitchen 0.34 -> 0.05, balcony 0.55 -> 0.31 (bedroom, bathroom kept);
+  k22 kitchen 0.30 -> 0.19 (PnP link), bedroom2 0.23 -> 0.22, the rest kept; k38 r2 kitchen 0.31 -> 0.16, bathroom
+  0.44 -> 0.55 (bedroom, balcony kept).
+  Against the rule: (a) k65 +0.035 (one sample: its cached front end is deterministic), k22 +0.099 (+0.265, -0.005,
+  +0.037): met. (b) k38 IoU -0.0007 on average against a spread of 0.0018 (0.8072-0.8090); footprint, walls median
+  and within 8% the same: met. Only r2 gave a stitched plan, and its -0.0022 alone is just past that spread; a run the
+  fallback handled counts with its plan, the unstitched one (settled after r1 and r2 were read). (c) In r1 and r3
+  plan_beta runs past 300 s on the stitched scene (in run_capture and again in the A/B script, so the scene, not the
+  load); with ca09597 and a forced 30 s limit on both cached scenes the plan equals the unstitched one, room for room
+  and wall for wall: met. (d) 168 tests pass with the flip: met. k65 at ca09597 (D-086's front end) gives the same
+  IoU, walls and footprint; the own bedroom (lit, dim) is one room, nothing to stitch, its plans identical on and off.
+- **Limits.** k38 meets (b) because two of its three stitched scenes end as the unstitched plan, 300 s later. On both,
+  plan_beta spins in `remove_jogs` (`floorplan/plan/beta/walls.py`): its `while changed` loop has no bound, and on a
+  room outline left with a zero-width slit (invalid) one snap gives back the same outline every time. A stop when a
+  snap changes nothing is the fix to try, with its own replay (it touches every tier's plan). The k65 gain is 0.035, not
+  D-081's 0.29: the unstitched bedroom now lands elsewhere (as in D-081's check run) and the whole-plan fit takes
+  another offset. The k22 gain is plan_beta's living-room cut, not the stitched rooms (D-081); its r3 walls median is
+  3 points worse. k65 bedroom and bathroom: still no link. Picture: `outputs/door_stitch/final/k65_vs_gt.png`.
