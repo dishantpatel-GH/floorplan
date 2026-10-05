@@ -30,12 +30,22 @@ the CPU; the video and photo tiers need an NVIDIA GPU (tested on 8 GB), and the 
 (`nvcc`, for DPVO's ops).
 
 ```bash
-git clone <this repo> floorplan-capture && cd floorplan-capture
+git clone https://github.com/dishantpatel-GH/floorplan.git floorplan-capture && cd floorplan-capture
 bash setup/install.sh            # envs, weights and tests; prints the time of each step (--cpu-only: LiDAR tier only)
 python3 scripts/fetch_data.py    # own house + k65 into data/, checked by SHA-256; the case study's sample captures: your copy in data/sample/
 source .venv/bin/activate && export HF_HUB_OFFLINE=1     # runs need no network from here
 python scripts/run_capture.py data/sample/single_room/c00a170fe1 --tier lidar
 ```
+
+**The benchmark data** (raw photos, video, LiDAR and ground truth) is in two archives on Google Drive, which
+`scripts/fetch_data.py` downloads and checks by SHA-256. To get them by hand, unzip each one into `data/`:
+
+| Archive | Size | What it holds |
+|---|---|---|
+| [`own_house.zip`](https://drive.google.com/file/d/1eWLv8KUZdrvwa-BB9z4Pfiz07Wz38fT7/view?usp=sharing) | 179 MB | own house, one room: 7 lit and 6 dim photos, the walkthrough video, the hand sketch, tape ground truth |
+| [`k65.zip`](https://drive.google.com/file/d/1-gubHzEKItvHmL-d5JuLTUNlazsNk1G9/view?usp=sharing) | 589 MB | simulated k65 flat (iPhone 15 emulation): photos per room, video, LiDAR, exact ground truth |
+
+The case study's own sample captures are not re-hosted: put your copy in `data/sample/` (`data/README.md`).
 
 Everything is created inside the repo folder and is git-ignored: `.venv/` (main env), `envs/dpvo/` and
 `envs/seg/` (the DPVO and segmenter envs), `third_party/` (DPVO source), `weights/` (models at pinned revisions and
@@ -145,7 +155,7 @@ env -u PYTHONPATH python -m pytest -q tests      # CPU, well under a minute
 | 5 | Benchmark report | `docs/BENCHMARK_REPORT.md` |
 | 6 | Fix loop bundle | `docs/FIX_LOOP.md`, `docs/fixloop.diff`, tags `before-fix` and `after-fix` |
 | 7 | Technical report | `docs/TECHNICAL_REPORT.md` |
-| 8 | Raw benchmark data | `data/` (`scripts/fetch_data.py`, `data/MANIFEST.json`), `data/cubicasa/` |
+| 8 | Raw benchmark data | `data/` (`scripts/fetch_data.py`, `data/MANIFEST.json`; Drive: [own_house.zip](https://drive.google.com/file/d/1eWLv8KUZdrvwa-BB9z4Pfiz07Wz38fT7/view?usp=sharing), [k65.zip](https://drive.google.com/file/d/1-gubHzEKItvHmL-d5JuLTUNlazsNk1G9/view?usp=sharing)), `data/cubicasa/` |
 
 ## History
 
