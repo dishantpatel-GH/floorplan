@@ -1682,6 +1682,84 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   - "Eat-in kitchen", dining and study are not types; ADE20K has no class that separates them.
   - The foyer rule needs a separate room of 4 m² or less at the entrance. No plan here has one.
 
+## D-080 Video frames as photos: tested, not adopted (why the photo tier works on my house and the video tier does not)
+
+- **Question** (5 Oct): "if the image one works, how come the video does not work?"
+- **Answer.** Both tiers measure with the same depth model (MoGe-2) on single images, and a single video frame
+  measures well: the bedroom window is 1.487 m in one frame (kf134) and 1.426 m in the test plan below, tape 1.473 m.
+  The difference is how the images are put together.
+  - The photo tier measures each room from one spot (a turning series of stills) and joins rooms at doors. No camera
+    path runs through the house, so a bad photo can only spoil its own room.
+  - The video tier tracks one camera path through the whole 117 s walk (DPVO) and places every frame on it. On take1
+    the path broke twice: DPVO's scale dropped about 13x at t 34.5 s, when the phone turned past the blank white
+    pillar at close range (no scale vote between t 12 and 37 s), and tracking was lost while the ceiling was filmed at
+    the end (t 107-117 s; the camera "climbs" 11.7 m). The walk ends in the bedroom, so no loop closes the path. The
+    23:28 run had 8 rooms: the hall twice, the bedroom in two pieces
+    (`outputs/own_house/diag/video/workflow_result.json`).
+  - DPVO's run differs from run to run (I-007), so every run breaks somewhere else: the nine cached take1 runs give 1 to
+    9 rooms and 10.0 to 40.3 m² at today's defaults (`docs/notes/video_better_rule.md`). Today's four fresh runs: one
+    room each with the default scale step (the bedroom, or the hall and passage), two with `--video-scale pnp` (the
+    bedroom, and the hall, kitchen and passage as one room).
+  - Where the path holds, the video measures as well as the stills: the fix loop's after r1 has the bedroom at
+    11.02 m² (tape 11.09) with 3 of 6 walls within 3%, and today's pnp r2 has the hall's W1 and W2 at +1.5% and -0.5%.
+    The photo tier's bedroom (D-077) is 10.66 m² (-4%), with 1 of 6 walls within 3%. The photo tier was also tested on
+    one room only (the bedroom stills); the video has to place four.
+- **Test: the video's frames as photos** (`floorplan/video/rooms_as_photos.py`, `5d8e142`, `b73e3d9`;
+  `outputs/video_as_photos/`). Rooms cut at the known times; per room 3-7 sharp turning frames 30-50° apart from one
+  spot, tilt -40° to +8°, plus one bedroom ceiling frame. Each frame carries the video's focal length (945.5 px; a
+  6 px centre crop lets the integer FocalLengthIn35mmFilm 28 give 945.7 px) and its time in the video. No doorway
+  pairs: the photo tier reads a pair as "same spot, turned round", while frames at a room change look the same way
+  1-2 m apart. Rooms were joined by feature matches (all four in one block). v2 is v1 without the frames that look out
+  of their room (picked by eye).
+- **Evidence** (tape, `scripts/eval_own_capture.py`; walls of 14, of 6 for the bedroom-only photo runs). A video plan
+  room is paired by the keyframe cameras inside it (`outputs/presentable/label_by_walk.py`): the scorer pairs by
+  label, and every video room is labelled like the bedroom. Sources: `outputs/video_as_photos/compare.json`,
+  `outputs/presentable/summary_walk.json`.
+
+  | Run | Rooms | Footprint m² | Walls ≤3% / ≤10% | Bedroom m² (tape 11.09) | Hall m² (12.71) | Kitchen m² (4.21) |
+  |---|---|---|---|---|---|---|
+  | Video, fix loop after (PnP scale), r1 | 2 | 28.8 | 3 / 4 | **11.02 (-1%)** | 17.82, with kitchen and passage (tape 16.92 without the passage) | in the hall |
+  | Video, today (`5fe6ae6`), default, r1 | 1 | 10.0 | 0 / 2 | 9.99 (-10%) | missing | missing |
+  | Video, today, default, r2 | 1 | 19.4 | 1 / 1 | missing | 19.40, with the passage | missing |
+  | Video, today, pnp, r1 | 2 | 31.1 | 0 / 2 | 9.02 (-19%) | 22.10, with kitchen and passage | in the hall |
+  | Video, today, pnp, r2 | 2 | 29.0 | 4 / 5 | 10.03 (-10%) | 18.97, with kitchen and passage | in the hall |
+  | Photo, bedroom stills (lit), D-074 code | 1 | 9.2 | 1 / 3 of 6 | 9.25 (-17%) | — | — |
+  | Photo, bedroom stills (lit), D-077 code | 1 | 10.7 | 1 / 3 of 6 | 10.66 (-4%) | — | — |
+  | Frames as photos v1, all turning frames | 4 | 21.7 | 0 / 2 | 2.83 (-75%) | 11.28 (-11%) | 4.69 (+11%) |
+  | Frames as photos v2, no look-out frames | 4 | 29.8 | 0 / 2 | 5.70 (-49%) | **12.81 (+1%)** | 4.93 (+17%) |
+
+  - The other fix-loop runs, paired the same way: before r1 4 rooms, 22.9 m², bedroom 12.51 m² (+13%), a 4.46 m²
+    hall slice; before r2 4 rooms, 37.8 m², the hall twice (17.07 and 14.36 m²; the scorer took the 14.36 as the
+    bedroom) and the bedroom's keyframes in a 4.95 m² room with the kitchen's and the passage's; after r2 one 6.35 m²
+    room, the passage (20 of 228 keyframes kept).
+  - Plans: v1 `outputs/video_as_photos/oracle_run/plan.png` (the bedroom is a 0.36 × 7.81 m strip between the other
+    rooms); v2 `outputs/video_as_photos/oracle_v2_run/plan.png` (hall 4.07 × 3.15 m, walls -9% and +9%; the passage,
+    not taped, is 6.40 m², where the house leaves it about 1-3 m²; the hall is named "Bedroom 1").
+- **Why the frames fall short of the stills.**
+  - Less wall in view. A 16:9 frame is 42° tall, a 4:3 still 54°. At 27° down (v2's bedroom frames are 22-29° down), a
+    frame sees 15 cm of the 1.0-2.0 m wall band on a wall 2 m away, a still 36 cm; in the bedroom 4.6k wall points per
+    frame against 11.5k per still. The far-wall rule (D-077) needs that band to tell a wall from furniture: in v2 the
+    wardrobe front, 0.55 m from the camera, became the bedroom wall.
+  - The camera moves while it turns (up to 0.46 m in the bedroom); the room fit puts all turning photos at one spot.
+    With each frame at its own pose-graph position (CPU refit, `offline_layout_c.py`) the bedroom box is 7.30 m²
+    (-34%) and the hall's long side 4.48 m (tape 4.469 m).
+  - Frames that look out of the room: in v1 one frame through the bedroom door put that side 6.2 m away, and the
+    neighbouring rooms then cut the box to the 0.36 m strip.
+  - The kitchen was filmed from its doorway: the side behind the camera is never seen, so it is a mirrored guess.
+- **Decision.** Not adopted, and the automatic room split (scene classes per keyframe, a minimum dwell, cuts at
+  doorway passes) was not built: with the rooms cut by hand and the bad frames dropped by eye the bedroom is still
+  -49% (-34% with per-frame positions), against -1% on the one video run whose path held. `--video-rooms JSON`
+  (rooms given by hand) stays as an experimental switch; the video tier's default is unchanged. For my house the photo
+  tier is the one to trust.
+- **What could make the video work** (leads, not tested):
+  - Keep a break inside one room: cut the path where tracking breaks (the 13x drop, the ceiling sweep), scale each
+    piece on its own (PnP votes where there is texture, D-075; the SfM models the focal step builds follow the scale
+    for t 8-71 s), and join the pieces at the doors they share, as the photo tier does (D-081).
+  - Filming: no turning past a blank wall or pillar at arm's length, no ceiling sweep at the end (the protocol films
+    the ceiling line on a second loop tilted 25° up), and finish where you started so the path can close
+    (`HOUSE_CAPTURE_GUIDE.md` section 6).
+- **Revisit if** the video path holds over the whole walk on repeat runs, or a take is filmed that way.
+
 ## D-081 Photo tier: rooms are stitched at the doors they share (door-anchored stitching)
 
 - **Context.** On the k65 simulated flat the photo tier measured room sizes well but put rooms 0.5-2.5 m off and one
@@ -1746,3 +1824,67 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   flats the stitched rooms sit closer to the living room's true relative position in 6 of 7 cases, and the k65 and
   k22 plans improve a lot. Before it goes on: repeat runs per flat, and make the photo front end's pose graph
   deterministic. Pictures: `MyHouse_Dataset/k65_photo_plan_vs_gt.png` (before) and `..._after.png`.
+
+## D-083 Photo tier: pillars and wall steps cut into the room outline
+
+- **Context.** "It does not identify beams, doors or anything, just a rectangular block." CubiCasa's plan of my
+  bedroom draws two pillars opposite each other on the long walls (0.61 m wide; 0.30 and 0.10 m deep), the step at
+  the end of the door wall (tape: 0.126 m out, 0.44 m long) and recesses at both ends of the window wall. The photo
+  tier drew a box, and its polygon step cut the wardrobe out as a corner notch (D-077 limits). The tape leaves pillars
+  out of wall lengths: a pillar changes the shape, not the length numbers.
+- **Options.**
+  - (a) Pillars from the spin's pooled cloud. The photos' depth scales differ by up to 40%: own lit 223824 sees the
+    W4 pillar at 1.10 m and the wall beside it at 1.25 m, 223851 at 1.56 and 1.74 m. One pillar smears over 0.6 m.
+  - (b) Per photo (chosen). Inside one depth map the pillar and the wall beside it are measured together: depth over
+    wall distance 0.116 and 0.114 in those two photos.
+  - (c) The segmenter's "column, pillar" class. No pixel of the own photos gets it; the pillars are "wall".
+- **Decision.** (b), `floorplan/photo/pillars.py`, rules in `photo_tier.md` "pillars". Per photo and measured side, a
+  run of the wall profile 0.15-0.8 m wide and 0.06-0.6 m in front of a wall run beside it, closed at its other end
+  (pillar) or running into the corner (step), standing on the floor and reaching as high as the photo sees.
+  `polygon.cut_pillars` cuts it into the outline as a rectilinear notch; the box sides do not move. plan.json keeps
+  them in `meta.pillars` (room id -> kind, wall side, notch rectangle, centre, width, depth, photos): the room object's
+  schema is closed and its files were being edited for room names. On by default; `--photo-param pillars=false`.
+  Also (`poly_skip_far_wall_lines`, on): a surface the far-wall rule set aside as furniture bounds no polygon notch,
+  so the wardrobe-corner notch goes.
+- **What the photos show** (own Room, both takes) and what was found:
+
+  | Feature (photos) | CubiCasa | Lit | Dim |
+  |---|---|---|---|
+  | W4 pillar, white-door wall (lit 223824, 223851; dim 223944, 224014) | 0.61 × 0.30 m | 0.43 × 0.12 m (223824 + 223851) | 0.46 × 0.15 m (223944) |
+  | W6 pillar, socket wall (lit 223834, 223905; dim 223956) | 0.61 × 0.10 m | 0.55 × 0.08 m (223834) | 0.54 × 0.10 m (223956) |
+  | W1/W3 step at the W4 corner, tape 0.44 × 0.126 m (lit 223846, dim 223938) | 0.43 × 0.10 m | 0.48 × 0.12 m (223846) | 0.57 × 0.12 m (223938) |
+  | Recesses at both ends of the window wall (lit 223829, dim 223949) | 0.27 and 0.42 × 0.21 m | not found (the wall steps back, not out) | not found |
+  | Niche in W6 at 1.3-2.0 m (lit 223905); beam over the white door (dim 224014) | not drawn | not found (no floor contact; overhead) | not found |
+  | Wardrobe at the W1/W6 corner (lit 223840, dim 224001) | furniture | no notch (was 0.69 × 0.70 m) | no notch (was 1.01 × 0.63 m) |
+
+  Phantoms: none. Along their walls the pillars sit 0.1-0.4 m from where CubiCasa has them (lit's box is 9% long).
+- **Evidence** (cached views, CPU, `run_capture.py` + `eval_own_capture.py` from a clean export of `f267c97` plus this
+  change; tape GT with `gt_polygons.json`, sim with `sim_gt.json`; `outputs/own_house/diag/pillars/runs_final/`,
+  `eval_final/`; "off" = both switches off, the code before this change):
+
+  | Set | Off | Notch fix only | On | Cut |
+  |---|---|---|---|---|
+  | Own lit: walls median / within 8% / matched / area (outline 11.09 m²) | 13.2%, 0 of 6, 4, 10.66 m² | 8.8%, 1 of 6, 4, 11.14 m² | 9.0%, 0 of 6, 5, 10.99 m² | 2 pillars, 1 step |
+  | Own dim: the same | 12.7%, 2 of 6, 4, 10.69 m² | 4.4%, 3 of 6, 4, 11.33 m² | 3.6%, 4 of 6, 5, 11.14 m² | 2 pillars, 1 step |
+  | k65 (sheet cue on): walls median / within 8% / footprint | 5.6%, 15 of 26, −9.0% | | 5.6%, 15 of 26, −9.0% (every wall and area row identical) | none (0 candidates) |
+  | k22, k65v23, k65v2_dim, k38_s1 (held out, working tree) | | | no pillar cut, no notch changed | none (1 candidate, k22 bedroom: outside the room) |
+
+  - Dim: the step splits the door wall where the tape does: W1 2.577 m (tape 2.545), W3 0.572 m (0.440); without it
+    the scorer paired W3 with the whole 3.15 m wall. W4 is 3 pieces end to end, 3.473 m (3.480).
+  - Lit: W3 0.479 m (0.440) is new, W4 16.9% -> 13.4%, but W1 7.6% -> 11.2% (2.260 m vs 2.545): the box is
+    2.74 m across where the tape has 2.985 m (its W4 side sits on the pillar face, D-077 limits), so the door wall
+    ends 0.25 m short and the step takes its last 0.48 m from it.
+  - Short walls: the step's riser (lit 0.122 m, dim 0.125 m; tape 0.126 m) is never paired: the registration
+    leaves the plan 0.07-0.18 m off the tape outline, more than the overlap a 0.13 m wall allows.
+  - The scorer's outline registration of these near-rectangles also moves with code outside this change: on the
+    working tree 30 minutes earlier (other agents' door code in progress) lit was turned the other way (rot 92.2°):
+    off 8.3%, 2 of 6, on 8.6%, 2 of 6; dim off 21.7%, 1 of 6, on 3.6%, 4 of 6.
+  - k38: both the on and the off run crashed in the free-space plan step (GEOS TopologyException in
+    `_canonical_outlines`, before the layout rooms; known, D-077). The held-out runs differ from each other run to
+    run (ceiling-photo matches 281 vs 272 on one cache), not through this change.
+- **Limits.**
+  - The W4 pillar comes out narrower and shallower than CubiCasa's (0.43-0.46 × 0.12-0.15 m vs 0.61 × 0.30 m); lit's
+    W4 side sits on that pillar's face (D-077 box), so the pillar is drawn 0.12 m in front of the face.
+  - Recesses (a wall stepping back) are not searched; nor are small rooms (threshold box, no polygon).
+  - Set on these two takes; the simulator has no pillars (k65's steps are a door alcove and a door passage, both
+    outward), so it only tests phantoms.

@@ -54,6 +54,7 @@ DEFAULTS = dict(
     poly_alcove_max_blocked=0.4,     # an alcove the spin photos saw mostly behind a wall is not this room's
     poly_notch_wall_cover=0.4,       # a notch's walls toward the room must be >= 40% seen
     poly_side_min_overlap_m=0.3,     # a measured side's seen wall must overlap the room's extent along it by 0.3 m
+    poly_skip_far_wall_lines=True,   # no notch line on a surface the far-wall rule set aside as furniture (D-077)
 )
 
 
@@ -346,10 +347,17 @@ def fit_polygon(lay: dict, data: dict, p, door_photos: list[str] | None = None, 
     for s in SIDES:
         ax, sg = _side_axis(s)
         j = 0 if ax == 0 else 1
+        # D-077 set this surface aside as furniture in front of the wall (own Room: the wardrobe front, an open door
+        # leaf): it bounds no notch (the false wardrobe-corner notch, lit 0.69 x 0.70 m, dim 1.01 x 0.63 m)
+        fw = (S[s].get("far_wall") or {}).get("from_m") if _par(p, "poly_skip_far_wall_lines") else None
         for g in segs[s]:
             if not (p.layout_min_dist_m < g["offset"] < rect[s] - sep):
                 continue
             if any(abs(sg * g["offset"] - q) < sep for q in lines[j]):
+                continue
+            if fw is not None and abs(g["offset"] - fw) <= 2 * p.layout_bin_m:
+                notes.append(dict(kind="notch_line_skipped", side=s, offset_m=round(g["offset"], 3),
+                                  reason="the far-wall rule set this surface aside as furniture (D-077)"))
                 continue
             add_line(j, sg * g["offset"], s, g, "seen wall")
     X = np.array(sorted(lines[0]))
@@ -539,7 +547,105 @@ def room_polygon(lay: dict, views: dict, group: list[str], yaws: dict, poses: di
         return dict(ok=False, reason="too few wall points")
     out = fit_polygon(lay, data, p, door_photos=[d for d in door_photos if d in yaws2 and d not in yaws_l], log=log)
     out["photo_offsets"] = {n: [round(float(offs[n][0]), 3), round(float(offs[n][2]), 3)] for n in yaws2}
+    if out.get("ok") and getattr(p, "pillars", True):          # D-083: pillars and wall steps (photo/pillars.py)
+        try:
+            from floorplan.photo.pillars import find_pillars
+            res = find_pillars(lay, views, yaws2, offs, scale, p)
+            cut_pillars(out, res.get("pillars", []), p)
+            out["pillar_search"] = dict(candidates=res.get("candidates", 0), rejected=res.get("rejected", []))
+        except Exception as e:                  # the polygon without pillars stands
+            out["pillar_search"] = dict(error=f"{type(e).__name__}: {e}")
     return out
+
+
+# ------------------------------------------------------------------------------------------------ pillars (D-083)
+def _outline(xl: list[dict], zl: list[dict], inside: np.ndarray):
+    """Vertices, vertex line indices, per-edge records and area of the cell set (same records as fit_polygon)."""
+    verts = trace(inside)
+    if verts is None:
+        return None
+    V = [[xl[i]["offset"], zl[k]["offset"]] for i, k in verts]
+    edges = []
+    for a in range(len(verts)):
+        (i0, k0), (i1, k1) = verts[a], verts[(a + 1) % len(verts)]
+        ln = xl[i0] if i0 == i1 else zl[k0]
+        edges.append(dict(axis="x" if i0 == i1 else "z", line=int(i0 if i0 == i1 else k0), status=ln["status"],
+                          sigma=ln["sigma"], kind=ln["kind"]))
+    return V, [[int(i), int(k)] for i, k in verts], edges, float(_shoelace(np.array(V)))
+
+
+def cut_pillars(pl: dict, pillars: list[dict], p) -> None:
+    """Cut pillars / wall steps (photo/pillars.py, layout frame) into polygon_local as rectilinear notches.
+
+    A pillar on side s takes the cells between its face line and the side line over its span along the wall. The
+    side line must be the polygon's edge there (the cell beyond it outside), so a side the polygon moved or an alcove
+    keeps its shape; a cut that leaves holes or splits the room is undone. The rectangle's lines never move: wall
+    lengths stay wall to wall. In place: lines, cells, vertices, edges, area, changes, pillars."""
+    pl.setdefault("pillars", [])
+    if not pillars or not pl.get("ok"):
+        return
+    xl, zl = [dict(q) for q in pl["x_lines"]], [dict(q) for q in pl["z_lines"]]
+    inside = np.array(pl["inside"], bool)
+    sides = pl.get("sides") or {}
+    for pr in pillars:
+        s = pr["side"]
+        ax, sg = _side_axis(s)
+        j = 0 if ax == 0 else 1
+        side_pos = sg * float(sides.get(s, {}).get("offset", pr["side_m"]))
+        rec = dict(pr, kind=pr["kind"], cut=False)
+        if abs(side_pos - sg * pr["side_m"]) > 0.05:
+            pl["pillars"].append(dict(rec, reason="the polygon moved this side: not cut"))
+            continue
+        L = [xl, zl]
+        sig = float(max(sides.get(s, {}).get("sigma") or 0.1, 0.05))
+        new = [(j, sg * pr["face_m"], f"{pr['kind']} face"), (1 - j, pr["t0"], f"{pr['kind']} side"),
+               (1 - j, pr["t1"], f"{pr['kind']} side")]
+        L2 = [list(xl), list(zl)]
+        for a, pos, kind in new:
+            if all(abs(q["offset"] - pos) > 0.02 for q in L2[a]):
+                L2[a].append(dict(offset=float(pos), side=s, kind=kind, status="measured", sigma=sig))
+        L2 = [sorted(q, key=lambda r: r["offset"]) for q in L2]
+        X0, Z0 = np.array([q["offset"] for q in L[0]]), np.array([q["offset"] for q in L[1]])
+        X2, Z2 = np.array([q["offset"] for q in L2[0]]), np.array([q["offset"] for q in L2[1]])
+        cx, cz = 0.5 * (X2[1:] + X2[:-1]), 0.5 * (Z2[1:] + Z2[:-1])
+        io = np.clip(np.searchsorted(X0, cx) - 1, 0, len(X0) - 2)
+        ko = np.clip(np.searchsorted(Z0, cz) - 1, 0, len(Z0) - 2)
+        ins2 = inside[io][:, ko] & (cx[:, None] > X0[0]) & (cx[:, None] < X0[-1]) \
+            & (cz[None, :] > Z0[0]) & (cz[None, :] < Z0[-1])
+        a0, a1 = sorted((sg * pr["face_m"], side_pos))
+        cn, ct = (cx, cz) if j == 0 else (cz, cx)
+        band_n = (cn > a0) & (cn < a1)
+        band_t = (ct > pr["t0"]) & (ct < pr["t1"])
+        cut = (band_n[:, None] & band_t[None, :]) if j == 0 else (band_t[:, None] & band_n[None, :])
+        cut &= ins2
+        if not cut.any():
+            pl["pillars"].append(dict(rec, reason="no room cells there: not cut"))
+            continue
+        # the side line is the outline there: just beyond it (same span), nothing of the room
+        beyond = np.flatnonzero((cn > side_pos) if sg > 0 else (cn < side_pos))
+        nxt = None if len(beyond) == 0 else int(beyond[0] if sg > 0 else beyond[-1])
+        if nxt is not None:
+            col = ins2[nxt, :] if j == 0 else ins2[:, nxt]
+            if (col & band_t).any():
+                pl["pillars"].append(dict(rec, reason="the room continues beyond the side there (alcove): not cut"))
+                continue
+        trial = ins2 & ~cut
+        if not _connected(trial) or trace(trial) is None:
+            pl["pillars"].append(dict(rec, reason="the cut would split the room or leave a hole: not cut"))
+            continue
+        xl, zl, inside = L2[0], L2[1], trial
+        pl["pillars"].append(dict(rec, cut=True))
+    if not any(q.get("cut") for q in pl["pillars"]):
+        return
+    o = _outline(xl, zl, inside)
+    if o is None:
+        return
+    V, vl, edges, area = o
+    pl.update(x_lines=xl, z_lines=zl, inside=inside.astype(int).tolist(), vertices=V, vertex_lines=vl, edges=edges,
+              n_vertices=len(V), area_m2=round(area, 3), used=True)
+    pl["changes"] = list(pl.get("changes", [])) + [
+        dict(kind=q["kind"], side=q["side"], t_m=[q["t0"], q["t1"]], width_m=q["width_m"], depth_m=q["depth_m"],
+             photos=q["photos"]) for q in pl["pillars"] if q.get("cut")]
 
 
 # ------------------------------------------------------------------------------------------------ plan side (tiers)
@@ -588,6 +694,41 @@ def plan_polygon(lay: dict, rel: float, S: int, rng) -> dict | None:
     return dict(u=np.array([q[0] for q in U]), v=np.array([q[0] for q in V]), umeta=[q[1] for q in U],
                 vmeta=[q[1] for q in V], DU=DU, DV=DV, inside=inside, verts=verts, side_line=side_line,
                 changes=pl.get("changes", []), n_vertices=len(verts))
+
+
+def plan_pillars(lay: dict, c, room_id: str) -> list[dict]:
+    """The pillars / steps cut into polygon_local (cut_pillars), in plan coordinates (u, v) for plan.json: kind, the
+    plan side of the wall they stand on, the notch rectangle, its centre, width along the wall and depth out of it,
+    the photos that saw it. Same mapping as plan_polygon (layout x/z -> plan axis and sign, + the room centre c)."""
+    pl = lay.get("polygon_local") or {}
+    if not pl.get("ok") or not pl.get("used"):
+        return []
+    amap = (lay.get("anchor") or {}).get("side_to_plan") or {s: s for s in SIDES}
+    ax_x, sx = _E[amap["+x"]]
+    ax_z, sz = _E[amap["+z"]]
+    if ax_x == ax_z:
+        return []
+    c = np.asarray(c, float)
+
+    def to_plan(x, z):
+        q = np.zeros(2)
+        q[ax_x], q[ax_z] = sx * x, sz * z
+        return c + q
+    out = []
+    for k, q in enumerate(x for x in pl.get("pillars", []) if x.get("cut")):
+        ax, sg = _side_axis(q["side"])
+        n0, n1 = sg * q["face_m"], sg * q["side_m"]
+        corners = [(n, t) if ax == 0 else (t, n) for n, t in ((n0, q["t0"]), (n1, q["t0"]), (n1, q["t1"]),
+                                                               (n0, q["t1"]))]
+        P = np.array([to_plan(x, z) for x, z in corners])
+        out.append(dict(id=f"{room_id}-P{k + 1}", kind=q["kind"], wall_side=amap[q["side"]],
+                        center=[round(float(v), 4) for v in P.mean(0)],
+                        width_m=round(float(q["t1"] - q["t0"]), 3), depth_m=round(float(q["side_m"] - q["face_m"]), 3),
+                        polygon=[[round(float(a), 4), round(float(b), 4)] for a, b in P],
+                        views=list(q.get("photos", [])), status="measured",
+                        method="photo tier: per-photo depth profile along the wall (D-083); cut into the outline, "
+                               "the wall's length stays wall to wall"))
+    return out
 
 
 def sync_sides(pg: dict, val: dict, draws: dict) -> None:

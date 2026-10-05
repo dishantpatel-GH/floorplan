@@ -172,6 +172,10 @@ def _extract_single(scene: dict, info: dict, capture_id: str, p: BetaParams):
                 wall_tilt_deg={w.id: round(float(np.degrees(np.arctan(t))), 3) for w, t in _tilts(rooms, walls)},
                 timing_s=timing, runtime_s=round(time.time() - t0, 2),
                 grid=dict(u0=grid.u0, v0=grid.v0, cell=grid.cell, rows=grid.rows, cols=grid.cols))
+    pillars = {v["room"]: v["pillars"] for v in ((tier_meta.get("layouts") or {}).get("per_folder") or {}).values()
+               if isinstance(v, dict) and v.get("pillars")}
+    if pillars:                                  # D-083 photo tier: pillars / wall steps per room id (plan frame)
+        meta["pillars"] = pillars
     plan = Plan(capture_id, p.tier, plan_rooms, walls, openings, adjacency, fp, meta=meta)
     debug = dict(grid=grid, maps=maps, labels=labels, rooms=rooms, necks=necks, traj=scene["traj"][:, [0, 2]])
     return plan, debug

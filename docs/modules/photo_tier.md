@@ -865,3 +865,30 @@ rectangle) and is only dropped because a neighbour clips that room; on the photo
 bedroom 6 vertices (area -28% -> -22%, wall median 29% -> 34%); (ii) k65's door alcove (1 m2) is not found (its door
 shot is only 0.33 m beyond the side); (iii) the polygon walls' intervals are as wide as the sides' (50% calibration
 term per line).
+
+# photo_tier pillars (5 Oct 2026): pillars and wall steps in the outline (D-083)
+
+> One new file (`floorplan/photo/pillars.py`), called at the end of `polygon.room_polygon`; `polygon.cut_pillars`
+> cuts what it finds into `polygon_local`; `polygon.plan_pillars` + 3 lines in `plan/beta/tiers.layout_plan` and
+> `extract.py` put them in plan.json (`meta.pillars`, per room id). Switch: `--photo-param pillars=false`. The false
+> wardrobe-corner notch has its own switch, `poly_skip_far_wall_lines`. Evidence: `outputs/own_house/diag/pillars/`.
+
+## Problem
+The box is a rectangle and the polygon step only cuts corner notches. My bedroom has two pillars (one on each long
+wall, opposite each other) and a 0.126 m step at the end of the door wall (tape W2/W3); CubiCasa draws all three. Its
+wardrobe was cut out as a corner notch (D-077 limits).
+
+## How it works (per photo, per measured side, layout frame)
+| Step | What | Why |
+|---|---|---|
+| 1 | The box fit's wall points of one photo (vertical normal, 1-2 m band, wall-labelled, farthest per image column), facing the side and toward it from the camera | one photo at a time: depth scales differ by up to 40% between photos of one spin, the step between a pillar and the wall beside it does not |
+| 2 | Profile along the wall in 5 cm cells -> runs (cells within 3 cm or 2% of a level) | a pillar is a run nearer than the runs beside it |
+| 3 | Pillar: run 0.15-0.8 m wide, 0.06-0.6 m in front of a wall run (>= 0.25 m, within 0.3 m), other end closed (a wall run >= 3 cm deeper, or its own side face). Step: the same with the outer end at the room's corner (<= 0.2 m) | a 0.15 m door-frame edge is not a wall; the wardrobe (1.05 m wide, 0.9 m deep) is not a pillar |
+| 4 | The face reaches below 0.5 m (followed down through the photo's lean, 4 cm per 15 cm) unless something stands in front of its foot, and up to the band top or what the photo sees | a wall cabinet does not stand on the floor; own 223851's walls lean 0.11 m over 1.35 m |
+| 5 | Into the box: x side offset / photo wall level (about the camera). One pillar per side cluster (0.4 m); the photo whose scale is closest to the box gives the numbers. The far-wall rule's set-aside surface is furniture | the box sides do not move: lengths stay wall to wall |
+| 6 | `cut_pillars`: cells between the face line and the side line over the span go out; skipped where the polygon moved that side, an alcove continues beyond it, or the cut would split the room | the rest of the polygon is unchanged |
+
+## Results
+Own Room, both takes: 2 pillars and the step found, no phantom; dim walls median 12.7% -> 3.6% (2 -> 4 of 6 within
+8%), lit 13.2% -> 9.0% (0 of 6 either way: the lit box is 8% narrow, D-077). k65 unchanged (5.6%, 15 of 26, -9.0%),
+no pillar on any simulated set. Table, photo by photo, and limits: DECISIONS D-083.

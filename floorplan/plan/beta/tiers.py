@@ -385,6 +385,9 @@ def layout_plan(info: dict, fallback_rooms: list, cams: dict | None, scene: dict
                               anchored=b["anchored"])
         if pg is not None:                           # v3-poly
             report[folder]["polygon"] = dict(vertices=len(poly), changes=pg["changes"])
+            pil = PG.plan_pillars(lays[folder], b["c"], rid)     # D-083: pillars / wall steps in the outline
+            if pil:
+                report[folder]["pillars"] = pil
         if folder in poly_err:
             report[folder]["polygon_error"] = poly_err[folder]
     # rooms with no layout: keep the v4 free-space room as it is (its walls come from the caller)

@@ -164,6 +164,10 @@ class PhotoParams:
     layout_max_spin_spread_m: float = 1.0  # placed spin photos further apart: not one spot, layout not used
     layout_overlap_gap_m: float = 0.10   # rooms pushed apart until they are at least a wall-face gap apart
     layout_polygon: bool = True          # v3-poly (polygon.py): rectangle + evidence-backed steps; plan_beta uses it
+    pillars: bool = True                 # D-083 (pillars.py): pillars and wall steps found per photo are cut into
+                                         #     the polygon outline as notches; the box sides do not move
+    poly_skip_far_wall_lines: bool = True  # D-083: a surface the far-wall rule set aside as furniture (D-077) bounds
+                                         #     no polygon notch (own Room: the false wardrobe-corner notch)
 
     # --- interval widening (decision P-6) ---
     widen_linked: float = 2.0            # photo intervals vs the LiDAR error budget when rooms are SfM-linked
