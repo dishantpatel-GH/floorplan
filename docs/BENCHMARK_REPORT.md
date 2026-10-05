@@ -30,7 +30,7 @@ The photo tier is judged on the own flat and on k65 only; the sample captures ru
 |---|---|---|---|
 | **Wall lengths** (photo ±8%, video ±3%; all walls) | k65: median error 1.8%, 4/26 within max(1 cm, 0.5%) — no separate LiDAR length gate; laser check cited in §8 | **FAIL**: own take1 0–3 of 14 per run (median error 14.8–31.0%); k65 0/26 | **FAIL**: own dim **5/6** (median 3.6%; the 12.6 cm step is missed), own lit 2/6 (8.9%), k65 11/26 (6.6%, 8 walls missed) |
 | **Opening widths** ≤ 2 cm on ≥ 85% (detection scored) | **FAIL**: k65 5/9 found, 2 phantom, 4 within 2 cm (median 0.6 cm) | **FAIL**: 0 within 2 cm in every run (median 5.1–42.6 cm) | **FAIL**: own dim 3/3 found, widths 2.7–6.3 cm off; lit 2/3; k65 8/9 found, 3 phantom, median 8.2 cm |
-| **Ceiling** ≤ 1.5 cm per room | **PASS** on k65: 5/5 rooms, errors +1.1 to +1.4 cm (all inside their intervals) | **FAIL**: 2.34–3.60 m (tape 2.63 m) | **FAIL**: own dim −7 cm, lit −11 cm; k65 −20 to +30 cm |
+| **Ceiling** ≤ 1.5 cm per room | **PASS** on k65: 5/5 rooms, errors +1.1 to +1.4 cm (all inside their intervals) | **FAIL**: 2.07–3.60 m (tape 2.63 m) | **FAIL**: own dim −7 cm, lit −11 cm; k65 −20 to +30 cm |
 | **Ceiling spread** ≤ 1 cm across captures | not measurable: one LiDAR capture of k65; of the samples only `with_ceiling` sees ceilings | **FAIL** (above) | **FAIL**: dim vs lit 4.8 cm |
 | **Repeatability** within max(1 cm, 0.5%) per wall | **FAIL**: repeat pair 15/87 walls (17.2%, Wilson 95% 10.7–26.5%); same-topology walls 14/30, median 1.8 cm. The same command twice gives the same plan (0.0 cm, all three samples) | **FAIL**: across 9 runs bedroom W6 0.91–3.31 m | **FAIL**: dim vs lit 0/6 walls (median 24.9 cm) |
 | **Drift accountability**: method and on/off ablation | **PASS** (§5) | the video pose graph is the same solver on depth; no ablation | – |
@@ -51,7 +51,7 @@ and comes within one wall of the ±8% wall gate on the dim own room. The video t
 |---|---|---|---|---|---|---|---|
 | own dim, photo (live) | 5/6 (±8%) | 3.6% | 5/5 | 11.15 vs 11.09 m² (+0.6%) | 2.56 m (−7 cm) | 3/3, 0 phantom | 36 s |
 | own lit, photo (live) | 2/6 (±8%) | 8.9% | 5/5 | 11.54 vs 11.09 m² (+4.0%) | 2.51 m (−11 cm) | 2/3, 0 phantom | 41 s |
-| own take1, video (9 replays) | 0–3/14 (±3%) | 14.8–31.0% | 0.32–0.76 per run | 27.4–31.3 vs 28.0 m² (−2.3% to +11.9%) | 2.34–3.60 m | 0–4 of 4–6, 0–9 phantom | 43–72 s replan |
+| own take1, video (9 replays) | 0–3/14 (±3%) | 14.8–31.0% | 0.32–0.76 per run | 27.4–31.3 vs 28.0 m² (−2.3% to +11.9%) | 2.07–3.60 m | 0–4 of 4–6, 0–9 phantom | 43–72 s replan |
 | k65, photo (live, stitched) | 11/26 (±8%) | 6.6% | 18/18 | 56.94 vs 59.20 m² (−3.8%), IoU 0.41 | −20 to +30 cm | 8/9, 3 phantom | 150 s |
 | k65, LiDAR (live) | 4/26 (max(1 cm, 0.5%)) | 1.8% | 15/25 | 57.42 vs 59.20 m² (−3.0%), IoU 0.93 | +1.1 to +1.4 cm (5 rooms) | 5/9, 2 phantom | 440 s |
 | k65, video (4 Oct replan) | 0/26 (±3%) | 20.9% | 10/16 | 134.35 vs 59.20 m² (+127%), IoU 0.30 | −68 to +146 cm | 3/9, 20 phantom | 333 s replan |
