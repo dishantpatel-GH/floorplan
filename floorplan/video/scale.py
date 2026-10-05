@@ -18,6 +18,9 @@ Local scale, two methods (VideoParams.scale_method, D-076):
     trajectory with it removes the drift.
   * "depth_agreement" (before D-075): the fine depth-agreement curves summed in a Gaussian window (sigma 15
     keyframes), clamped to 1.5x of the segment's value.
+  * "auto" (D-087): per segment, PnP's scale where its votes measure at least `auto_min_coverage` of the segment's
+    keyframes, else depth agreement's (choose_segment_scales). PnP's votes are sparse on blurred white walls (the
+    sample videos), where its scale is interpolated; take1's segments have them on 0.67-1.00 of their keyframes.
 """
 from __future__ import annotations
 
@@ -295,7 +298,8 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
                     method: str = "pnp", sigma_kf: float = 15.0,
                     min_contrast: float = 0.005, jump: float = 1.5, n_boot: int = 2000, block: int = 10,
                     seed: int = 0, forced_cuts=(), min_step_m: float = 0.08, max_dir_deg: float = 35.0,
-                    max_rot_deg: float = 4.0, half_kf: int = 8, min_votes: int = 3, exclude=None) -> dict:
+                    max_rot_deg: float = 4.0, half_kf: int = 8, min_votes: int = 3, exclude=None,
+                    auto_min_coverage: float = 0.5) -> dict:
     """Per-keyframe (local) metric scale of an up-to-scale trajectory T (N,4,4) from metric depth D (N,h,w) and the
     keyframe images it was predicted from.
 
@@ -304,12 +308,13 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
     3. fine curves (1% steps, +-35% around the local coarse value): merge cuts with nearly the same scale both sides
     4. method "pnp": scale votes from PnP (pnp_steps, pnp_scale_votes); their running median inside each segment is
        the local scale. Method "depth_agreement": the fine curves in a Gaussian window, clamped (_depth_agreement_local;
-       `images` is not used)
+       `images` is not used). Method "auto": both, then per segment PnP's if its vote coverage is at least
+       auto_min_coverage, else depth agreement's (choose_segment_scales); each segment records its "scale_method"
     5. block bootstrap, per segment, for the statistical part of the uncertainty (over the votes, or over the pairs)
     `exclude` (bool per keyframe, D-084): steep keyframes; no pair that contains one votes, in either method.
     """
-    if method not in ("pnp", "depth_agreement"):
-        raise ValueError(f"scale method {method!r}: 'pnp' or 'depth_agreement'")
+    if method not in ("pnp", "depth_agreement", "auto"):
+        raise ValueError(f"scale method {method!r}: 'pnp', 'depth_agreement' or 'auto'")
     pairs = keyframe_pairs(len(T), max_gap)
     mid = np.array([(i + j) / 2 for i, j in pairs])
     coarse = np.exp(np.arange(np.log(1e-3), np.log(1e3), np.log(1.1)))
@@ -395,9 +400,39 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
                              ci95_stat=[s_g * float(np.exp(lo)), s_g * float(np.exp(hi))],
                              sigma_rel_stat=float((hi - lo) / (2 * 1.96)), vote_coverage=cov,
                              vote_residual=float(np.median(np.abs(r)))))
+    if method == "auto":
+        s_da, segments_da = _depth_agreement_local(C, fine, mid, seg, seg_pair, same, informative, sigma_kf, n_boot,
+                                                   block, seed)
+        s_local, segments = choose_segment_scales(seg, s_local, segments, s_da, segments_da, auto_min_coverage)
+    else:
+        segments = [dict(g, scale_method="pnp") for g in segments]
     return dict(s_local=s_local, segment=seg, segments=segments, sigma_rel_stat=_scene_sigma(segments),
                 pairs=len(pairs), informative_pairs=int((informative & same).sum()), method=method,
                 votes=int(len(vote)), measured_keyframes=int(measured.sum()))
+
+
+def choose_segment_scales(seg: np.ndarray, s_pnp: np.ndarray, segments_pnp: list[dict], s_da: np.ndarray,
+                          segments_da: list[dict], min_coverage: float) -> tuple[np.ndarray, list[dict]]:
+    """scale_method "auto" (D-087): each segment keeps PnP's local scale if its votes measure at least min_coverage of
+    its keyframes, else it takes depth agreement's (local scale and segment record, plus its vote counts).
+
+    Where votes are sparse, PnP's scale is interpolated over long stretches: against ARKit, floor_only's first segment
+    (coverage 0.37) is +13.8% with PnP and +3.3% with depth agreement, d066's (0.44) +200.6% and +18.1%. Where they
+    are dense PnP follows DPVO's drift, which the depth-agreement clamp hides (take1, coverage 0.67-1.00: a 13x drop;
+    with_ceiling's segment 1, 0.51: -12.7% against -27.9%)."""
+    s = np.asarray(s_pnp, float).copy()
+    da = {int(g["id"]): g for g in segments_da}
+    out = []
+    for g in segments_pnp:
+        cov = float(g.get("vote_coverage") or 0.0)
+        if cov >= min_coverage:
+            out.append(dict(g, scale_method="pnp"))
+            continue
+        sel = seg == g["id"]
+        s[sel] = s_da[sel]
+        out.append(dict(da[int(g["id"])], scale_method="depth_agreement", votes=g.get("votes"), vote_coverage=cov,
+                        vote_residual=g.get("vote_residual")))
+    return s, out
 
 
 def _scene_sigma(segments: list[dict]) -> float:

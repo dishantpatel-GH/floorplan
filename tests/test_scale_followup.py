@@ -100,3 +100,30 @@ def test_scale_method_is_checked():
     assert p.scale_method == "depth_agreement" and p.floor_level is None    # D-076: "pnp" is opt-in
     with pytest.raises(ValueError):
         estimate_scales(np.zeros((3, H, W)), K, np.tile(np.eye(4), (3, 1, 1)), [], 2, method="clamp")
+
+
+def test_auto_takes_pnp_where_votes_are_dense_else_depth_agreement():
+    from floorplan.video.scale import choose_segment_scales
+    seg = np.repeat([0, 1, 2], 10)
+    s_pnp, s_da = np.r_[np.full(10, 2.0), np.full(10, 9.0), np.full(10, 4.0)], np.full(30, 3.0)
+    pnp = [dict(id=0, keyframes=[0, 9], votes=12, s=2.0, sigma_rel_stat=0.01, vote_coverage=0.8, vote_residual=0.02),
+           dict(id=1, keyframes=[10, 19], votes=3, s=9.0, sigma_rel_stat=0.2, vote_coverage=0.3, vote_residual=0.1),
+           dict(id=2, keyframes=[20, 29], votes=6, s=4.0, sigma_rel_stat=0.05, vote_coverage=0.5, vote_residual=0.03)]
+    da = [dict(id=g, keyframes=[10 * g, 10 * g + 9], pairs=20, s=3.0, sigma_rel_stat=0.03) for g in range(3)]
+    s, out = choose_segment_scales(seg, s_pnp, pnp, s_da, da, 0.5)
+    assert [o["scale_method"] for o in out] == ["pnp", "depth_agreement", "pnp"]   # coverage 0.5 is enough
+    assert np.allclose(s, np.r_[np.full(10, 2.0), np.full(10, 3.0), np.full(10, 4.0)])
+    assert out[1]["pairs"] == 20 and out[1]["vote_coverage"] == 0.3 and out[1]["votes"] == 3   # its votes recorded
+
+
+def test_auto_self_check_follows_each_segments_method():
+    n = 40
+    T = np.stack([_pose(1.35, x=0.1 * k) for k in range(n)])
+    D = np.stack([_depth_of_plane(t, 0.0) for t in T])
+    seg = np.repeat([0, 1], 20)
+    s_local = np.r_[np.geomspace(1.0, 30.0, 20), np.geomspace(1.0, 30.0, 20)]   # both follow a 30x drift
+    p = VideoParams(scale_method="auto")
+    q = segment_quality(D, K, T, seg, s_local, p, votes={0: (0.9, 0.1), 1: (0.3, 0.1)},
+                        methods={0: "pnp", 1: "depth_agreement"})
+    assert q[0]["trusted"]                                     # PnP: the spread is not judged
+    assert not q[1]["trusted"] and q[1]["reasons"][0].startswith("local scale spread")

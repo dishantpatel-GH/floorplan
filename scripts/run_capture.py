@@ -165,7 +165,7 @@ def main():
     ap.add_argument("--damage-timeout", type=int, default=300, help="seconds before damage detection is skipped")
     ap.add_argument("--photo-param", action="append", default=[], metavar="KEY=VALUE",
                     help="override a photo-tier parameter (floorplan/photo/params.py), e.g. f35_rule=diagonal")
-    ap.add_argument("--video-scale", choices=["depth_agreement", "pnp"],
+    ap.add_argument("--video-scale", choices=["depth_agreement", "pnp", "auto"],
                     help="video tier: local scale method (D-076); default from floorplan/video/params.py")
     ap.add_argument("--video-steep", action="store_true",
                     help="video tier: leave ceiling looks and straight-down looks out of the scale and the fusion; a "

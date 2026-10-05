@@ -286,7 +286,8 @@ def _rerun_vo_per_segment(video, work, rot, f_full, up_size, vo, kf, seg, params
 
 
 def segment_quality(D: np.ndarray, K: np.ndarray, T_m: np.ndarray, seg: np.ndarray, s_local: np.ndarray,
-                    params: VideoParams, votes: dict | None = None, exclude: np.ndarray | None = None) -> dict:
+                    params: VideoParams, votes: dict | None = None, exclude: np.ndarray | None = None,
+                    methods: dict | None = None) -> dict:
     """Self-check of each segment's camera path, without ground truth (v2, V2-5; D-076 for the PnP scale).
 
     Symptoms of a VO run that is wrong in SHAPE (not just in scale), or of a scale that is not measured:
@@ -299,6 +300,8 @@ def segment_quality(D: np.ndarray, K: np.ndarray, T_m: np.ndarray, seg: np.ndarr
         so its spread is reported, not judged. The segment needs votes of its own on at least half of its keyframes
         (coverage); elsewhere its scale is interpolated and DPVO's motion is not measured (D-076: every sample
         segment that ARKit puts more than 100% off had coverage <= 0.44). The vote residual is reported only.
+      * scale_method "auto" (D-087): each segment is checked by the method its scale came from (`methods`,
+        {segment: "pnp" | "depth_agreement"}); a segment without one is checked like "depth_agreement".
     A segment is trusted only if every check passes and it has enough path to measure them. Steep keyframes
     (`exclude`, D-084) are left out of the residual."""
     from floorplan.video.scale import TRUNC, _backproject, _cost
@@ -318,7 +321,8 @@ def segment_quality(D: np.ndarray, K: np.ndarray, T_m: np.ndarray, seg: np.ndarr
         res = float(np.median(costs)) if costs else float("nan")
         path = float(np.linalg.norm(np.diff(T_m[ids, :3, 3], axis=0), axis=1).sum()) if len(ids) > 1 else 0.0
         reasons = []
-        if params.scale_method == "pnp":
+        method = (methods or {}).get(int(g), params.scale_method)
+        if method == "pnp":
             cov = (votes or {}).get(int(g), (0.0, None))[0]
             if cov < params.trust_min_vote_coverage:
                 reasons.append(f"vote coverage {cov:.2f} < {params.trust_min_vote_coverage}")
@@ -571,7 +575,8 @@ def _geometry(D, K_d, files, T_kf_vo, vo, kf, n, ts, sc_local, seg, up, ups, ups
     T_all[kf] = T_kf_m
     T_lev, T_all_lev, R_up, lev = _level_segments(T_kf_m, T_all, kf, seg, ts, up, ups, ups_kf, params)
     floor_level = params.floor_level if params.floor_level is not None else params.scale_method == "pnp"
-    if floor_level:                                        # D-076: one floor height for every keyframe
+    if floor_level:                                        # D-076: one floor height for every keyframe ("auto": the
+                                                           # caller sets it when a segment's scale is PnP's, D-087)
         dy, lev["floor_level"] = level_to_floor(D, K_d, T_lev, seg, params)
         if lev["floor_level"]["applied"]:
             C_kf = np.tile(np.eye(4), (len(T_lev), 1, 1))
@@ -765,7 +770,7 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                       min_contrast=params.scale_min_contrast, n_boot=params.bootstrap,
                       block=params.bootstrap_block, seed=params.seed, min_step_m=params.scale_vote_min_step_m,
                       max_dir_deg=params.scale_vote_max_dir_deg, max_rot_deg=params.scale_vote_max_rot_deg,
-                      half_kf=params.scale_vote_half_kf)
+                      half_kf=params.scale_vote_half_kf, auto_min_coverage=params.scale_auto_min_coverage)
     sc = sfm["sc"] if sfm else estimate_scales(D, K_d, T_kf, files, params.scale_max_gap, **scale_args)
     seg = np.asarray(sc["segment"])
     vo_reruns = []
@@ -799,7 +804,11 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                                                + (params.focal_scale_sensitivity * sig_f) ** 2))
         sig_learned[s["id"]] = s["sigma_rel_learned"]
     votes_txt = (f"; {sc['votes']} PnP votes, {sc['measured_keyframes']}/{len(kf)} keyframes measured"
-                 if params.scale_method == "pnp" else f" ({params.scale_method})")
+                 if params.scale_method in ("pnp", "auto") and not sfm else f" ({params.scale_method})")
+    seg_methods = {int(s_["id"]): s_["scale_method"] for s_ in sc["segments"] if "scale_method" in s_}
+    if params.scale_method == "auto" and not sfm:
+        votes_txt += "; per segment " + ", ".join(f"{s_['id']}: {s_['scale_method']} (vote coverage "
+                                                  f"{s_['vote_coverage']:.2f})" for s_ in sc["segments"])
     log(f"[scale] {len(sc['segments'])} scale segment(s); local scale {sc['s_local'].min():.3f}-"
         f"{sc['s_local'].max():.3f}; statistical 1-sigma {100 * sc['sigma_rel_stat']:.1f}%{votes_txt}")
     tick("scale")
@@ -808,14 +817,14 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     s_local = sc["s_local"].copy()
     votes = {s_["id"]: (s_.get("vote_coverage", 0.0), s_.get("vote_residual")) for s_ in sc["segments"]}
     quality = segment_quality(D, K_d, rescale_trajectory(T_kf, s_local), seg, s_local, params, votes=votes,
-                              exclude=ex)
+                              exclude=ex, methods=seg_methods)
     for s_ in sc["segments"]:
         s_.update(quality[s_["id"]])
     trusted = np.array([quality[int(g)]["trusted"] for g in seg])
 
     def _votes_txt(g):
         cov, vres = votes.get(int(g), (0.0, None))
-        return "" if params.scale_method != "pnp" else \
+        return "" if params.scale_method not in ("pnp", "auto") else \
             f"vote coverage {cov:.2f}, vote residual {'-' if vres is None else f'{vres:.3f}'}, "
     log(f"[quality] " + "; ".join(f"seg {g}: spread {q['scale_spread']:.2f}, {_votes_txt(g)}residual "
                                   f"{q['depth_residual']:.3f}, {'trusted' if q['trusted'] else 'UNTRUSTED'}"
@@ -834,6 +843,8 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     #     keyframes that the SfM model already placed)
     import dataclasses
     geo_params = dataclasses.replace(params, max_walk_speed_mps=float("inf")) if sfm else params
+    if params.scale_method == "auto" and params.floor_level is None:   # D-087: floor levelling (D-076) where PnP's
+        geo_params = dataclasses.replace(geo_params, floor_level="pnp" in seg_methods.values())   # scale is used
     geo_out = _geometry(D_fuse, K_d, files, T_kf, vo, kf, n, ts, s_local, seg, up, ups, ups_kf, geo_params, log)
     tick("graph_fusion_alignment")
 
@@ -908,7 +919,9 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                            sheets_found=len(sheets), status=status,
                            trusted_keyframes=int(trusted.sum()),
                            pairs=sc["pairs"], informative_pairs=sc["informative_pairs"], method=params.scale_method,
-                           votes=sc.get("votes"), measured_keyframes=sc.get("measured_keyframes")),
+                           votes=sc.get("votes"), measured_keyframes=sc.get("measured_keyframes"),
+                           segment_methods=[s_.get("scale_method", sc.get("method")) for s_ in sc["segments"]],
+                           floor_levelled=bool((geo_out["levelling"].get("floor_level") or {}).get("applied"))),
                 scale_sigma_rel=sig_tot, whole_scene_consistent=consistent,
                 levelling=geo_out["levelling"], pose_graph=graph,
                 dpvo=dict(frames=int(len(vo["frames"])), runtime_s=vo["runtime_s"], peak_gb=vo["peak_gb"],

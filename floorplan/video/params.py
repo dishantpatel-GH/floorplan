@@ -98,7 +98,14 @@ class VideoParams:
     scale_method: str = "depth_agreement"  # D-076: "depth_agreement" (Gaussian window, 1.5x clamp; the step before
                                          # D-075) or "pnp" (D-075 votes + vote-coverage self-check + floor levelling).
                                          # Replays on 12 cached DPVO runs: "pnp" better on take1 (median footprint
-                                         # error 2.7% vs 26%) but not worse on only 6 of 12 runs, so not the default
+                                         # error 2.7% vs 26%) but not worse on only 6 of 12 runs, so not the default.
+                                         # "auto" (D-087): per segment, "pnp" where its votes are dense enough, else
+                                         # "depth_agreement"; floor levelling on if one segment uses "pnp"
+    scale_auto_min_coverage: float = 0.5 # "auto": PnP's scale for a segment whose votes measure >= 50% of its
+                                         # keyframes. Coverage: take1 0.67-1.00 on every segment of 20+ keyframes;
+                                         # samples 0.31-0.44 where PnP is far off ARKit (+13.8% and +200.6% against
+                                         # +3.3% and +18.1% for depth agreement), 0.51-0.67 elsewhere (PnP -12.7%
+                                         # against -27.9% on with_ceiling, -5.9% against +29.6% on d066)
     scale_sigma_kf: float = 15.0         # depth_agreement: Gaussian time window (keyframes) for the local scale
     scale_max_gap: int = 4               # scale cost curves from keyframe pairs up to 4 keyframes apart
     scale_jump: float = 2.0              # a >2x step in the running-median scale = VO scale restart (segment cut)
