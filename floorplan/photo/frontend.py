@@ -322,6 +322,14 @@ def build_scene_from_photos(photo_root, params: dict | None = None, work_dir: Pa
                                                 ceiling_scale=csc)
         except Exception as e:                     # never lose the scene over the layout step
             info["room_layouts_error"] = f"{type(e).__name__}: {e}"
+        if p.door_stitch and info.get("room_layouts"):   # D-081: rooms snap together at the doors they share
+            from floorplan.photo.door_stitch import stitch_rooms
+            try:
+                info["door_stitch"] = stitch_rooms(views, matches, info["room_layouts"], proto.get("pairs", []),
+                                                   names, edges, poses, k, scene, p, log)
+            except Exception as e:                 # never lose the scene over the stitch: placements unchanged
+                info["door_stitch"] = dict(error=f"{type(e).__name__}: {e}")
+                log(f"[photo/door] stitch failed, placements kept: {type(e).__name__}: {e}")
     info["intra_room_proposals"] = intra_stats
     info["edges"] = [dict(a=e.a, b=e.b, source=e.kind if e.kind != "features" else
                           ("features" if e.matches else "mapanything+icp"), inliers=e.inliers, matches=e.matches,

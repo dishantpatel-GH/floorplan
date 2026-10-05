@@ -169,7 +169,13 @@ def main():
                     help="video/photo: skip the doors and windows from the segmenter (floorplan/openings/semantic.py)")
     ap.add_argument("--no-room-names", action="store_true",
                     help="skip room names (Bedroom, Kitchen, ...) from the classes seen in each room (D-078)")
+    ap.add_argument("--video-rooms", type=Path, metavar="JSON",
+                    help="video tier, experimental: measure each room from its own turning frames with the photo tier "
+                         "(floorplan/video/rooms_as_photos.py; JSON: the rooms' time windows and a video-tier run "
+                         "for the camera rotations)")
     a = ap.parse_args()
+    if a.video_rooms and a.tier != "video":
+        ap.error("--video-rooms needs --tier video")
     global VIDEO_SCALE
     VIDEO_SCALE = a.video_scale
     for kv in a.photo_param:
@@ -182,6 +188,13 @@ def main():
     name = a.input.stem if a.input.is_file() else f"{a.input.parent.name}__{a.input.name}"
     out = a.out or ROOT / "outputs" / "runs" / name / a.tier
     out.mkdir(parents=True, exist_ok=True)
+    if a.video_rooms:
+        # video as per-room photos: no camera path is chained through the house; each room is measured from its own
+        # turning frames (oracle test on my home, 5 Oct: see the module docstring for what it can and cannot do)
+        from floorplan.video.rooms_as_photos import prepare_photo_input
+        a.input, extra = prepare_photo_input(a.input, a.video_rooms, out / "rooms_as_photos")
+        a.tier = "photo"
+        PHOTO_OVERRIDES.update({k: v for k, v in extra.items() if k not in PHOTO_OVERRIDES})
     cfg = Config.load(a.config)
     t0 = time.time()
     log = lambda m: print(f"[{time.time() - t0:6.1f}s] {m}", flush=True)  # noqa: E731

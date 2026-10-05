@@ -1681,3 +1681,68 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   - A plan that merges rooms gets one name: own r1's hall, kitchen and passage are one "Living room".
   - "Eat-in kitchen", dining and study are not types; ADE20K has no class that separates them.
   - The foyer rule needs a separate room of 4 m² or less at the entrance. No plan here has one.
+
+## D-081 Photo tier: rooms are stitched at the doors they share (door-anchored stitching)
+
+- **Context.** On the k65 simulated flat the photo tier measured room sizes well but put rooms 0.5-2.5 m off and one
+  room "beside the block" (overlap IoU 0.39, MyHouse_Dataset/k65_photo_plan_vs_gt.png). The idea came from the user:
+  stitch at the doors the out-looking photos see. Every room has a door, and the protocol always takes a photo looking
+  OUT through it (the first turning photo faces the door one came in by; a small room's far-end photos look back at
+  its door; the doorway pair stands on the threshold). The room that photo matches is the neighbour, and the match
+  says where. Then the two rooms snap together at that door.
+- **Decision** (`floorplan/photo/door_stitch.py`, one hook in `frontend.py` after the room layouts are fitted,
+  `--photo-param door_stitch=true|false`; the layout now stores each fitted photo's local pose, `fit_poses`):
+  1. Doors per room, in the room's own layout frame: pixels whose depth runs > 0.25 m past a fitted wall at door
+     heights, cast along their rays onto that wall (no sill: open down to the floor; windows, sky, curtains and
+     mirrors from the ADE20K map are not openings), plus ADE20K door pixels on the wall. A doorway-pair photo placed in
+     the room stands in one of its doors (the threshold).
+  2. Door correspondences: each verified photo pair across two rooms, both ways, by PnP of the other photo's pixels on
+     this photo's MoGe-2 depth (RANSAC + LM). Kept when the relative pose is level (tilt <= 3 deg), has a real
+     baseline (>= 0.3 m), the matched points lie outside this room (seen through its door) and inside the other
+     room, and the rooms do not overlap. A room pair needs >= 20 such inliers in one consistent placement, and no
+     rival placement with half as many. Why these thresholds: on k65 with true poses, real cross-room pairs gave
+     PnP errors of 3-42 cm and 0.0-2.3 deg with tilt <= 1.9 deg; matches on the outdoor scene through two windows
+     gave hundreds of "inliers" (643 bedroom-balcony) as a pure rotation (baseline 0), and every other false pair
+     had tilt 5-90 deg or under 15 inliers.
+  3. Relative placement: the PnP pose puts B's frame in A's (rotation snapped to the Manhattan axes); the door snap
+     then makes the facing door intervals coincide along the wall, faces parallel and a wall thickness apart. The
+     thickness is the jambs' depth when they are seen (0.23 m on k65, 0.25 m on k22; the simulator's walls are
+     0.24 m), else 0.15 +- 0.05 m. A snap that disagrees with the PnP placement by > 0.8 m is not used.
+     A doorway pair alone links two rooms only when both door walls are known: a seen door, a small room's door side,
+     or a threshold photo square (<= 12 deg) to the wall behind it.
+  4. Joint adjustment: rotations from a spanning tree of the strongest links, translations by robust least squares
+     over door snaps (normal 0.05 m, along the wall 0.1-0.35 m), PnP links (0.15 m), doorway-pair same-spot priors
+     (0.3 m) and an overlap penalty. Rooms only move (sizes unchanged). A room with no matched door keeps its
+     placement and is flagged; each stitched room's cameras move with it in the scene.
+- **Tried and dropped.** "The only door left" for a pair photo not placed in its room put the k65 bathroom on a
+  phantom door (7 m off); the wall behind a diagonal threshold photo put the k65 bedroom door in the wrong wall.
+- **Evidence** (cached photos, depth and features, CPU; one run each with `door_stitch=false` / `true` on the same
+  working tree, `--no-damage --no-semantic-openings --no-room-names`; `outputs/door_stitch/replay.sh`, scored by
+  `scripts/eval_own_capture.py` and `scripts/eval_door_stitch.py`). "Placement vs living room" is where each
+  anchored room's frame sits relative to the living room's, plan vs the simulator's true camera poses (it does not
+  depend on room sizes or on the whole-plan alignment).
+
+  | House | IoU off -> on | Footprint off -> on | Walls median off -> on | Within 8% off -> on | Rooms stitched |
+  |---|---|---|---|---|---|
+  | k65 | 0.376 -> 0.439 | -5.0% -> -3.8% | 6.6% -> 6.6% | 38% -> 42% | kitchen, balcony (bedroom, bathroom kept) |
+  | k22 | 0.334 -> 0.618 | -44.5% -> -31.6% | 26.0% -> 21.7% | 30% -> 30% | bedroom2, bathroom, kitchen (bedroom kept) |
+  | k38 | 0.815 -> 0.797 | +8.6% -> +11.0% | 5.7% -> 9.8% | 50% -> 35% | kitchen, bathroom (bedroom, balcony kept) |
+
+  | Placement vs living room (m), off -> on | k65 | k22 | k38 |
+  |---|---|---|---|
+  | kitchen | 0.34 -> 0.10 | 0.30 -> 0.16 | 0.31 -> 0.24 |
+  | balcony | 0.55 -> 0.31 | - | 0.53 -> 0.56 |
+  | bathroom | 9.27 -> 9.27 (not stitched) | 0.17 -> 0.22 | 0.45 -> 0.27 |
+  | bedroom / bedroom2 | not anchored | 0.15 -> 0.16 / 0.23 -> 0.23 | 0.41 -> 0.12 |
+
+  Doors in each room's own frame (k65, k22; frame put on the GT by true poses, fit residual 0.4-2.3 deg): k65 6 found
+  (along the wall median 0.17 m; widths of 3 seen doors off by 0.04-0.77 m: a door's leaf hides part of it), 3
+  phantoms (one is the bedroom's window), 3 missed (the closed front door, the bathroom door no living-room photo
+  sees, the bedroom door at the end of a 0.7 m passage); k22 13 found (along 0.11 m median), 3 phantoms, 1 missed.
+- **Default: off.** The rule was "on only if IoU improves on all three flats and nothing else gets worse": k38 got
+  worse (IoU -0.02, walls median 5.7% -> 9.8%). Part of that is run-to-run noise (the pose graph differs between two
+  runs of the same photos: k38 kitchen and balcony sides moved 0.17-0.20 m, and the unstitched bedroom's placement
+  error changed 0.41 -> 0.12 m), but one run each cannot show the stitch is not to blame. What holds: on all three
+  flats the stitched rooms sit closer to the living room's true relative position in 6 of 7 cases, and the k65 and
+  k22 plans improve a lot. Before it goes on: repeat runs per flat, and make the photo front end's pose graph
+  deterministic. Pictures: `MyHouse_Dataset/k65_photo_plan_vs_gt.png` (before) and `..._after.png`.

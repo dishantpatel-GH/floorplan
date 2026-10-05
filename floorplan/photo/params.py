@@ -175,6 +175,47 @@ class PhotoParams:
     door_height_prior_m: float = 2.06    # interior door: US 2.03 m, EU 2.0-2.1 m, India 2.1-2.13 m
     door_height_sigma_rel: float = 0.035  # ... 1-sigma across homes; systematic within one home (all doors alike)
 
+    # --- door-anchored stitching (door_stitch.py, D-081): rooms snap together at the doors they share ---
+    door_stitch: bool = False            # D-081: off by default: on k38 the plan got worse (IoU, walls; DECISIONS)
+    door_bin_m: float = 0.05             # door intervals are built from 5 cm cells along each wall
+    door_stride: int = 2                 # every 2nd depth pixel (518 px photos: ~33k points per photo)
+    door_beyond_m: float = 0.25          # a point this far past a wall face was seen through an opening in it
+    door_low_top_m: float = 0.8          # below this a window has its sill: a door is open down to the floor
+    door_top_m: float = 1.95             # above a door's head the wall continues
+    door_min_incidence_deg: float = 15.0  # grazing rays give unstable positions along the wall
+    door_min_pts: int = 4                # points per 5 cm cell before it counts
+    door_min_out_frac: float = 0.6       # share of a cell's door-height points seen through the wall
+    door_gap_bins: int = 2               # gaps up to 10 cm inside a door are closed (a jamb, a stray point)
+    door_min_w_m: float = 0.45           # interior doors 0.6-1.0 m, open passages up to ~3 m
+    door_max_w_m: float = 3.2
+    door_sigma_c_m: float = 0.08         # 1-sigma of a seen door's centre along its wall
+    threshold_sigma_c_m: float = 0.25    # a doorway photo's camera: somewhere on the threshold, not at its centre
+    first_photo_max_angle_deg: float = 40.0  # the entered room's first turning photo faces its entry door
+    threshold_square_deg: float = 12.0   # a threshold photo this square to the wall behind it shows the door's wall
+    inferred_slack_m: float = 1.5        # an inferred side may lie this much farther out (sim k65 living: 1.8 m)
+    jamb_min_pts: int = 30               # jamb points needed to measure the wall thickness at a door
+    wall_thickness_m: float = 0.15       # prior when the jambs are not seen
+    wall_thickness_sigma_m: float = 0.05
+    pnp_min_inliers: int = 15            # PnP inliers (points also in the next room) for one photo pair to count
+    pnp_px: float = 2.0                  # RANSAC reprojection threshold at the 518 px depth resolution
+    pnp_max_depth_m: float = 10.0        # matched points farther than this (outdoors, through windows) are not used
+    pnp_max_tilt_deg: float = 3.0        # both photos are levelled: true relative poses had tilt <= 1.9 deg (sim k65)
+    pnp_max_dy_m: float = 0.35           # chest-height photos: camera heights within 35 cm
+    pnp_min_baseline_m: float = 0.30     # less = a pure rotation (matches on the far scene through windows)
+    pnp_max_axis_resid_deg: float = 12.0  # the two rooms' Manhattan axes must agree within this after the PnP
+    pnp_min_good_frac: float = 0.5       # share of PnP inliers outside the out-looking room AND inside the other
+    out_margin_m: float = 0.15           # "outside a room" = this far past its box
+    in_margin_m: float = 0.30            # "inside the other room" = within its box plus this
+    max_room_overlap: float = 0.15       # the PnP placement may overlap the two rooms by this share of the smaller
+    link_min_inliers: int = 20           # a room pair needs this many verified inliers in total (weak link below)
+    link_max_rival: float = 0.5          # a second placement with half the inliers makes the link ambiguous
+    cluster_tol_m: float = 0.5           # photo pairs agreeing within this on the room placement are one cluster
+    door_assoc_m: float = 0.8            # the looked-through door is within this of where the rays cross the wall
+    snap_max_move_m: float = 0.8         # the door snap may move a PnP placement by this much at most
+    pnp_sigma_m: float = 0.15            # a PnP-only room link (no door pair found)
+    same_spot_sigma_m: float = 0.30      # doorway pair: both photos on one threshold
+    overlap_sigma_m: float = 0.03        # overlap penalty scale
+
     def to_dict(self) -> dict:
         return asdict(self)
 

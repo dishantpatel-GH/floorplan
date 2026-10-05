@@ -167,6 +167,10 @@ def fit_room_layout(views: dict, yaws: dict[str, float], scale: float, p, offset
             height = None
     out = dict(ok=True, manhattan_yaw=float(m), cam_height_m=cam_h, photos=names, wall_points=per, sides=sides,
                height=height, semantic_photos=sem_used)
+    # each fitted photo's pose in the local frame (yaw, x, y, z): door_stitch.py places the room's photos with it
+    out["fit_poses"] = {n: [float(yaws[n])] + [float(x) for x in (np.zeros(3) if offsets is None else
+                                                                  np.asarray(offsets.get(n, np.zeros(3)), float))]
+                        for n in names}
     out["mc"] = _monte_carlo(out, names, p, rng)
     return out
 

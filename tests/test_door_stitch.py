@@ -1,0 +1,58 @@
+"""Door-anchored stitching (D-081): the geometry of the door snap, the ray crossings and the joint adjustment."""
+import numpy as np
+
+from floorplan.photo import door_stitch as DS
+from floorplan.photo.params import PhotoParams
+
+
+def _frame(box_off, status="measured"):
+    off = dict(zip(("+x", "-x", "+z", "-z"), box_off))
+    return dict(off=off, box=(-off["-x"], off["+x"], -off["-z"], off["+z"]), photos={}, small=False,
+                status={s: status for s in off}, first=None)
+
+
+def test_rot2_matches_ry():
+    for th in (0.3, -1.2, np.pi / 2):
+        v = np.array([0.7, -0.4])
+        R3 = DS._ry(th) @ np.array([v[0], 0.0, v[1]])
+        assert np.allclose(DS._rot2(th) @ v, R3[[0, 2]])
+
+
+def test_snap_puts_doors_together_a_wall_apart():
+    A, B = _frame((2.0, 2.0, 1.5, 1.5)), _frame((1.0, 1.0, 1.2, 1.2))
+    dA = dict(side="+x", c=0.4, face=None)                  # A's east wall, 0.4 m along it
+    dB = dict(side="+z", c=-0.2, face=None)                 # B's north wall
+    psi, t = DS._snap(dA, A, dB, B, 0.2)
+    pB = DS._rot2(psi) @ DS.door_point(dB, B) + t           # B's door, in A's frame
+    assert np.allclose(pB, DS.door_point(dA, A) + 0.2 * np.array([1.0, 0.0]))
+    nB = DS._rot2(psi) @ DS._DIR["+z"]
+    assert np.allclose(nB, [-1.0, 0.0], atol=1e-9)         # faces each other
+
+
+def test_crossings_first_exit():
+    fr = _frame((2.0, 2.0, 2.0, 2.0))
+    X = np.array([[3.0, 0.5], [3.5, 0.6], [2.8, 0.4]])      # beyond the +x wall, seen from the centre
+    c = DS._crossings(np.zeros(2), X, fr)
+    assert c["side"] == "+x" and abs(c["c"] - 0.33) < 0.05
+
+
+def test_adjust_places_room_and_avoids_overlap():
+    p = PhotoParams()
+    frames = {"A": _frame((2.0, 2.0, 1.5, 1.5)), "B": _frame((1.0, 1.0, 1.0, 1.0))}
+    # B east of A: B's origin at x = 2 + 0.2 + 1 = 3.2
+    cons = [dict(A="A", B="B", psi=0.0, t=np.array([3.2, 0.3]), n=np.array([1.0, 0.0]), sn=0.05, st=0.1,
+                 kind="pnp+door", weight=100)]
+    place, dropped = DS.adjust(frames, cons, [], "A", p)
+    assert not dropped
+    assert np.allclose(place["B"][1], [3.2, 0.3], atol=0.02)
+    # a constraint that would make them overlap is pulled back to touching
+    cons[0]["t"] = np.array([2.5, 0.0])
+    cons[0]["sn"] = cons[0]["st"] = 1.0
+    place, _ = DS.adjust(frames, cons, [], "A", p)
+    assert place["B"][1][0] > 2.9
+
+
+def test_photo_param_default_and_known():
+    p = PhotoParams.from_dict({"door_stitch": True})
+    assert p.door_stitch is True
+    assert isinstance(PhotoParams().door_stitch, bool)
