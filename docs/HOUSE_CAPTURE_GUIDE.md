@@ -131,6 +131,8 @@ folders share views and the rooms can be joined.
    - Take **1 photo back into the room you are leaving**, aimed at its middle.
    - Turn around and take **1 photo into the next room**, aimed at its middle (it goes into the next room's folder).
    - Take both **within about 5 seconds**, with nothing in between.
+   - **Keep the door leaf out of the picture.** If the open door would fill the frame, step 1-1.5 m back and aim
+     straight through the doorway, so the next room's furniture fills the opening.
 6. [ ] Check that **every wall** of the room appears in at least one of its photos (if not, take one more of it). A room too full to stand in the middle (bed, table): use the small-room method.
 7. [ ] Total per room: **at most 8 photos** (slate excluded).
 

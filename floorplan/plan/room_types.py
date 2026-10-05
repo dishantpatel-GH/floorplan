@@ -17,7 +17,8 @@ evidence must be three times stronger (it is usually seen through a doorway); a 
 sky is a balcony, a long narrow one a passage, a small one at the entrance a foyer. A home has one kitchen and one
 living room: a second claim next to the first is the same room split by the plan, elsewhere it falls to its next
 type. With no sofa, TV or coffee table anywhere, the largest room (at the entrance if one is) is the living
-room.
+room; when its own pixels say kitchen too and no room is the kitchen, it is named "Living room + kitchen" (open plan,
+or hall and kitchen the plan did not separate).
 """
 from __future__ import annotations
 
@@ -33,6 +34,7 @@ from shapely.geometry import Point, Polygon
 DISPLAY = {"bedroom": "Bedroom", "kitchen": "Kitchen", "living_room": "Living room", "bathroom": "Bathroom",
            "foyer": "Foyer", "passage": "Passage", "balcony": "Balcony", "room": "Room"}
 TYPES = tuple(DISPLAY)
+LIVING_KITCHEN = "Living room + kitchen"   # name (type living_room) of the size rule's room when it holds the kitchen
 
 # Indicator classes (ADE20K names) and weights: 1.0 = the object alone names the room.
 CLASS_WEIGHTS = {
@@ -211,6 +213,12 @@ def name_plan(plan, evidence: dict[str, dict], folder_types: dict[str, str] | No
         t = s["type"]
         used[t] = used.get(t, 0) + 1
         name = DISPLAY[t] if (count[t] == 1 or t in ("room",) + UNIQUE) else f"{DISPLAY[t]} {used[t]}"
+        if t == "living_room" and s["rule"].startswith("largest room") and "kitchen" not in count and \
+                any(c == "kitchen" for c, _ in s["cands"]):
+            # the size rule named a room whose own pixels say kitchen, and no room is the kitchen: an open-plan
+            # living room and kitchen, or rooms the plan did not separate. The name says both.
+            name = LIVING_KITCHEN
+            s["rule"] += "; kitchen objects in it too and no kitchen elsewhere (open plan, or rooms not separated)"
         te = dict(rule=s["rule"], images=int(s["ev"].get("images", 0)), source=s["ev"].get("source", "none"),
                   view_images=int(s["ev"].get("view_images", 0)),
                   shape=dict(length_m=round(s["shape"]["length"], 2), width_m=round(s["shape"]["width"], 2),

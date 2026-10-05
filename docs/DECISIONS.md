@@ -1885,24 +1885,31 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
      tilt 5-90 deg or under 15 inliers. A doorway pair names the two rooms of a door when both door walls are known.
   4. Relative placement: the PnP pose puts B's frame in A's (rotation snapped to the Manhattan axes; 0.15 m); the
      door snap makes the facing door intervals coincide along
-     the wall, faces parallel and a wall thickness apart (the jambs' depth when seen: 0.23-0.25 m on k65/k22, the
-     simulator's walls are 0.24 m, but 0.32-0.38 m on k38; else 0.15 +- 0.05 m). A snap that disagrees with the PnP
-     placement by > 0.8 m is not used.
+     the wall, faces parallel and a wall thickness apart (the jambs' depth when seen, at most 0.40 m; else 0.15 +-
+     0.05 m). The GT outlines put the true walls at these doors at 0.24 m on k65 and k38 and 0.12 m on k22; the jambs
+     gave 0.23 m at the k65 kitchen door but 0.40 m (k65 balcony), 0.24-0.25 m (k22 bathroom), 0.31-0.33 m (k22
+     kitchen) and 0.37 m (k38 kitchen): 0.12-0.21 m too thick at 4 of 5 doors, so a snapped room sits that much too
+     far out. A snap that disagrees with the PnP placement by > 0.8 m is not used.
   5. Joint adjustment: rotations from a spanning tree of the strongest links; a link that turns a room the pose graph
      placed with the reference room is dropped (a door association can be 90 deg wrong: k38, a threshold photo in a
      corner between two doors). Translations by robust least squares over door snaps, PnP links, the pose graph's own
-     placement as a prior (off: see Evidence) and no overlap (rooms not moved are obstacles). Rooms only move: sizes
-     unchanged. A room the stitch would carry > 1 m from where the pose graph put it keeps that placement (the pose
-     graph's errors were 0.15-0.55 m; the k22 bathroom's link wanted 1.26 m). A room with no matched door keeps its
-     placement and is flagged; each stitched room's cameras move with it in the scene.
+     placement as a prior (off: see Evidence) and no overlap (rooms not moved are obstacles). Rooms only move: the
+     layouts' sizes are unchanged (plan_beta's rooms are not: see Evidence). A room the stitch would carry > 1 m from
+     where the pose graph put it keeps that placement (the pose graph's errors were 0.15-0.55 m; the k22 bathroom's
+     link wanted 1.26 m). A room with no link keeps its placement and is flagged; a room joined only by a PnP link,
+     with no matched door, is moved by that link (the k22 kitchen, the k38 bathroom). Each stitched room's cameras
+     move with it in the scene.
 - **How it was measured.** Two runs of the same photos differ (COLMAP's match verification is random; k38 rooms moved
   0.1-0.4 m between runs), so each front-end run is scored twice: the plan with the stitch and the plan with the
   stitch undone (`scripts/ab_door_stitch.py`, paired A/B), 3 runs per flat, cached photos, depth and features, CPU
   (`outputs/door_stitch/replay_ab.sh`; scored by `scripts/eval_own_capture.py` and `scripts/eval_door_stitch.py`).
   "Placement vs living room" is where each room's frame sits relative to the living room's, plan vs the simulator's
-  true camera poses: it does not depend on room sizes or on the whole-plan alignment.
-- **Evidence** (shipped settings, 3 paired runs per flat; one k38 run is left out because its plan WITHOUT the stitch
-  crashed in plan_beta, a shapely topology error):
+  true camera poses: it does not depend on room sizes or on the whole-plan alignment. It reads the layouts' anchors,
+  i.e. where the stitch put each room, before plan_beta's push-apart.
+- **Evidence** (3 paired runs per flat with the code of 09:59, `outputs/door_stitch/ab_v3`; the committed code adds
+  three options whose defaults keep that behaviour, overlap_tol_m 0, pnp_sigma_pg_m 0.15 and pose_graph_sigma_m 0,
+  the only parameter differences the runs record; the committed code itself was scored only by the check run below.
+  One k38 run is left out because its plan WITHOUT the stitch crashed in plan_beta, a shapely topology error):
 
   | Flat | IoU off -> on, per run | Footprint off -> on | Walls median off -> on | Within 8% off -> on | Rooms moved by the stitch |
   |---|---|---|---|---|---|
@@ -1920,8 +1927,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   | Doors in each room's own frame (true poses put the frame on the GT) | Found (seen / threshold) | Phantoms | Missed | Along the wall, median (max) | Width error, median (n) |
   |---|---|---|---|---|---|
   | k65 | 6 (3 / 3) | 3 | 3 (closed front door, bathroom door no living-room photo sees, bedroom door at the end of a 0.7 m passage) | 0.19 m (0.41) | 0.57 m (3) |
-  | k22 | 11 (5 / 6) | 2 | 1 | 0.09 m (1.27) | 0.35 m (5) |
-  | k38 | 9 (4 / 5) | 2 | 1 | 0.18 m (0.35) | 0.65 m (4) |
+  | k22 | 11 (5 / 6; the kitchen door counted twice) | 2 | 1 | 0.09 m (1.27) | 0.35 m (5) |
+  | k38 | 9 (4 / 5; the bedroom door counted twice) | 2 | 1 | 0.18 m (0.35) | 0.65 m (4) |
 
   Widths come out short (an open leaf hides part of the opening), so the snap aligns door centres, not ends. Other
   settings tried, the same paired way: the pose graph's placement as a 0.35 m prior, PnP through a pose-graph photo at
@@ -1931,6 +1938,26 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   plan_beta's step hit its 300 s limit on the stitched scene (run_capture fell back to the alpha extractor).
   The first, unpaired replay (one run each with the first version, commit faf461f) gave k65 0.376 -> 0.439, k22
   0.334 -> 0.618, k38 0.815 -> 0.797; those numbers mixed run-to-run noise into the comparison.
+
+  Re-check of the final plans, room by room (same paired runs, no new runs; door links checked against
+  sim_gt.json's openings):
+  - Every door snap that was used joins the right two rooms at the right door (k65 kitchen and balcony, k22 bedroom2,
+    k38 kitchen). Two pairs that share NO door passed every PnP check, rooms that see into each other across the
+    living room: k22 bedroom2-kitchen (53-58 inliers, used: it is what placed the kitchen, whose own door snap was
+    dropped by the rotation rule) and k38 bedroom-balcony (35, dropped by the rotation rule).
+  - k65: the plan follows the stitch. Kitchen IoU with its true room 0.35 -> 0.79, balcony 0.16 -> 0.74, no stitched
+    room inside another true room. The living room is 1.05 m2 larger with the stitch: without it, plan_beta cuts a
+    room back when another anchored room's centre lies inside it, and the kitchen did. The three k65 runs are
+    identical to the last digit (its cached front end is deterministic), so they are one sample; the committed
+    code's own k65 run gains +0.03 (the bedroom, not stitched, lands elsewhere).
+  - k22: the gain is not the stitched rooms. In r1 and r3 (and the check run) the kitchen's 0.12-0.16 m move takes
+    its centre out of the living room's box, so plan_beta stops cutting the living room back: 13.8 -> 20.4 m2 (r1),
+    10.4 -> 20.1 m2 (r3); in r2 the cut stays and the IoU does not move. plan_beta's push-apart then moves the
+    stitched kitchen 1.70 m and bedroom2 1.21 m away from where the stitch put them: in the final plan the kitchen's
+    IoU with its true room is 0.005 (0.0 without the stitch) and 2.8 m2 of it lies inside the true bedroom2.
+  - k38: room areas the same on and off. In the final plan the snapped kitchen ends further from its true room with
+    the stitch (offset 0.06 -> 0.26 m in r1, 0.06 -> 0.17 m in r3; IoU 0.86 -> 0.82, 0.90 -> 0.86): without it,
+    plan_beta's push-apart had moved it 0.59 m to almost the right spot. The bathroom is the same in the plan.
 
 - **Tried and dropped.** "The only door left" for a pair photo not placed in its room put the k65 bathroom on a
   phantom door (7 m off). The wall behind a diagonal threshold photo put the k65 bedroom door in the wrong wall. A
@@ -1944,11 +1971,17 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 
 - **Default: off.** The rule was "on only if the IoU improves on all three flats and nothing else gets worse". k38
   does not improve (-0.002 and -0.003 IoU, the bathroom 0.13 m further off, one wall fewer within 8% in one run), and
-  one k38 run hit plan_beta's time limit with the stitch on. What holds: in every run the stitched rooms that have
-  a verified door link sit closer to their true place next to the living room (kitchens 0.31-0.34 -> 0.05-0.18 m,
-  k65 balcony 0.55 -> 0.31 m), and the k65 and k22 plans gain 0.19-0.29 IoU. Before it goes on: the k38 bathroom
-  (a PnP through photos the pose graph placed), plan_beta's push-apart and time limit on stitched scenes, and the own
-  house. Pictures: `MyHouse_Dataset/k65_photo_plan_vs_gt.png` (before) and `..._after.png` (after, run 1 above).
+  one k38 run hit plan_beta's time limit with the stitch on. What holds: in every run the rooms snapped at a door
+  are anchored closer to their true place next to the living room (k65 kitchen 0.34 -> 0.05 m, k38 kitchen 0.31 ->
+  0.16 m, k65 balcony 0.55 -> 0.31 m; the k22 kitchen's 0.31 -> 0.18 m came from a PnP link), but only on k65 does
+  the final plan keep that (plan_beta moves the k22 kitchen 1.70 m, and the k38 kitchen ends 0.17-0.26 m off),
+  and the k65 and k22 plans gain 0.29 and 0.19 IoU on average (k22 r2 -0.005; the k65 check run +0.03). Before it
+  goes on: the k38 bathroom (a PnP through photos the pose graph placed), plan_beta's push-apart, neighbour cut and
+  time limit on stitched scenes, the jamb wall thickness, and the own house. Pictures:
+  `MyHouse_Dataset/k65_photo_plan_vs_gt.png` (before: an older run, 01:48, bathroom 5.25 m2) and `..._after.png`
+  (after, run 1 above). In the after run the bathroom measures 7.67 m2 with and without the stitch: that change came
+  from the front end between the two runs, not from the stitch; the paired before is
+  `outputs/door_stitch/ab_v3/k65_r1/ab_off.png`.
 - **Commits.** faf461f is the first version (its unpaired numbers are quoted above). The paired-run version (doors
   on measured walls, in-room PnP, no turn against the pose graph, scripts/ab_door_stitch.py) went in with 618bc92,
   whose subject is about alcoves: both were staged in the same index at once.
@@ -2103,3 +2136,121 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   - Recesses (a wall stepping back) are not searched; nor are small rooms (threshold box, no polygon).
   - Set on these two takes; the simulator has no pillars (k65's steps are a door alcove and a door passage, both
     outward), so it only tests phantoms.
+
+## D-084 Video: steep keyframes (ceiling looks) out of the scale and the fusion; both scale steps replayed with it (defaults unchanged)
+
+- **Context.** The request "make sure video works better than it did". The rule and the baseline were committed
+  before any of this (`f267c97`, `docs/notes/video_better_rule.md`): a video change becomes the default only if it
+  passes (a) my take1 on nine cached DPVO runs, (b) the sample videos and (c) other tiers unchanged; otherwise it ships
+  behind a switch that is off. The own-video diagnosis (`outputs/own_house/diag/video/workflow_result.json`) found
+  that filming the bedroom ceiling at the end of take1 (t 107–117 s) broke tracking. This entry leaves such keyframes
+  out, then replays both scale steps of D-076 with that in place.
+- **What the pitch says** (each keyframe's optical axis against the GeoCalib up, on the 16 cached runs).
+  - No take1 keyframe is steeper than 45°. The ceiling look peaks at +33 to +40°, inside GeoCalib's ±45° range, so
+    the gravity step uses it and a 45–50° limit would find nothing. The walk itself looks down: median pitch −21 to
+    −22° on take1, −17 to −30° on the samples.
+  - The look breaks the camera path. In the 6.4 s after kf 215 the camera travels 1.4–128 m in the scene, where a
+    person filming a ceiling moves a step or two, and it reaches 1.2–6.1 m above the floor (14.1 m on 23:28). On five
+    runs the path is already as long in the 3.9 s before (kf 202–214, blank bedroom walls: 6.9–132 m).
+  - Against one global up, DPVO's rotation drift marks ordinary frames as steep and hides the look: after r1's run
+    gets 17 "steep" keyframes in two false looks down (to −72°) and misses the ceiling look, presentable default r1
+    misses it too (+28°), floor_only d066 gets 7 false ones. Against the local up (the GeoCalib frames within ±15
+    keyframes, carried by DPVO's rotation) none of these remain, and all nine take1 runs find the same look.
+- **Change** (`6543f23`, `6bbdef6`, `5283d7d`: `floorplan/video/steep.py`, `VideoParams.steep_frames`;
+  `run_capture.py --video-steep`, `8af7667`).
+  - A keyframe more than 30° above the horizon (`steep_up_deg`) or more than 50° below it (`steep_down_deg`, beyond
+    GeoCalib's range) is steep. No pair that contains it votes on scale, in either scale step. Its depth enters
+    neither the fusion nor the raw points, and it is left out of the self-check's depth residual.
+  - Three or more in a row are a look. If fewer than 20 keyframes follow the last look, the walk ends where the look
+    starts: the keyframes, frames and camera path after it leave the scene. A look in the middle cuts a scale segment
+    after it (a protected cut, like a DPVO restart, but without a fresh DPVO run) if both sides keep 20 usable
+    keyframes.
+  - What it finds. take1: the look at kf 215–218 on all nine runs, so the walk ends at kf 215 (t 111.0 s; 13 keyframes
+    and 188 frames out). with_ceiling: four looks up (kf 534–538, 588–594, 609–621, 784–787; 29 keyframes), cuts after
+    three of them. single_room and floor_only: none, so their replays run the baseline's code path.
+- **Ceiling height from the short upward look: not done.** It needs the camera height during the look, and the phone
+  is lifted to film a ceiling. The diagnosis measured the bedroom ceiling 0.88–1.02 m above the camera in kf 216–221
+  and the floor 1.17–1.37 m below it just before and after: 2.05–2.39 m in sum, against 2.629 m on tape. So the cut
+  costs ceilings (reported, not judged): with the depth-agreement scale the bedroom ceiling is gone on after r2 (was
+  2.84 m) and presentable default r1 (was 2.61 m, 2 cm from the tape), and pnp r2's goes from 2.93 to 1.92 m; with
+  PnP the bedroom gets a ceiling on 3 of the 9 runs.
+- **Two plan-step crashes found by the replays** (`35a2062`, `7c8fea4`).
+  - Before r2 without the look: the overlap undo (`_undo_overlapping_refinements`) raised a GEOS TopologyException
+    after it had moved one room's lines. The exception is caught (I-012, crash 2), but that room now crossed itself and
+    `_canonical_outlines` raised again, uncaught. Now every room goes back to its refined lines when the undo fails.
+  - 23:28 with the PnP scale and without the look: one room's refined outline crossed itself, and the footprint
+    raised. Now such an outline goes back to its free-space lines (the room is dropped if that one crosses itself too).
+  - A live run would have ended without a plan in both cases. Neither branch acts on the saved LiDAR scenes of the
+    three samples (counted: no self-crossing outline, no failed undo; same rooms and footprints, 17.61, 61.90 and
+    62.50 m²), so (c) holds, nor on any of the 16 baseline video scenes (same rooms and footprints as the baseline).
+    The first is probably also the k38 photo crash noted in D-077 and D-083; not checked.
+- **Replays.** Every cached DPVO run of the baseline replayed on CPU, one at a time (`outputs/video_better/run_arm.sh`,
+  `steep_da/`, `steep_pnp/`), from git-archive exports, against the baseline replays of the same caches (`2b52052`):
+  - steep + depth agreement (`VIDEO_PARAMS={"steep_frames": true}`): `6543f23`; before r2 again on `5283d7d` (it
+    stopped in the plan step) and with_ceiling again on `7c8fea4` (its middle looks: the cut rule changed in
+    `5283d7d`).
+    single_room d069 r1–r3 and floor_only's after run have no steep keyframe (the PnP arm's logs), so this arm takes
+    their baseline replays: the same code path.
+  - steep + PnP (`{"steep_frames": true, "scale_method": "pnp"}`, floor levelling on as in D-076): `5283d7d`; 23:28
+    again on `7c8fea4` (it stopped in the plan step).
+  - Between those exports, other commits changed only the photo tier, scripts, docs, and plan-step switches that are
+    off (D-079).
+
+  Own take1 against the tape (footprint error against 30 m²; DA = depth agreement):
+
+  | Run | Rooms (baseline → steep + DA → steep + PnP) | Footprint, m² (error vs 30 m²) | Walls ≤3% / ≤10% / found, of 14 | Bedroom room, m² (tape 11.09) | Keyframes kept |
+  |---|---|---|---|---|---|
+  | 23:28 | 9 → 7 → 3 | 37.6 (25.2%) → 32.9 (9.6%) → 29.6 (1.4%) | 0/1/8 → 0/1/8 → 1/1/13 | 14.9 → 15.2 → 9.2 | 228/228 → 215/215 → 215/215 |
+  | before r1 | 4 → 3 → 2 | 24.1 (19.5%) → 21.5 (28.3%) → 29.9 (0.4%) | 2/5/12 → 2/4/12 → 2/4/11 | 12.2 → 14.4 → 9.3 | 177/228 → 164/215 → 215/215 |
+  | before r2 | 4 → 4 → 2 | 40.3 (34.5%) → 39.0 (29.9%) → 30.4 (1.5%) | 0/1/8 → 0/2/11 → 0/1/6 | 18.0 → 14.8 → 9.3 | 228/228 → 215/215 → 215/215 |
+  | after r1 | 2 → 1 → 1 | 37.8 (26.0%) → 41.2 (37.5%) → 22.2 (26.0%) | 1/1/6 → 0/1/3 → 0/1/3 | 27.8 → 41.2 → 22.2 | 228/228 → 215/215 → 215/215 |
+  | after r2 | 2 → 1 → 2 | 18.7 (37.7%) → 11.7 (60.9%) → 29.9 (0.3%) | 1/1/8 → 0/2/4 → 2/3/10 | 11.9 → 11.7 → 10.5 | 121/228 → 108/215 → 215/215 |
+  | presentable default r1 | 1 → 1 → 2 | 10.0 (66.8%) → 10.2 (65.9%) → 31.7 (5.6%) | 0/1/6 → 0/1/6 → 1/3/10 | 10.0 → 10.2 → 10.4 | 122/228 → 109/215 → 215/215 |
+  | presentable pnp r1 | 3 → 4 → 2 | 29.9 (0.4%) → 25.6 (14.8%) → 31.5 (5.1%) | 2/2/13 → 1/2/8 → 2/3/10 | 14.5 → 4.6 → 10.4 | 228/228 → 215/215 → 215/215 |
+  | presentable default r2 | 1 → 4 → 2 | 19.2 (35.9%) → 22.2 (26.1%) → 30.0 (0.0%) | 0/0/3 → 0/3/10 → 0/2/11 | 19.2 → 10.0 → 10.1 | 71/228 → 215/215 → 215/215 |
+  | presentable pnp r2 | 2 → 2 → 2 | 29.6 (1.3%) → 29.7 (1.0%) → 29.8 (0.8%) | 3/6/11 → 2/5/10 → 1/4/10 | 12.8 → 12.1 → 10.3 | 209/228 → 196/215 → 196/215 |
+
+  Sample videos against the LiDAR plan of the same capture:
+
+  | Run | Rooms (baseline → steep + DA → steep + PnP; LiDAR in brackets) | Footprint, m² (vs LiDAR) | Plan rooms matched to a LiDAR room | Keyframes kept |
+  |---|---|---|---|---|
+  | single_room d069 r1 | 3 (3) → 3 → 3 | 17.83 (+1.2%) → 17.83 (+1.2%) → 21.32 (+21.1%) | 2 → 2 → 3 | 164/164 → 164/164 → 164/164 |
+  | single_room d069 r2 | 3 (3) → 3 → 3 | 17.10 (−2.9%) → 17.10 (−2.9%) → 22.60 (+28.3%) | 2 → 2 → 3 | 164/164 → 164/164 → 164/164 |
+  | single_room d069 r3 | 3 (3) → 3 → 2 | 16.72 (−5.1%) → 16.72 (−5.1%) → 14.82 (−15.8%) | 2 → 2 → 2 | 164/164 → 164/164 → 164/164 |
+  | single_room after run | 3 (3) → 3 → 3 | 21.12 (+19.9%) → 21.12 (+19.9%) → 19.07 (+8.3%) | 2 → 2 → 2 | 164/164 → 164/164 → 164/164 |
+  | floor_only after run | 0 (8) → 0 → 3 | 0.00 (−100.0%) → 0.00 (−100.0%) → 22.60 (−63.5%) | 0 → 0 → 3 | 372/432 → 372/432 → 210/432 |
+  | floor_only d066 | 5 (8) → 5 → 1 | 31.45 (−49.2%) → 31.45 (−49.2%) → 7.41 (−88.0%) | 3 → 3 → 1 | 211/432 → 211/432 → 100/432 |
+  | with_ceiling after re-run | 3 (8) → 5 → 2 | 54.28 (−13.2%) → 57.07 (−8.7%) → 21.04 (−66.3%) | 1 → 2 → 2 | 211/836 → 191/836 → 143/836 |
+- **Rule** (`outputs/video_better/rule_check.py`; per arm `steep_da/rule_check.txt`, `steep_pnp/rule_check.txt`).
+  - Steep + depth agreement. (a1) The footprint is better on 3 of 9 caches (23:28 25.2 → 9.6%, default r2 35.9 →
+    26.1%, pnp r2 inside 29–31 m²); the rule needs 7. Fails. (a2) More walls are found on 2 of 9 (before r2 8 → 11,
+    default r2 3 → 10). Fails. (a3) Walls within 10% total 18 → 21, no cache loses more than one. Holds. (b) Holds:
+    single_room and floor_only are unchanged, with_ceiling goes from −13.2% to −8.7% and from 1 matched room to 2.
+    (c) Holds: the switch is video only, and the plan-step fixes leave the LiDAR plans as they were.
+  - Steep + PnP. (a1) The footprint is better on 7 of 9. Holds, the first arm to pass it. (a2) More walls are found on
+    4 of 9 (23:28 8 → 13, after r2 8 → 10, default r1 6 → 10, default r2 3 → 11). Fails. (a3) Walls within 10% total
+    18 → 22, but pnp r2 loses two (6 → 4). Fails. (b) Fails: d069 +21.1, +28.3 and −15.8% against a limit of 5.05%
+    (single_room has no steep keyframe, so these are D-076's numbers again), floor_only d066 from 3 matched rooms to 1
+    at −88.0%, with_ceiling from −13.2% to −66.3%. (c) Holds.
+- **Decision.** Neither arm passes, so the video defaults do not change: `steep_frames` stays off (`run_capture.py
+  --video-steep` turns it on), the scale step stays "depth_agreement", and "pnp" stays opt-in (`--video-scale pnp`).
+  - What does change for every run: the two plan-step crashes are fixed, and neither fix moves any of the 16 baseline
+    plans or the LiDAR plans.
+  - With depth agreement the cut helps where the look had spoiled a whole segment: on default r2 the segment from
+    kf 71 passes its self-check without the look, and the bedroom comes back (10.0 m², 3 → 10 walls found). Elsewhere
+    it takes away area and walls (below), and on balance it is not better.
+  - With PnP the cut changes little on take1. On the five caches D-076 replayed with PnP alone (27.4–31.3 m², 2–3
+    rooms) it gives 22.2–30.4 m² and 1–3 rooms; after r1 loses its bedroom. The steady result is PnP's: on 8 of the 9
+    caches 29.6–31.7 m² and the bedroom as a room of its own, 9.2–10.5 m² (tape 11.09 m²).
+  - For PnP to become the default it still has to hold on the sample videos, where its votes are sparse on white
+    walls (D-076). The steep cut does not touch that.
+- **Limits / revisit if.**
+  - The look is not the only break at the end of take1: on five runs the path is as long in the 3.9 s before it, on
+    blank walls the camera looks at level. That is texture, not pitch, and the cut leaves it in.
+  - With the depth-agreement scale, cutting the tail changes rooms far from the bedroom: after r2 loses its 6.8 m²
+    passage room, after r1's hall merges into one 41.2 m² room, pnp r1's bedroom room falls from 14.5 to 4.6 m². None
+    of the tail's 188 camera positions is inside those rooms, so they lost or gained the tail's fused depth (placed by
+    the broken path); I have not traced it further.
+  - The limits (30° up, 50° down, 3 keyframes, 20 keyframes) were set on these 16 caches; there is no held-out set.
+  - Revisit if the protocol films the ceiling as a separate clip (the walk then has no look to cut, and the ceiling is
+    still filmed; not tested), or if the look's ceiling points can be placed with a measured phone height.

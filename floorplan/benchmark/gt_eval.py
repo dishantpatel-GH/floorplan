@@ -23,7 +23,17 @@ Matching (rooms -> walls -> openings) is done by geometry only, never by hand:
     and every row says how it was paired; unmatched predicted walls are reported. The old pure cyclic-order pairing
     (which shifts after any extra short wall) is kept for comparability under the result key 'wall_order_based'
     (not gated);
-  * openings: per room, Hungarian on width difference.
+  * openings: by POSITION when the GT says where they are (decision D-085). The simulator's GT has every opening's
+    centre: each predicted opening is put in the GT frame with its room's transform (the one the walls use) and
+    paired with the true opening of the same type (door or passage <-> door; window <-> window) on the same wall
+    line (offset <= 0.45 m) whose centre is nearest along the wall (within max(0.5 m, half its width)); one
+    Hungarian over all of them, so a door found in either room of a shared door counts once. gt_polygons.json
+    (own house) says only which wall holds a door: a predicted opening on that wall pairs with it, width breaks
+    ties. A GT opening without a place (a room without an outline) pairs by width within 0.10 m, with predictions
+    at no known place only. Unpaired GT = missed; unpaired predictions = phantom (a second prediction at a found
+    opening: duplicate, also a phantom; but one door drawn in each of two rooms that are not joined, as the photo
+    tier does, is that door's other side). A tape GT without outlines keeps the old pairing: per room, Hungarian on
+    width difference.
 
 Reported per item: predicted value, interval, GT, error, |error| / GT, and whether GT lies inside the 95% interval
 (calibration). Gate checks follow the case study's Part 2 thresholds.
@@ -116,7 +126,9 @@ def read_gt_geometry(gt_csv, gt_json=None) -> dict | None:
             raise FileNotFoundError(f"GT JSON not found: {p}")
         return None
     out = {}
-    for r in json.loads(p.read_text()).get("rooms", []):
+    js = json.loads(p.read_text())
+    placed = {o["id"]: o for o in js.get("openings", []) if o.get("center") is not None and o.get("walls")}
+    for r in js.get("rooms", []):
         poly = np.asarray(r.get("polygon") or [], float)
         if poly.ndim != 2 or len(poly) < 3 or not r.get("walls_cw"):
             continue
@@ -125,6 +137,17 @@ def read_gt_geometry(gt_csv, gt_json=None) -> dict | None:
             w["name"]: dict(a=poly[int(w["edge"]) % n], b=poly[(int(w["edge"]) + 1) % n],
                             door=any(str(o).startswith("door") for o in w.get("openings", [])))
             for w in r["walls_cw"]})
+        # openings on this room's walls: with their centre (simulator) or only the wall that holds them (tape)
+        ops = []
+        for w in r["walls_cw"]:
+            a, b = poly[int(w["edge"]) % n], poly[(int(w["edge"]) + 1) % n]
+            for oid in w.get("openings", []):
+                o = placed.get(oid)
+                kind = "window" if str((o or {}).get("cls", oid)).startswith("window") else "door"
+                c = None if o is None else np.asarray(o["center"][:2], float)
+                ops.append(dict(id=str(oid), kind=kind, wall=w["name"], a=a, b=b, center=c,
+                                width=None if o is None else float(o["width"])))
+        out[r["id"]]["openings"] = ops
     return out or None
 
 
@@ -478,6 +501,7 @@ def evaluate(plan: dict, gt: list[GTItem], tier: str, gt_geom: dict | None = Non
     outlines = {g: wm.reconstruct_outlines(gt_rooms[g], gt_names[g]) for g in gt_rooms
                 if tape_method == "geometric" and g not in (gt_geom or {})}
     rows, pairing, candidates_phantom = [], {}, []
+    by_position = bool(gt_geom) and any(g.get("openings") for g in gt_geom.values())
     for g_room, p_idx in room_pairs.items():
         room = plan["rooms"][p_idx]
         wr, pairing[g_room] = _wall_rows(plan, room, g_room, gt_names[g_room], gt_rooms[g_room],
@@ -493,8 +517,8 @@ def evaluate(plan: dict, gt: list[GTItem], tier: str, gt_geom: dict | None = Non
                                  rel=None if v is None else abs(v - it.value) / it.value,
                                  inside=None if lo is None else bool(lo <= it.value <= hi), note="",
                                  match="room pair"))
-        # openings (doors/passages and windows), Hungarian on width
-        for kind_gt, kinds_pred in (("door_width", ("door", "passage")), ("window_width", ("window",))):
+        # openings (doors/passages and windows), Hungarian on width; by position below when the GT has places
+        for kind_gt, kinds_pred in (() if by_position else OPENING_KINDS):
             g_items = [it for it in gt if it.room == g_room and it.kind == kind_gt]
             p_items = [o for o in plan.get("openings", []) if room["id"] in o.get("room_ids", []) and o.get("kind") in kinds_pred]
             if g_items and p_items:
@@ -529,9 +553,14 @@ def evaluate(plan: dict, gt: list[GTItem], tier: str, gt_geom: dict | None = Non
         rows.append(dict(room=g_room, pred_room=rid, item="-", kind=kind_gt, pred_id=o["id"], value=_m(o["width"])[0],
                          lo=None, hi=None, gt=None, err=None, rel=None, inside=None, note="PHANTOM (no GT opening)",
                          match="phantom"))
+    open_summary = None
+    if by_position:
+        o_rows, open_summary = position_opening_rows(plan, gt, gt_geom, room_pairs, glob, mirror, gt_names)
+        rows += o_rows
     pairs_ids = {g: plan["rooms"][i]["id"] for g, i in room_pairs.items()}
     rows += _area_rows(plan, gt, room_pairs)
     gates = gate_summary(rows, tier)
+    gates["openings"] = open_summary or opening_counts(rows)
     gates["wall_pairing"] = _pairing_summary(pairing, glob)
     if outlines:
         gates["wall_pairing"]["tape_outlines"] = {s: sorted(g for g, o in outlines.items() if o["status"] == s)
@@ -547,6 +576,225 @@ def evaluate(plan: dict, gt: list[GTItem], tier: str, gt_geom: dict | None = Non
                                            "for comparability only, not gated",
                                       summary=_wall_stats(legacy, tol), rows=legacy),
                 damage=evaluate_damage(plan, gt, pairs_ids))
+
+
+OPENING_KINDS = (("door_width", ("door", "passage")), ("window_width", ("window",)))
+# position pairing (D-085): same wall line within offset_m; centres within max(along_min_m, along_frac x GT width)
+POS = dict(offset_m=0.45, along_min_m=0.5, along_frac=0.5, wall_margin_m=0.3, width_only_m=0.10)
+_ON_WALL = re.compile(r"\b(?:on|of)\s+(W\d+)\b", re.I)
+_BIG = 1e6
+
+
+def _place(room: str, wall: str, a, b, s) -> dict:
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    L = float(np.linalg.norm(b - a))
+    return dict(room=room, wall=wall, a=a, b=b, L=L, d=(b - a) / max(L, 1e-9), s=s)
+
+
+def gt_opening_places(gt: list[GTItem], gt_geom: dict) -> list[dict]:
+    """One record per true opening: id, kind (door | window), width, GT rooms and its places (GT room, wall line, and
+    the centre's position along it when the GT has one). Simulator: the openings of sim_gt.json, a door shared by two
+    rooms has a place in each. Tape GT with outlines: the CSV's door and window rows; the wall from 'on W3' / 'of W1'
+    in their notes, else the room's only outline wall that holds that kind of opening; no position along it."""
+    positioned = any(o["center"] is not None for g in gt_geom.values() for o in g.get("openings", []))
+    out: dict = {}
+    if positioned:
+        for g, geo in gt_geom.items():
+            for o in geo.get("openings", []):
+                if o["center"] is None:
+                    continue
+                rec = out.setdefault(o["id"], dict(id=o["id"], item=o["id"], kind=o["kind"], width=o["width"],
+                                                   rooms=[], places=[]))
+                pl = _place(g, o["wall"], o["a"], o["b"], None)
+                pl["s"] = float((o["center"] - pl["a"]) @ pl["d"])
+                rec["places"].append(pl)
+                rec["rooms"].append(g)
+        for it in gt:                            # a CSV opening the JSON does not place: width only
+            if it.kind in ("door_width", "window_width") and it.item not in out:
+                out[it.item] = dict(id=it.item, item=it.item, kind="door" if it.kind == "door_width" else "window",
+                                    width=it.value, rooms=[it.room], places=[])
+        return list(out.values())
+    for it in gt:
+        if it.kind not in ("door_width", "window_width"):
+            continue
+        kind = "door" if it.kind == "door_width" else "window"
+        rec = dict(id=f"{it.room}/{it.item}", item=it.item, kind=kind, width=it.value, rooms=[it.room], places=[])
+        geo = gt_geom.get(it.room)
+        if geo is not None:
+            names = [x.upper() for x in _ON_WALL.findall(f"{it.description} {it.notes}") if x.upper() in geo["walls"]]
+            if not names:
+                names = sorted({o["wall"] for o in geo.get("openings", []) if o["kind"] == kind})
+                names = names if len(names) == 1 else []
+            for nm in names[:1]:
+                rec["places"].append(_place(it.room, nm, geo["walls"][nm]["a"], geo["walls"][nm]["b"], None))
+        out[rec["id"]] = rec
+    return list(out.values())
+
+
+def _room_transforms(plan, gt_geom, room_pairs, glob, mirror, gt_names) -> dict:
+    """GT room -> (plan room id, R, t): the transform the wall pairing puts that plan room into the GT frame with
+    (wall_match.align_room; plan points are mirrored first when the plan is)."""
+    openings = {o["id"]: o for o in plan.get("openings", [])}
+    out = {}
+    for g, i in room_pairs.items():
+        gtg, room = gt_geom.get(g), plan["rooms"][i]
+        if gtg is None or len(room.get("polygon") or []) < 3 or not room.get("wall_ids"):
+            continue
+        names = gt_names.get(g) or []
+        if not names or not all(n in gtg["walls"] for n in names):
+            names = sorted(gtg["walls"], key=_wnum)
+        al = wm.align_room(plan, room, gtg, names, mirror, glob, openings)
+        out[g] = (room["id"], np.asarray(al["R"], float), np.asarray(al["t"], float))
+    return out
+
+
+def _candidate(pl: dict, q: np.ndarray, w_gt, w_p):
+    """(cost, details) of a predicted centre q (GT frame) at a GT place, or None when it is not there."""
+    n = np.array([-pl["d"][1], pl["d"][0]])
+    off, s_p = abs(float((q - pl["a"]) @ n)), float((q - pl["a"]) @ pl["d"])
+    if off > POS["offset_m"]:
+        return None
+    if pl["s"] is not None:
+        e = s_p - pl["s"]
+        if abs(e) > max(POS["along_min_m"], POS["along_frac"] * (w_gt or 0.0)):
+            return None
+        return abs(e) + 0.5 * off, dict(pos_err=abs(e), offset=off, how="position")
+    if not -POS["wall_margin_m"] <= s_p <= pl["L"] + POS["wall_margin_m"]:
+        return None
+    dw = abs(w_p - w_gt) if (w_p is not None and w_gt is not None) else 0.5
+    return 1.0 + min(dw, 0.5) + 0.1 * off, dict(pos_err=None, offset=off, how="wall")
+
+
+def position_opening_rows(plan, gt, gt_geom, room_pairs, glob, mirror, gt_names) -> tuple[list[dict], dict]:
+    """Opening rows paired by position (see the module docstring), and the per-type summary."""
+    recs = gt_opening_places(gt, gt_geom)
+    tf = _room_transforms(plan, gt_geom, room_pairs, glob, mirror, gt_names)
+    M = np.diag([1.0, -1.0]) if mirror else np.eye(2)
+    room_of_wall = {w["id"]: w["room_id"] for w in plan.get("walls", [])}
+    paired_rooms = {plan["rooms"][i]["id"] for i in room_pairs.values()}
+    inv = {plan["rooms"][i]["id"]: g for g, i in room_pairs.items()}
+
+    def rooms_of(o):
+        return set(o.get("room_ids", [])) | {room_of_wall[w] for w in o.get("wall_ids", []) if w in room_of_wall}
+
+    rows, summary = [], dict(pairing=("position (GT centres)" if any(pl["s"] is not None for r in recs
+                                                                       for pl in r["places"])
+                                      else "wall (the GT names the wall, not the place on it)"),
+                             params=dict(POS))
+    for kind_gt, kinds_pred in OPENING_KINDS:
+        kind = "door" if kind_gt == "door_width" else "window"
+        G = [r for r in recs if r["kind"] == kind]
+        P = [o for o in plan.get("openings", []) if o.get("kind") in kinds_pred and rooms_of(o) & paired_rooms]
+        C = np.full((len(G), len(P)), _BIG)
+        det: dict = {}
+        for a, r in enumerate(G):
+            for b, o in enumerate(P):
+                w_p = _m(o.get("width"))[0]
+                # the opening goes into the GT frame with the transform of every room it touches: a door between
+                # two rooms is at its place if either room's transform puts it there
+                for pl in r["places"]:
+                    for g2, (rid, R, t) in tf.items():
+                        if rid not in rooms_of(o):
+                            continue
+                        q = R @ (M @ np.asarray(o["center"], float)) + t
+                        c = _candidate(pl, q, r["width"], w_p)
+                        if c is not None and c[0] < C[a, b]:
+                            C[a, b], det[a, b] = c[0], dict(c[1], room=pl["room"], wall=pl["wall"], via=g2)
+        match = {}
+        if len(G) and len(P):
+            for a, b in zip(*linear_sum_assignment(C)):
+                if C[a, b] < _BIG:
+                    match[a] = b
+        # a true opening with no place (its room has no outline): width only, within width_only_m
+        # (only predictions at no place of the GT: a door the transforms put on a known door's wall is not it)
+        free_g = [a for a, r in enumerate(G) if a not in match and not any(pl["room"] in tf for pl in r["places"])]
+        free_p = [b for b in range(len(P)) if b not in match.values() and _m(P[b].get("width"))[0] is not None
+                  and not (C[:, b] < _BIG).any()]
+        if free_g and free_p:
+            W = np.array([[abs(_m(P[b]["width"])[0] - G[a]["width"]) for b in free_p] for a in free_g])
+            for i, j in zip(*linear_sum_assignment(W)):
+                if W[i, j] <= POS["width_only_m"]:
+                    match[free_g[i]] = free_p[j]
+                    det[free_g[i], free_p[j]] = dict(pos_err=None, offset=None, how="width only (GT has no place)",
+                                                     room=G[free_g[i]]["rooms"][0], wall=None)
+        st = dict(gt=len(G), found=0, missed=0, phantom=0, duplicate=0, drawn_as_passage=0, width_err_cm=[],
+                  pos_err_cm=[], found_ids=[], missed_ids=[], phantom_ids=[])
+        for a, r in enumerate(G):
+            if a not in match:
+                rows.append(dict(room=r["rooms"][0], pred_room=None, item=r["item"], kind=kind_gt, pred_id=None,
+                                 value=None, lo=None, hi=None, gt=r["width"], err=None, rel=None, inside=None,
+                                 note=f"MISSED (no predicted {kind} at its place)", match="missed"))
+                st["missed"] += 1
+                st["missed_ids"].append(r["item"])
+                continue
+            o, dd = P[match[a]], det[a, match[a]]
+            v, lo, hi = _m(o.get("width"))
+            err = None if v is None or r["width"] is None else v - r["width"]
+            where = (f"centre {dd['pos_err']:.2f} m along {dd['room']} {dd['wall']} from the true centre, "
+                     f"{dd['offset']:.2f} m off its line" if dd["how"] == "position"
+                     else f"on {dd['room']} {dd['wall']} ({dd['offset']:.2f} m off its line)" if dd["how"] == "wall"
+                     else dd["how"])
+            rows.append(dict(room=r["rooms"][0], pred_room="+".join(sorted(rooms_of(o))), item=r["item"],
+                             kind=kind_gt, pred_id=o["id"], value=v, lo=lo, hi=hi, gt=r["width"], err=err,
+                             rel=None if err is None else abs(err) / r["width"],
+                             inside=None if lo is None or r["width"] is None else bool(lo <= r["width"] <= hi),
+                             note=f"{o.get('kind')} ({o.get('source') or 'geometry'}): {where}"
+                                  + ("" if v is not None else "; no width"), match=dd["how"],
+                             pos_err=dd["pos_err"], offset=dd["offset"], source=o.get("source") or "geometry"))
+            st["found"] += 1
+            st["found_ids"].append(f"{r['item']}={o['id']}")
+            st["drawn_as_passage"] += o.get("kind") == "passage"
+            if err is not None:
+                st["width_err_cm"].append(round(100 * err, 1))
+            if dd["pos_err"] is not None:
+                st["pos_err_cm"].append(round(100 * dd["pos_err"], 1))
+        hit = {b: a for a, b in match.items()}
+        for b, o in enumerate(P):
+            if b in hit:
+                continue
+            dup = next((a for a in match if C[a, b] < _BIG), None)
+            g_room = next((inv[x] for x in sorted(rooms_of(o)) if x in inv), "-")
+            if dup is not None and det[dup, b]["room"] != det[dup, match[dup]]["room"] \
+                    and not rooms_of(o) & rooms_of(P[match[dup]]):
+                # rooms not stitched (photo tier): the same door drawn in each of its two rooms, once per room
+                rows.append(dict(room=g_room, pred_room="+".join(sorted(rooms_of(o))), item=G[dup]["item"],
+                                 kind=kind_gt, pred_id=o["id"], value=_m(o.get("width"))[0], lo=None, hi=None,
+                                 gt=None, err=None, rel=None, inside=None, match="other side",
+                                 source=o.get("source") or "geometry",
+                                 note=f"the other room's side of {G[dup]['item']} (found as {P[match[dup]]['id']}; "
+                                      f"the two rooms are not joined)"))
+                st["other_side"] = st.get("other_side", 0) + 1
+                continue
+            dup = None if dup is None else G[dup]["item"]
+            rows.append(dict(room=g_room, pred_room="+".join(sorted(rooms_of(o))), item="-", kind=kind_gt,
+                             pred_id=o["id"], value=_m(o.get("width"))[0], lo=None, hi=None, gt=None, err=None,
+                             rel=None, inside=None, match="phantom", source=o.get("source") or "geometry",
+                             note=(f"PHANTOM: DUPLICATE of {dup} (a second prediction at a found opening)" if dup
+                                   else "PHANTOM (no GT opening at its place)")))
+            st["phantom"] += 1
+            st["duplicate"] += dup is not None
+            st["phantom_ids"].append(o["id"] + (f" (dup {dup})" if dup else ""))
+        st["width_median_abs_err_cm"] = (round(float(np.median(np.abs(st["width_err_cm"]))), 1)
+                                         if st["width_err_cm"] else None)
+        st["pos_median_err_cm"] = round(float(np.median(st["pos_err_cm"])), 1) if st["pos_err_cm"] else None
+        summary[kind] = st
+    return rows, summary
+
+
+def opening_counts(rows: list[dict]) -> dict:
+    """The per-type summary of position_opening_rows, from the width-only rows of a tape GT without outlines."""
+    out = dict(pairing="width (per room, Hungarian; the GT has no places)")
+    for kind_gt in ("door_width", "window_width"):
+        rs = [r for r in rows if r["kind"] == kind_gt]
+        found = [r for r in rs if r["pred_id"] is not None and r["gt"] is not None]
+        errs = [round(100 * r["err"], 1) for r in found if r["err"] is not None]
+        out["door" if kind_gt == "door_width" else "window"] = dict(
+            gt=sum(r["gt"] is not None for r in rs), found=len(found),
+            missed=sum("MISSED" in r["note"] for r in rs), phantom=sum("PHANTOM" in r["note"] for r in rs),
+            duplicate=None, width_err_cm=errs, pos_err_cm=[],
+            width_median_abs_err_cm=round(float(np.median(np.abs(errs))), 1) if errs else None,
+            pos_median_err_cm=None)
+    return out
 
 
 def _pairing_summary(pairing: dict, glob) -> dict:
@@ -796,6 +1044,18 @@ def to_markdown(res: dict) -> str:
                           + (f", within {100 * ob['wall_gate']['tol']:.0f}% {100 * ob['wall_gate']['pass_frac']:.0f}%"
                              if ob.get("wall_gate") else "")
                           + " (rows under 'wall_order_based' in the JSON)."]
+    op = (res.get("gates") or {}).get("openings")
+    if op:
+        lines += ["", f"**Openings** (pairing: {op['pairing']}):", "",
+                  "| Type | GT | Found | Missed | Phantom (of which duplicates) | Width error, cm | Position error, cm |",
+                  "|---|---|---|---|---|---|---|"]
+        for k in ("door", "window"):
+            s = op.get(k)
+            if s:
+                lines.append(f"| {k} | {s['gt']} | {s['found']} | {s['missed']} | {s['phantom']} "
+                             f"({'—' if s['duplicate'] is None else s['duplicate']}) | "
+                             f"{', '.join(f'{x:+.1f}' for x in s['width_err_cm']) or '—'} | "
+                             f"{', '.join(f'{x:.0f}' for x in s['pos_err_cm']) or '—'} |")
     lines += ["", "**Gates:**", "```json", json.dumps(res["gates"], indent=1), "```"]
     if res.get("damage"):
         lines += ["", "**Staged damage vs tape:**", "", "| Room | Item | Class | Detected | Status | Conf | W pred/GT | H pred/GT | In CI (W,H) | Note |",

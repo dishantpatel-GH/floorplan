@@ -53,6 +53,10 @@ neighbouring rooms' folders share views and the rooms can be joined (v2.1, 4 Oct
    - Take one photo **back into the room you are leaving**, aimed at its open middle, not at a nearby wall.
    - Then turn round and take one photo **into the next room**, aimed at its open middle, within about 5 s.
    - Each photo goes in the folder of the room it looks into.
+   - **Keep the door leaf out of the picture.** If the open door would fill the frame, step 1-1.5 m back into the room
+     you are leaving and aim straight through the doorway, so the next room's furniture fills the opening. A photo of
+     a door leaf or a bare wall matches nothing in the next room, and the two rooms cannot be joined (k65 simulator,
+     5 Oct: the bedroom and bathroom stayed unjoined for exactly this reason).
 4. **No reference object:** nothing is placed in the rooms and nothing extra is photographed (changed 4 Oct, D-067).
 5. **Keep the photos' EXIF data:** no messaging apps. Capture times pair the doorway shots; the focal length sets the
    scale.

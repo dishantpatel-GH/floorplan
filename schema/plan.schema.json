@@ -91,7 +91,7 @@
         },
         "floor_level": {"type": ["number", "null"]},
         "name": {"type": "string", "minLength": 1,
-                 "description": "Floor-plan name: Bedroom, Kitchen, Living room, Bathroom, Foyer, Passage, Balcony, or Room when unknown; numbered when a type repeats (Bedroom 1, Bedroom 2). Optional (schema 1.1)."},
+                 "description": "Floor-plan name: Bedroom, Kitchen, Living room, Bathroom, Foyer, Passage, Balcony, or Room when unknown; numbered when a type repeats (Bedroom 1, Bedroom 2); Living room + kitchen when the size rule's living room holds the only kitchen evidence. Optional (schema 1.1)."},
         "type": {"enum": ["bedroom", "kitchen", "living_room", "bathroom", "foyer", "passage", "balcony", "room"],
                  "description": "Room type behind the name. Optional (schema 1.1)."},
         "type_evidence": {"type": "object",

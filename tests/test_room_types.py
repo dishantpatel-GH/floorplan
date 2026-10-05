@@ -115,3 +115,18 @@ def test_largest_room_with_a_weak_bed_is_the_living_room_without_an_entrance():
     RT.name_plan(p, {"H": _ev(bed=0.017, sink=0.007), "B": _ev(bed=0.078)})
     by = {r.id: r for r in p.rooms}
     assert (by["H"].name, by["B"].name) == ("Living room", "Bedroom")
+
+
+def test_size_rule_room_with_the_kitchen_in_it_says_both():
+    """Own house video: hall, kitchen and passage in one plan room; its pixels say kitchen (sink) and no room is the
+    kitchen. The size rule keeps the living room type and the name says both."""
+    door = Opening("O1", "door", [], ["H"], (0.0, 1.0), Measurement(0.6, 0.5, 0.7))
+    p = _plan([_room("H", 0, 0, 5.0, 3.8), _room("B", 0, 4.0, 3.1, 7.9)], [door])
+    RT.name_plan(p, {"H": _ev(bed=0.012, sink=0.016), "B": _ev(bed=0.064)})
+    by = {r.id: r for r in p.rooms}
+    assert (by["H"].name, by["H"].room_type, by["B"].name) == ("Living room + kitchen", "living_room", "Bedroom")
+    assert "kitchen objects in it too" in by["H"].type_evidence["rule"]
+    # a room with a sofa is the living room by its objects: the name stays, kitchen evidence or not
+    q = _plan([_room("H", 0, 0, 5.0, 3.8), _room("B", 0, 4.0, 3.1, 7.9)], [door])
+    RT.name_plan(q, {"H": _ev(sofa=0.05, sink=0.016), "B": _ev(bed=0.064)})
+    assert {r.id: r.name for r in q.rooms}["H"] == "Living room"

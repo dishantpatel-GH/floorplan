@@ -22,6 +22,7 @@ command processes both: `scripts/process_own_capture.py <capture folder>`.
 | 0b | `scene_gt.py <scene.usda>` | `.venv` | Ground truth from the visible surfaces (ray casting): walls, ceilings, doors, windows. Walkable map = Isaac occupancy ∪ every object's triangles at 0.10–1.90 m, with 25 cm margins. A4 sheet spots |
 | 1a | `teleop.py --session <dir>` | Isaac* | **You** drive the phone (WASD + arrows) and record walks and photos |
 | 1b | `auto_capture.py --session <dir>` | `.venv` | A scripted person follows `docs/CAPTURE_PROTOCOL.md` literally |
+| 1c | `door_photos.py plan\|assemble` | `.venv` | Adds door photos to a photo session: one out through each door from 1.0-1.5 m inside the smaller room, one in from the neighbour; spot and heading chosen by ray-cast labels (the next room's textured objects seen through the opening). Renders with `render.py`, emulates like the rest |
 | 2 | `render.py <dir>` | Isaac* | RTX colour frames of the walk and photos, with human imperfection added |
 | 3 | `emulate.py <dir> --profile iphone15` | `.venv` | Phone files: JPEG+EXIF, MOV, Stray Scanner folder with LiDAR noise, confidence and drift |
 | 4 | `scripts/process_own_capture.py <capture>` | `.venv` | The real pipeline on all tiers, scored against the GT |

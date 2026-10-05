@@ -52,6 +52,7 @@ def drop_implausible_openings(plan) -> list[dict]:
 
 PHOTO_OVERRIDES: dict = {}
 VIDEO_SCALE: str | None = None        # --video-scale: VideoParams.scale_method (D-076); None = its default
+VIDEO_STEEP: bool = False             # --video-steep: VideoParams.steep_frames (D-084, off by default)
 SEMANTIC_HINT = {"no segmentation env": "build it with setup/seg_env.sh",
                  "disabled": "turned off with --photo-param semantic_walls=false"}
 
@@ -86,7 +87,8 @@ def front_end(inp: Path, tier: str, cfg: Config, out: Path, drift: bool, log):
         return scene, info, report, 0.0, "LiDAR depth is metric; no scale term"
     if tier == "video":
         from floorplan.video import VideoParams, build_scene_from_video
-        params = VideoParams(scale_method=VIDEO_SCALE) if VIDEO_SCALE else None
+        kw = dict(scale_method=VIDEO_SCALE) if VIDEO_SCALE else {}
+        params = VideoParams(**kw, steep_frames=True) if VIDEO_STEEP else (VideoParams(**kw) if kw else None)
         scene, info = build_scene_from_video(inp, params, work_dir=out / "work", log=log)
         rel = float(info.get("scale_sigma_rel", info.get("scale", {}).get("sigma_rel", 0.03)) or 0.03)
         reason = "video scale from learned metric depth + priors; no reference object needed (D-067)"
@@ -165,6 +167,9 @@ def main():
                     help="override a photo-tier parameter (floorplan/photo/params.py), e.g. f35_rule=diagonal")
     ap.add_argument("--video-scale", choices=["depth_agreement", "pnp"],
                     help="video tier: local scale method (D-076); default from floorplan/video/params.py")
+    ap.add_argument("--video-steep", action="store_true",
+                    help="video tier: leave ceiling looks and straight-down looks out of the scale and the fusion; a "
+                         "look at the end ends the walk (D-084, off by default)")
     ap.add_argument("--no-semantic-openings", action="store_true",
                     help="video/photo: skip the doors and windows from the segmenter (floorplan/openings/semantic.py)")
     ap.add_argument("--no-room-names", action="store_true",
@@ -176,8 +181,9 @@ def main():
     a = ap.parse_args()
     if a.video_rooms and a.tier != "video":
         ap.error("--video-rooms needs --tier video")
-    global VIDEO_SCALE
+    global VIDEO_SCALE, VIDEO_STEEP
     VIDEO_SCALE = a.video_scale
+    VIDEO_STEEP = a.video_steep
     for kv in a.photo_param:
         k, v = kv.split("=", 1)
         try:
