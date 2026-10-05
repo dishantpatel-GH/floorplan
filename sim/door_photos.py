@@ -382,12 +382,12 @@ def assemble(a):
     for room in sorted(x for x in cap.iterdir() if x.is_dir() and not x.name.endswith("_take2")):
         (ph / room.name).mkdir(parents=True)
         for f in sorted(room.glob("*.JPG")):
-            shutil.copy2(f, ph / room.name / f.name)
+            _link(f, ph / room.name / f.name)
     for p in plan_s["photos"]:
         src = emu / "photos" / p["folder"] / f"IMG_{p['index']:04d}.JPG"
         dst = (ph if p["in_set"] else ref) / p["folder"]
         dst.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst / src.name)
+        _link(src, dst / src.name)
     # 3. session.json: the old session (walk and photos) + the new photos with their roles and true poses
     out_s = dict(sess)
     out_s["photos"] = sess["photos"] + plan_s["photos"]
@@ -405,7 +405,7 @@ def assemble(a):
     for m in old_meta["photos"]:
         (rp / m["file"]).symlink_to((rend / m["file"]).resolve())
     for m in new_meta["photos"]:
-        shutil.copy2(rdir / "photos" / m["file"], rp / m["file"])
+        _link(rdir / "photos" / m["file"], rp / m["file"])
     (rp / "photos.json").write_text(json.dumps(dict(old_meta, photos=old_meta["photos"] + new_meta["photos"]), indent=1))
     if (a.out / "truth").exists():
         shutil.rmtree(a.out / "truth")
@@ -414,6 +414,15 @@ def assemble(a):
     _check_pairs(ph, a.out / "door_pairs.json")
     if a.sheet:
         contact_sheet(a, plan_s["photos"], ph, ref, gt)
+
+
+def _link(src: Path, dst: Path):
+    """Hard link (same bytes, no extra disk: the files are never edited in place), a copy across file systems."""
+    import os
+    try:
+        os.link(src, dst)
+    except OSError:
+        shutil.copy2(src, dst)
 
 
 def _check_pairs(ph: Path, out: Path):
@@ -453,8 +462,9 @@ def contact_sheet(a, photos: list, ph: Path, ref: Path, gt: dict, tw=500, th=375
         tag = "" if p["in_set"] else "  [reference, not in photos/]"
         dr.text((x0 + 4, y0 + 2), f"{p['folder']}/IMG_{p['index']:04d}.JPG{tag}", fill=(255, 215, 0), font=fb(13))
         door = next(o for o in gt["openings"] if o["id"] == p["door"])
-        other = [r for r in door["room_ids"] if r != "01_living_room"]
-        dr.text((x0 + 4, y0 + 20), f"{p['role']} ({short(other[0]) if other else ''} door), t={p['t']:.1f} s",
+        area = {r["id"]: r["area"] for r in gt["rooms"]}
+        small = min(door["room_ids"], key=lambda r: area[r])
+        dr.text((x0 + 4, y0 + 20), f"{p['role']} ({short(small)} door), t={p['t']:.1f} s",
                 fill=(120, 220, 255), font=fnt(12))
         x, y, z, yaw, pitch, _ = p["pose"]
         dr.text((x0 + 4, y0 + 37), f"xy {x:.2f},{y:.2f} z {z:.2f} yaw {yaw:.0f} pitch {pitch:.0f} | {pl['dist_door_m']:.1f} m "

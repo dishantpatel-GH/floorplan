@@ -744,6 +744,20 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     D = np.stack([depth_mod.clean_depth(d, params.depth_max_m, params.depth_edge_rel) for d in D])
     tick("depth")
 
+    # 7b. path_source "sfm" (path_sfm.py): the keyframes' metric path comes from global SfM scaled by MoGe-2 depth, not
+    #     from DPVO; the scale step and DPVO's fresh runs are skipped, DPVO only fills short gaps and places models
+    #     path_source "mapanything" (path_mapanything.py): the same swap, the path from chained MapAnything windows
+    sfm = None
+    if params.path_source in ("sfm", "mapanything"):
+        if params.path_source == "sfm":
+            from floorplan.video.path_sfm import frontend_path
+        else:
+            from floorplan.video.path_mapanything import frontend_path
+        sfm = frontend_path(files, D, T_kf, vo, kf, ts, work, f_sfm_res, geo, ok, ups_kf, flipped, ex, params, log)
+        T_kf, vo, ex, ups, up, up_spread, pitch = (sfm[k] for k in ("T_kf", "vo", "exclude", "ups", "up",
+                                                                     "up_spread", "pitch"))
+        tick(f"path_{params.path_source}")
+
     # 8. metric scale with drift correction; segments = stretches between VO scale restarts; the local scale comes
     #    from depth agreement (default) or from PnP votes on the keyframe images and their depth (scale_method, D-076)
     scale_args = dict(method=params.scale_method, sigma_kf=params.scale_sigma_kf, jump=params.scale_jump,
@@ -751,10 +765,12 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                       block=params.bootstrap_block, seed=params.seed, min_step_m=params.scale_vote_min_step_m,
                       max_dir_deg=params.scale_vote_max_dir_deg, max_rot_deg=params.scale_vote_max_rot_deg,
                       half_kf=params.scale_vote_half_kf)
-    sc = estimate_scales(D, K_d, T_kf, files, params.scale_max_gap, **scale_args)
+    sc = sfm["sc"] if sfm else estimate_scales(D, K_d, T_kf, files, params.scale_max_gap, **scale_args)
     seg = np.asarray(sc["segment"])
     vo_reruns = []
-    if params.vo_rerun_segments and len(sc["segments"]) > 1:
+    if sfm:
+        pass
+    elif params.vo_rerun_segments and len(sc["segments"]) > 1:
         vo, forced = _rerun_vo_per_segment(video, work, rot, f_full, up_size, vo, kf, seg, params, log)
         vo_reruns = vo["reruns"]
         T_kf = vo["T_wc"][pos]
@@ -812,8 +828,12 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
         D_fuse = D_fuse.copy() if D_fuse is D else D_fuse
         D_fuse[ex] = 0.0
 
-    # 9-10. levelling per segment, pose graph (joins segments, closes loops), fusion, alignment
-    geo_out = _geometry(D_fuse, K_d, files, T_kf, vo, kf, n, ts, s_local, seg, up, ups, ups_kf, params, log)
+    # 9-10. levelling per segment, pose graph (joins segments, closes loops), fusion, alignment. An SfM path keeps its
+    #     placements across segment boundaries: the walking-speed reset is for DPVO restarts (it would also move later
+    #     keyframes that the SfM model already placed)
+    import dataclasses
+    geo_params = dataclasses.replace(params, max_walk_speed_mps=float("inf")) if sfm else params
+    geo_out = _geometry(D_fuse, K_d, files, T_kf, vo, kf, n, ts, s_local, seg, up, ups, ups_kf, geo_params, log)
     tick("graph_fusion_alignment")
 
     # 11. paper sheet (optional, off by default: no reference object in the protocol, D-067) -> per-segment scale
@@ -832,7 +852,8 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
             if np.max(np.abs(np.log(c))) > 0.002:
                 D_fuse = D_fuse * c[:, None, None].astype(D.dtype)
                 s_local = s_local * c
-                geo_out = _geometry(D_fuse, K_d, files, T_kf, vo, kf, n, ts, s_local, seg, up, ups, ups_kf, params, log)
+                geo_out = _geometry(D_fuse, K_d, files, T_kf, vo, kf, n, ts, s_local, seg, up, ups, ups_kf, geo_params,
+                                    log)
         tick("sheet")
 
     # 12. honest uncertainty and consistency
@@ -894,6 +915,8 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                 steep=dict(steep_rep, walk_frames=n_walk),
                 depth_model=params.depth_model, recommended_measurement_cloud="points", timings_s=timings,
                 runtime_s=round(time.time() - t0, 1), params=params.to_dict())
+    if sfm:
+        info[f"path_{params.path_source}"] = sfm["report"]
     log(f"[video] done in {info['runtime_s']} s: {len(P)} surface points, floor {info['floor_y']}, "
         f"ceiling {info['ceiling_y']}")
     return scene, info

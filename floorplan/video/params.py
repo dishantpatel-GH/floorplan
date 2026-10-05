@@ -50,6 +50,37 @@ class VideoParams:
     seq_overlap: int = 10                # match each keyframe with its next 10 keyframes
     camera_model: str = "SIMPLE_RADIAL"  # one shared focal + 1 radial distortion term: enough for an iPhone main lens
 
+    # --- camera path source: "dpvo" (frame-to-frame VO + scale step), "sfm" (global SfM, path_sfm.py) or
+    #     "mapanything" (path_mapanything.py) ---
+    path_source: str = "dpvo"
+    # path_sfm.py: pairs that do not depend on the walk order, all models kept, metric scale from MoGe-2
+    path_sfm_window: int = 8             # each keyframe with its next 8 keyframes
+    path_sfm_retrieval_k: int = 10       # + its 10 most similar keyframes (VLAD of the ALIKED descriptors)
+    path_sfm_long_every: int = 0         # + every keyframe against every n-th keyframe (0 = off)
+    path_sfm_min_model: int = 10         # smaller models are dropped (their keyframes are filled or left out)
+    path_sfm_threads: int = 1            # mapper threads; 1: the same matches give the same model
+    path_sfm_max_local_scale: float = 1.25   # keyframes whose +-10-keyframe median MoGe/SfM depth ratio is off the
+                                             # model's by > 1.25x are left out (a bent model; take1: 0.91-1.07 on the
+                                             # default pairs, 2.85 with every keyframe linked to every 4th one)
+    path_sfm_max_gap: int = 5            # unregistered keyframes filled from DPVO only in gaps of <= 5 (~2.5 s)
+    path_sfm_fill_max_miss_m: float = 0.15   # ... and only if the fill meets the next registered keyframe within
+                                             # 0.15 m + 30% of the gap's span
+    path_sfm_link_window: int = 10       # keyframes each side of a link used to fit DPVO onto the models
+    path_sfm_link_max_gap: int = 8       # models joined through a DPVO link only across <= 8 keyframes ...
+    path_sfm_link_max_scale_ratio: float = 1.25  # ... if DPVO's metric scale agrees within 25% on both sides ...
+    path_sfm_link_max_rot_deg: float = 5.0       # ... and its path fits both models within 5 deg ...
+    path_sfm_link_max_pos_m: float = 0.15        # ... and 0.15 m + 10% of the window's path
+    # path_mapanything.py: MapAnything windows chained into one metric path (docs/notes/video_mapanything_path.md)
+    ma_window: int = 24                  # keyframes per window (24: 4.5 GB peak at 518 px, 6 s a window; 32: 5.0 GB)
+    ma_overlap: int = 8                  # keyframes shared by consecutive windows; the chaining fit uses them
+    ma_depth_input: bool = True          # MoGe-2 depth as metric depth input: MapAnything only registers the views
+                                         # (take1 revisits: mean error 0.06 m with it, 0.21 m without)
+    ma_chain: str = "points"             # "points": robust fit of the shared keyframes' depth points; "anchored":
+                                         # the chain's poses as pose inputs (take1: drifts, revisit error 0.56 m)
+    ma_sim3: bool = False                # "points": also fit a scale per link; off: each window keeps the metric scale
+                                         # of its depth input (take1 link scales 0.95-1.07 would compound to 1.25)
+    ma_average: bool = False             # a keyframe's pose = the average of its poses in every window of its segment
+
     # --- metric depth and scale ---
     depth_model: str = "moge2"           # "moge2" or "da3metric"; chosen by evidence (video_tier.md, decision V-5)
     scale_method: str = "depth_agreement"  # D-076: "depth_agreement" (Gaussian window, 1.5x clamp; the step before
