@@ -17,10 +17,12 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PY=${PY:-$ROOT/.venv/bin/python}; [ -x "$PY" ] || PY=$ROOT/../.venv/bin/python
 O=$ROOT/outputs
 DATA=${DATA:-$ROOT/data}
-OWN_PHOTOS=${OWN_PHOTOS:-$O/own_house/capture/photos}          # room/ (lit, 7) and room_take2/ (dim, 6)
-OWN_VIDEO=${OWN_VIDEO:-$O/own_house/capture/video/take1.mp4}
-K65_PHOTOS=${K65_PHOTOS:-$O/fixes/k65_inputs_1x}               # 31 photos, 5 room folders, 1x lens (the k65 benchmark)
-K65=${K65:-$O/sim/k65v2/capture_iphone15}                      # lidar/take1, video/take1.MOV, gt/
+pick() { for c in "$@"; do [ -e "$c" ] && { echo "$c"; return; }; done; echo "$1"; }
+OWN_PHOTOS=${OWN_PHOTOS:-$(pick "$DATA/own_house/photos" "$O/own_house/capture/photos")}  # room/ (lit, 7), room_take2/ (dim, 6)
+OWN_VIDEO=${OWN_VIDEO:-$(pick "$DATA/own_house/video/take1.mp4" "$O/own_house/capture/video/take1.mp4")}
+# k65 photo benchmark: 31 photos in 5 room folders, 1x lens (D-088's set); data/k65/photos is the later render
+K65_PHOTOS=${K65_PHOTOS:-$(pick "$O/fixes/k65_inputs_1x" "$DATA/k65/photos")}
+K65=${K65:-$(pick "$DATA/k65" "$O/sim/k65v2/capture_iphone15")}   # lidar/take1, video/take1.MOV, gt/
 SAMPLE=${SAMPLE:-$DATA/sample}; [ -d "$SAMPLE/single_room" ] || SAMPLE=$ROOT/../TakeHome/Dataset
 VIDEO=${VIDEO:-replay}
 F=${F:-$O/benchmark/fresh_$(date +%H%M)}
@@ -32,8 +34,13 @@ ln -sfn "$OWN_PHOTOS/room_take2" "$F/in/own_dim/room"
 ln -sfn "$OWN_PHOTOS/room" "$F/in/own_lit/room"
 for r in "$K65_PHOTOS"/*/; do ln -sfn "$(readlink -f "$r")" "$F/in/k65/$(basename "$r")"; done
 # the photo work folder sits next to the input (photo_work__<name>): a new input folder = no cached depth/features
-export FLOORPLAN_SEG_PYTHON=${FLOORPLAN_SEG_PYTHON:-$ROOT/../envs/seg/bin/python}
-export FLOORPLAN_THIRD_PARTY_ROOT=${FLOORPLAN_THIRD_PARTY_ROOT:-$(cd "$ROOT/.." && pwd)}
+# The code runs from code/ (an export), so point it at this checkout's envs, third-party code and weights: inside the
+# repo (setup/install.sh) or next to it (the dev machine), the two places floorplan/paths.py looks.
+TP=$ROOT; [ -d "$ROOT/envs" ] || TP=$(cd "$ROOT/.." && pwd)
+export FLOORPLAN_THIRD_PARTY_ROOT=${FLOORPLAN_THIRD_PARTY_ROOT:-$TP}
+export FLOORPLAN_SEG_PYTHON=${FLOORPLAN_SEG_PYTHON:-$TP/envs/seg/bin/python}
+[ -d "$ROOT/weights/hf" ] && export HF_HOME=${HF_HOME:-$ROOT/weights/hf}
+[ -d "$ROOT/weights/torch" ] && export TORCH_HOME=${TORCH_HOME:-$ROOT/weights/torch}
 
 one() {  # one <out> <gpu|cpu> <cmd...>
   local out=$1 kind=$2; shift 2
