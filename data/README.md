@@ -42,8 +42,9 @@ Each run prints its output folder, `outputs/runs/<name>/<tier>/`: `plan.png` and
 | `sample/` | not re-hosted: your copy of the case study's Sample Data | the case study's sample captures: `single_room`, `single_scan_floor_only`, `single_scan_with_ceiling`; put the three folders here as they come | LiDAR, video |
 | `cubicasa/` | in git | CubiCasa 3.14.1 (Android, Google Play) export of the own house: report PDF, plan with and without dimensions | head-to-head |
 
-`python scripts/fetch_data.py` downloads the archives from the GitHub release `data-v1` of this repo and checks
-each against the SHA-256 in `MANIFEST.json`; `--list` shows them, `--url` takes another source (a mirror, or
+`python scripts/fetch_data.py` downloads the archives and checks each against the SHA-256 in `MANIFEST.json`: first
+from the links in an archive's `"mirrors"` list there (a Google Drive share link works as it is), then from the
+GitHub release `data-v1` of this repo; `--list` shows them, `--url` takes another source (a mirror, or
 `file:///dir/` for a local copy). `scripts/pack_data.sh` builds the archives from this folder and rewrites
 `MANIFEST.json`.
 

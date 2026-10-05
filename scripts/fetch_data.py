@@ -10,7 +10,9 @@ Usage:
   python scripts/fetch_data.py own_house k65      # some of them
   python scripts/fetch_data.py --list             # what there is, with sizes
   python scripts/fetch_data.py --url URL          # another source: a release download URL, a mirror, file:///dir/
-The default URL is https://github.com/<owner>/<repo>/releases/download/data-v1/ from `git remote get-url origin`.
+Sources, in order: each archive's "mirrors" in data/MANIFEST.json (Google Drive share links work: they are turned
+into direct downloads), then https://github.com/<owner>/<repo>/releases/download/data-v1/ from `git remote get-url
+origin`. --url replaces both.
 An archive whose SHA-256 is already recorded in data/.fetched/ is skipped; --force fetches it again.
 """
 from __future__ import annotations
@@ -38,11 +40,15 @@ def github_repo() -> str:
         origin = subprocess.run(["git", "-C", str(REPO), "remote", "get-url", "origin"], capture_output=True,
                                 text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
-        sys.exit("no git remote 'origin' to find the release from: pass --url")
+        return None
     m = re.match(r"^(?:https://|ssh://git@|git@)github\.com[:/]([^/]+)/(.+?)(?:\.git)?/?$", origin)
-    if not m:
-        sys.exit(f"origin is {origin}, not a GitHub repo: pass --url (a release download URL or file:///dir/)")
-    return f"{m[1]}/{m[2]}"
+    return f"{m[1]}/{m[2]}" if m else None
+
+
+def direct_url(url: str) -> str:
+    """A Google Drive share link -> its direct download (confirm=t skips the large-file warning page)."""
+    m = re.search(r"drive\.google\.com/(?:file/d/|open\?id=|uc\?(?:export=download&)?id=)([\w-]{20,})", url)
+    return f"https://drive.usercontent.google.com/download?id={m[1]}&export=download&confirm=t" if m else url
 
 
 def gh_download(repo: str, release: str, name: str, dst: Path) -> str:
@@ -61,6 +67,8 @@ def download(url: str, dst: Path) -> str:
     """Stream url to dst; return the SHA-256."""
     h, done, t0 = hashlib.sha256(), 0, time.time()
     with urllib.request.urlopen(url, timeout=60) as r, open(dst, "wb") as f:
+        if "text/html" in (r.headers.get("Content-Type") or ""):
+            raise OSError("got a web page, not the file (a Drive link not shared as 'anyone with the link'?)")
         total = int(r.headers.get("Content-Length") or 0)
         while chunk := r.read(1 << 22):
             f.write(chunk)
@@ -106,8 +114,8 @@ def main() -> None:
     if bad:
         sys.exit(f"unknown archive(s) {bad}; there are {list(rows)}")
     repo = None if a.url else github_repo()
-    base = a.url or f"https://github.com/{repo}/releases/download/{man['release']}/"
-    base = base if base.endswith("/") else base + "/"
+    base = a.url or (f"https://github.com/{repo}/releases/download/{man['release']}/" if repo else None)
+    base = base if not base or base.endswith("/") else base + "/"
     dl, mark = a.dest / ".download", a.dest / ".fetched"
     dl.mkdir(parents=True, exist_ok=True)
     mark.mkdir(parents=True, exist_ok=True)
@@ -118,17 +126,32 @@ def main() -> None:
         if not a.force and m.exists() and m.read_text().strip() == r["sha256"]:
             print(f"{r['name']}: already in {a.dest / n}")
             continue
-        print(f"{r['name']} ({r['bytes'] / 1e6:.0f} MB) from {base}")
         part = dl / (r["name"] + ".part")
-        try:
+        sources = ([] if a.url else [direct_url(u) for u in r.get("mirrors", [])]) + ([base + r["name"]] if base else [])
+        if not sources:
+            print(f"{r['name']}: no source (no mirror in MANIFEST.json, no GitHub origin): pass --url")
+            failed.append(r["name"])
+            continue
+        digest = None
+        for i, src in enumerate(sources):
+            print(f"{r['name']} ({r['bytes'] / 1e6:.0f} MB) from {src}")
             try:
-                digest = download(base + r["name"], part)
-            except urllib.error.HTTPError:
-                if not (repo and shutil.which("gh")):
-                    raise
-                print("  not public; trying the GitHub CLI (gh auth login first if it asks)")
-                digest = gh_download(repo, man["release"], r["name"], part)
-        except (urllib.error.URLError, OSError, subprocess.CalledProcessError) as e:
+                try:
+                    digest = download(src, part)
+                except urllib.error.HTTPError:
+                    if not (repo and src.startswith("https://github.com/") and shutil.which("gh")):
+                        raise
+                    print("  not public; trying the GitHub CLI (gh auth login first if it asks)")
+                    digest = gh_download(repo, man["release"], r["name"], part)
+                break
+            except (urllib.error.URLError, OSError, subprocess.CalledProcessError) as e:
+                part.unlink(missing_ok=True)
+                if i + 1 < len(sources):
+                    print(f"  could not download it ({e}); trying the next source")
+                    continue
+                err = e
+        if digest is None:
+            e = err
             part.unlink(missing_ok=True)
             print(f"  could not download it: {e}")
             if isinstance(e, urllib.error.HTTPError) and e.code == 404:
