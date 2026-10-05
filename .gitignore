@@ -38,6 +38,11 @@ __pycache__/
 *.jpg
 *.jpeg
 !docs/img/*
+!docs/**/*.png
+!docs/**/*.jpg
+!results/**/*.png
+!results/**/*.jpg
+!data/cubicasa/*
 *.pkl
 *.h5
 *.pt

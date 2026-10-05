@@ -14,9 +14,9 @@
     {
       "name": "k65.zip",
       "unpacks_to": "data/k65",
-      "bytes": 606950399,
-      "sha256": "bbafe1b788cdaa1c7c21897d3f1791df8d86852c5c42248a6ecc81e8ba78db76",
-      "files": 8399,
+      "bytes": 588670861,
+      "sha256": "80cfa1f3a0889a35bcb381de0f3fcce1792d6e54c093654d4361bba1f6f8451a",
+      "files": 8393,
       "what": "simulated k65 flat (Isaac Sim, iPhone 15 emulation): photos per room, video, LiDAR (Stray Scanner format), exact ground truth"
     }
   ],

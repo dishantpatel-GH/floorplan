@@ -20,7 +20,7 @@ DATA=${DATA:-$ROOT/data}
 pick() { for c in "$@"; do [ -e "$c" ] && { echo "$c"; return; }; done; echo "$1"; }
 OWN_PHOTOS=${OWN_PHOTOS:-$(pick "$DATA/own_house/photos" "$O/own_house/capture/photos")}  # room/ (lit, 7), room_take2/ (dim, 6)
 OWN_VIDEO=${OWN_VIDEO:-$(pick "$DATA/own_house/video/take1.mp4" "$O/own_house/capture/video/take1.mp4")}
-# k65 photo benchmark: 31 photos in 5 room folders, 1x lens (D-088's set); data/k65/photos is the later render
+# k65 photo benchmark: 31 photos in 5 room folders, 1x lens (D-088's set), the same set as data/k65/photos
 K65_PHOTOS=${K65_PHOTOS:-$(pick "$O/fixes/k65_inputs_1x" "$DATA/k65/photos")}
 K65=${K65:-$(pick "$DATA/k65" "$O/sim/k65v2/capture_iphone15")}   # lidar/take1, video/take1.MOV, gt/
 SAMPLE=${SAMPLE:-$DATA/sample}; [ -d "$SAMPLE/single_room" ] || SAMPLE=$ROOT/../TakeHome/Dataset

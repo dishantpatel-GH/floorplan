@@ -88,8 +88,15 @@ for name, sub, what in ARCHIVES:
     rows.append(dict(name=name, unpacks_to=f"data/{sub}", bytes=size, sha256=digest, files=n, what=what))
     print(f"{name:14s} {size / 1e6:8.1f} MB  {n:6d} files  {digest}  ({time.time() - t0:.0f} s)")
 
+old = json.loads((repo / "data" / "MANIFEST.json").read_text()) if (repo / "data" / "MANIFEST.json").exists() else {}
+mirrors = {r["name"]: r["mirrors"] for r in old.get("archives", []) if r.get("mirrors")}
+for r in rows:                                            # mirror links stay valid only if the archive did not change
+    if r["name"] in mirrors and any(o["name"] == r["name"] and o["sha256"] == r["sha256"] for o in old["archives"]):
+        r["mirrors"] = mirrors[r["name"]]
 manifest = dict(release="data-v1", built_by="scripts/pack_data.sh", fetched_by="scripts/fetch_data.py",
                 archives=rows)
+if old.get("not_in_release"):
+    manifest["not_in_release"] = old["not_in_release"]
 (repo / "data" / "MANIFEST.json").write_text(json.dumps(manifest, indent=2) + "\n")
 print(f"wrote {repo / 'data' / 'MANIFEST.json'}; archives in {out}")
 EOF
