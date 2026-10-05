@@ -1005,7 +1005,8 @@
       },
       "sill_height": null,
       "confidence": 0.97,
-      "evidence": "frame edges + depth gap"
+      "evidence": "frame edges + depth gap",
+      "source": "geometry"
     },
     {
       "id": "o_living",
@@ -1035,7 +1036,8 @@
       },
       "sill_height": null,
       "confidence": 0.95,
-      "evidence": "depth gap through wall"
+      "evidence": "depth gap through wall",
+      "source": "geometry"
     },
     {
       "id": "o_bed",
@@ -1065,7 +1067,8 @@
       },
       "sill_height": null,
       "confidence": 0.94,
-      "evidence": "depth gap through wall"
+      "evidence": "depth gap through wall",
+      "source": "geometry"
     },
     {
       "id": "o_bath",
@@ -1095,7 +1098,8 @@
       },
       "sill_height": null,
       "confidence": 0.93,
-      "evidence": "depth gap through wall"
+      "evidence": "depth gap through wall",
+      "source": "geometry"
     },
     {
       "id": "o_wc",
@@ -1125,7 +1129,8 @@
       },
       "sill_height": null,
       "confidence": 0.88,
-      "evidence": "depth gap through wall"
+      "evidence": "depth gap through wall",
+      "source": "geometry"
     },
     {
       "id": "o_kitchen",
@@ -1155,7 +1160,8 @@
       },
       "sill_height": null,
       "confidence": 0.96,
-      "evidence": "full-height gap"
+      "evidence": "full-height gap",
+      "source": "geometry"
     },
     {
       "id": "o_win_living",
@@ -1189,7 +1195,8 @@
         "status": "measured"
       },
       "confidence": 0.92,
-      "evidence": "frame + glass hole"
+      "evidence": "frame + glass hole",
+      "source": "geometry"
     },
     {
       "id": "o_win_bay",
@@ -1223,7 +1230,8 @@
         "status": "measured"
       },
       "confidence": 0.85,
-      "evidence": "frame + glass hole"
+      "evidence": "frame + glass hole",
+      "source": "geometry"
     },
     {
       "id": "o_win_bed",
@@ -1257,7 +1265,8 @@
         "status": "measured"
       },
       "confidence": 0.91,
-      "evidence": "frame + glass hole"
+      "evidence": "frame + glass hole",
+      "source": "geometry"
     },
     {
       "id": "o_win_kitchen",
@@ -1291,7 +1300,8 @@
         "status": "measured"
       },
       "confidence": 0.9,
-      "evidence": "frame + glass hole"
+      "evidence": "frame + glass hole",
+      "source": "geometry"
     },
     {
       "id": "o_win_wc",
@@ -1325,7 +1335,8 @@
         "status": "measured"
       },
       "confidence": 0.4,
-      "evidence": "frosted glass: no LiDAR returns, colour edge only"
+      "evidence": "frosted glass: no LiDAR returns, colour edge only",
+      "source": "geometry"
     }
   ],
   "adjacency": [

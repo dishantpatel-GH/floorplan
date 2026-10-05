@@ -43,6 +43,7 @@ class Opening:
     sill_height: Optional[Measurement] = None
     confidence: float = 1.0                # detection confidence 0..1
     evidence: str = ""
+    source: str = "geometry"               # geometry (gaps in the points) | segmentation (door/window pixels)
 
 
 @dataclass

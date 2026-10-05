@@ -133,7 +133,9 @@
         "sill_height": {"$ref": "#/$defs/optional_measurement"},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1,
                        "description": "Detection confidence (is there really an opening here?), separate from the width interval."},
-        "evidence": {"type": "string"}
+        "evidence": {"type": "string"},
+        "source": {"enum": ["geometry", "segmentation"],
+                   "description": "geometry: a gap in the points (width from the points); segmentation: door or window pixels of the segmenter, measured on the wall surface (floorplan/openings/semantic.py). Optional; absent = geometry."}
       }
     },
     "adjacency": {

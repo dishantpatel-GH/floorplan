@@ -103,7 +103,7 @@ def _opening_to_json(o: Opening) -> dict:
         "id": o.id, "kind": o.kind, "wall_ids": list(o.wall_ids), "room_ids": list(o.room_ids),
         "center": _pt(o.center), "width": measurement_to_json(o.width),
         "height": measurement_to_json(o.height), "sill_height": measurement_to_json(o.sill_height),
-        "confidence": _num(o.confidence), "evidence": o.evidence,
+        "confidence": _num(o.confidence), "evidence": o.evidence, "source": o.source,
     }
 
 
@@ -189,7 +189,7 @@ def plan_from_json(doc: dict) -> Plan:
         id=o["id"], kind=o["kind"], wall_ids=list(o["wall_ids"]), room_ids=list(o["room_ids"]),
         center=tuple(o["center"]), width=m(o["width"]), height=m(o.get("height")),
         sill_height=m(o.get("sill_height")), confidence=o.get("confidence", 1.0),
-        evidence=o.get("evidence", "")) for o in doc["openings"]]
+        evidence=o.get("evidence", ""), source=o.get("source", "geometry")) for o in doc["openings"]]
     adjacency = [Adjacency(a["room_a"], a["room_b"], a["via"]) for a in doc["adjacency"]]
     return Plan(capture_id=doc["capture_id"], tier=doc["tier"], rooms=rooms, walls=walls, openings=openings,
                 adjacency=adjacency, footprint_area=m(doc["footprint_area"]), damage=list(doc.get("damage", [])),

@@ -165,6 +165,8 @@ def main():
                     help="override a photo-tier parameter (floorplan/photo/params.py), e.g. f35_rule=diagonal")
     ap.add_argument("--video-scale", choices=["depth_agreement", "pnp"],
                     help="video tier: local scale method (D-076); default from floorplan/video/params.py")
+    ap.add_argument("--no-semantic-openings", action="store_true",
+                    help="video/photo: skip the doors and windows from the segmenter (floorplan/openings/semantic.py)")
     ap.add_argument("--no-room-names", action="store_true",
                     help="skip room names (Bedroom, Kitchen, ...) from the classes seen in each room (D-078)")
     a = ap.parse_args()
@@ -227,6 +229,12 @@ def main():
         log(f"dropped {len(dropped)} implausible opening(s): {[d['id'] for d in dropped]}")
     if info.get("floor_fallback"):
         plan.meta["floor_fallback"] = info["floor_fallback"]
+    if a.tier in ("video", "photo") and not a.no_semantic_openings:
+        # doors and windows from the segmenter's door / window pixels, measured on the plan's walls; geometric openings
+        # win where both exist. Before the tier widening, so the new widths get the scale term like every other one.
+        from floorplan.openings.semantic import add_semantic_openings
+        work = out / "work" if a.tier == "video" else a.input.parent / f"photo_work__{a.input.name}"
+        report["semantic_openings"] = add_semantic_openings(plan, scene, info, a.tier, work, log=log)
     if a.tier == "lidar":
         # D-021: Apple LiDAR surfaces sit ~0.7 cm into the room vs a laser; correct it and carry its uncertainty.
         # With --no-bias-correction the values stay raw but the interval is still widened one-sided (D-027).
