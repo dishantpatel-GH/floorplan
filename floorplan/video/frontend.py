@@ -300,7 +300,7 @@ def segment_quality(D: np.ndarray, K: np.ndarray, T_m: np.ndarray, seg: np.ndarr
         (coverage); elsewhere its scale is interpolated and DPVO's motion is not measured (D-076: every sample
         segment that ARKit puts more than 100% off had coverage <= 0.44). The vote residual is reported only.
     A segment is trusted only if every check passes and it has enough path to measure them. Steep keyframes
-    (`exclude`, D-078) are left out of the residual."""
+    (`exclude`, D-084) are left out of the residual."""
     from floorplan.video.scale import TRUNC, _backproject, _cost
     ex = np.zeros(len(seg), bool) if exclude is None else np.asarray(exclude, bool)
     out = {}
@@ -712,7 +712,7 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     log(f"[gravity] up from {ok.sum()} GeoCalib frames (spread {up_spread:.1f} deg); rotation {rot} "
         f"(flip {flipped}); median camera pitch {np.median(pitch):.1f} deg")
 
-    # 6b. D-078: steep keyframes (ceiling looks, straight down) leave the scale votes and the fusion; a look at the end
+    # 6b. D-084: steep keyframes (ceiling looks, straight down) leave the scale votes and the fusion; a look at the end
     #     ends the walk where it starts, one in the middle cuts a scale segment after it (steep.py)
     kf_all, ex, steep_cuts, steep_rep = kf, np.zeros(len(kf), bool), [], dict(applied=False)
     if params.steep_frames:
@@ -769,7 +769,7 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
         seg = np.asarray(sc["segment"])
         log(f"[scale] after fresh VO runs: {len(sc['segments'])} segment(s), starts "
             f"{[s['keyframes'][0] for s in sc['segments']]}")
-    elif ex.any() or steep_cuts:        # D-078: steep keyframes do not vote; a look in the middle cuts a segment
+    elif ex.any() or steep_cuts:        # D-084: steep keyframes do not vote; a look in the middle cuts a segment
         sc = estimate_scales(D, K_d, T_kf, files, params.scale_max_gap, forced_cuts=steep_cuts, exclude=ex,
                              **scale_args)
         seg = np.asarray(sc["segment"])
@@ -808,7 +808,7 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
         D_fuse = D.copy()
         D_fuse[~trusted] = 0.0                      # their geometry never enters the scene (unobserved, not free)
         log(f"[quality] {int((~trusted).sum())} keyframes of untrusted segments left out of the scene")
-    if ex.any():                                    # D-078: steep keyframes never enter the scene
+    if ex.any():                                    # D-084: steep keyframes never enter the scene
         D_fuse = D_fuse.copy() if D_fuse is D else D_fuse
         D_fuse[ex] = 0.0
 
@@ -860,7 +860,7 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     log(f"[scale] scene 1-sigma {100 * sig_tot:.1f}% (worst large segment); whole_scene_consistent={consistent}")
 
     P, N, raw, R_lev2al = geo_out["P"], geo_out["N"], geo_out["raw"], geo_out["R_lev2al"]
-    n_walk = int(kf_all[len(kf)]) if len(kf) < len(kf_all) else n       # D-078: frames after the walk's end go
+    n_walk = int(kf_all[len(kf)]) if len(kf) < len(kf_all) else n       # D-084: frames after the walk's end go
     T_all, ts = geo_out["T_wc"][:n_walk], ts[:n_walk]
     R = geo_out["T_align"][:3, :3]
     scene = dict(points=P.astype(np.float32), normals=N.astype(np.float32), colors=geo_out["colors"],

@@ -1,4 +1,4 @@
-"""Steep keyframes (D-078): looks at the ceiling and straight down, found from the camera pitch.
+"""Steep keyframes (D-084): looks at the ceiling and straight down, found from the camera pitch.
 
 A walkthrough films the walls with the phone tilted down: the median camera pitch is -15 to -33 deg on every capture
 we have. Turned to the ceiling, the camera sees a blank surface and DPVO loses track. On my own take1 the bedroom
@@ -13,7 +13,8 @@ ceiling look at the end (kf 211-222, t 110-115 s) puts the camera 2.0-13.6 m abo
 Every keyframe beyond either limit is left out of the scale votes and the fusion. A run of at least min_kf such
 keyframes is a steep look. If fewer than tail_kf keyframes follow the last look, the walk ends where the look starts:
 the path after it is not reliable, and too short to be checked on its own. A look in the middle cuts a scale segment
-after it when both sides keep at least tail_kf keyframes; a shorter piece could not pass the segment self-check.
+after it when both sides keep at least tail_kf usable (not steep) keyframes; a shorter piece could not pass the
+segment self-check.
 
 The pitch is measured against the local "up": the mean of the GeoCalib up vectors of the keyframes within +-half_kf,
 carried into DPVO's world by DPVO's rotations. DPVO's rotation drifts 15-20 deg on some runs (take1 after r1), and a
@@ -54,11 +55,12 @@ def steep_keyframes(pitch: np.ndarray, up_deg: float, down_deg: float, min_kf: i
     st.sort()
     exclude = (pitch > up_deg) | (pitch < -down_deg)
     end = n
-    if st and n - st[-1][1] < tail_kf:
+    if st and n - st[-1][1] < tail_kf and st[-1][0] >= tail_kf:     # a walk shorter than that could not be checked
         end = st[-1][0]
+    usable = ~exclude                                   # steep keyframes carry no depth and no votes
     cuts, last = [], 0
     for a, b, _ in st:
-        if a > 0 and b < end and b - last >= tail_kf and end - b >= tail_kf:
+        if a > 0 and b < end and usable[last:b].sum() >= tail_kf and usable[b:end].sum() >= tail_kf:
             cuts.append(int(b))
             last = b
     return dict(exclude=exclude, stretches=[[int(a), int(b), k] for a, b, k in st], walk_end=int(end), cuts=cuts)

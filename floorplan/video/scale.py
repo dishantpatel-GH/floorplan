@@ -306,7 +306,7 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
        the local scale. Method "depth_agreement": the fine curves in a Gaussian window, clamped (_depth_agreement_local;
        `images` is not used)
     5. block bootstrap, per segment, for the statistical part of the uncertainty (over the votes, or over the pairs)
-    `exclude` (bool per keyframe, D-078): steep keyframes; no pair that contains one votes, in either method.
+    `exclude` (bool per keyframe, D-084): steep keyframes; no pair that contains one votes, in either method.
     """
     if method not in ("pnp", "depth_agreement"):
         raise ValueError(f"scale method {method!r}: 'pnp' or 'depth_agreement'")
@@ -316,7 +316,7 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
     Cc = _normalised(np.array([pair_cost_curve(D[i], D[j], K, T[i], T[j], coarse) for i, j in pairs]), coarse,
                      min_contrast)
     ex = np.zeros(len(T), bool) if exclude is None else np.asarray(exclude, bool)
-    if ex.any():                            # D-078: a pair with a steep keyframe has no opinion
+    if ex.any():                            # D-084: a pair with a steep keyframe has no opinion
         Cc[ex[[i for i, _ in pairs]] | ex[[j for _, j in pairs]]] = 0.0
     informative = Cc.max(axis=1) > 0
     argmins = np.where(informative, coarse[np.argmin(Cc, axis=1)], np.nan)

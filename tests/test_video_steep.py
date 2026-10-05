@@ -1,4 +1,4 @@
-"""Steep keyframes (D-078): ceiling looks and straight-down looks leave the scale votes and the fusion; a look at the
+"""Steep keyframes (D-084): ceiling looks and straight-down looks leave the scale votes and the fusion; a look at the
 end ends the walk where it starts, one in the middle cuts a scale segment after it; the pitch is measured against the
 local up, so a slow drift of DPVO's rotation does not mark ordinary frames as steep. Synthetic pitches and rotations.
 
@@ -41,6 +41,21 @@ def test_look_in_the_middle_cuts_a_segment_after_it():
     r = _steep(p)
     assert r["walk_end"] == 200 and r["cuts"] == [106]
     assert r["exclude"][100:106].all() and r["exclude"][150] and r["exclude"].sum() == 7
+
+
+def test_a_piece_between_two_looks_needs_20_usable_keyframes():
+    p = np.full(200, -25.0)
+    p[60:66] = 40.0                          # look 1: cut at 66
+    p[78:88] = 40.0                          # look 2: 22 keyframes after look 1, but only 12 of them usable
+    r = _steep(p)
+    assert r["cuts"] == [66]
+
+
+def test_a_look_never_leaves_a_walk_too_short_to_check():
+    p = np.full(25, -20.0)
+    p[5:9] = 40.0                            # 5 keyframes, then a look, then 16: ending the walk would keep 5
+    r = _steep(p)
+    assert r["walk_end"] == 25 and r["exclude"][5:9].all()
 
 
 def test_short_pieces_are_not_cut_and_walks_without_steep_looks_are_untouched():

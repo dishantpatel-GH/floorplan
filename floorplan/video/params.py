@@ -26,7 +26,7 @@ class VideoParams:
     gravity_max_pitch_deg: float = 45.0  # GeoCalib is trained within +-45 deg pitch; steeper frames are not trusted
     flip_min_pitch_deg: float = 10.0     # flip to upside-down only if the median camera pitch is > +10 deg (Issue 15)
 
-    # --- steep keyframes (D-078, steep.py): ceiling looks and straight-down looks ---
+    # --- steep keyframes (D-084, steep.py): ceiling looks and straight-down looks ---
     steep_frames: bool = False           # leave them out of the scale votes and the fusion; a look at the end ends
                                          # the walk there, one in the middle cuts a scale segment after it
     steep_up_deg: float = 30.0           # take1's ceiling look peaks at +33..+40 deg, inside GeoCalib's 45; walks look
