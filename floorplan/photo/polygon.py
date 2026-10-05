@@ -16,7 +16,10 @@ frame (spin centre = origin, axes = the rectangle's Manhattan axes):
      door, beside the room) is replaced by the nearest farther wall of that side that overlaps the room;
   5. an INFERRED side reaches at least the doorway photo standing on it (taken on the threshold);
   6. alcove: doorway photo(s) of this room >= 0.4 m beyond a measured side, corroborated by a second doorway photo or
-     by a wall seen just beyond; not if the spin photos saw that region mostly blocked;
+     by a wall seen just beyond; not if the spin photos saw that region mostly blocked. D-082 (poly_ext_walls): the
+     alcove is measured by its own walls (_alcove_walls: span cut to the open stretch of the side's wall line, depth
+     from the far wall seen anywhere in it) and an alcove with no doorway photo in it is found from its walls alone
+     (_open_mouths: a gap in the side's wall line, the alcove's side wall running out beyond it, no door head);
   7. notch: a rectangle corner cell between seen wall lines that is mostly blocked, never seen free and fronted by
      seen walls (strict; cells nobody saw keep the rectangle: no evidence -> rectangle);
   8. the polygon is the boundary of the inside cells of the line grid (<= 2 changes); every edge keeps the line it
@@ -52,6 +55,19 @@ DEFAULTS = dict(
     poly_alcove_min_beyond_m=0.4,    # a doorway photo >= 0.4 m beyond a measured side (door shots are placed to
                                      # ~0.15 m typically, 0.65 m worst on the sim): the room reaches it there
     poly_alcove_max_blocked=0.4,     # an alcove the spin photos saw mostly behind a wall is not this room's
+    poly_ext_walls=True,             # D-082: alcoves measured by their own walls (_alcove_walls, _open_mouths)
+    poly_alcove_side_wall_m=0.3,     # ... a perpendicular wall seen this far beyond the side at the span's edge is
+                                     #     the alcove's own side wall (a door reveal is one wall: 0.10-0.25 m)
+    poly_alcove_mouth_open=0.5,      # ... the side's own wall seen over more of the span than this: no mouth there
+    poly_alcove_mouth_m=0.4,         # ... "in front of a wall" is judged on this strip just past the side line
+    poly_alcove_min_free=0.2,        # ... and >= 20% of the alcove seen free by some photo (rays went into it)
+    poly_head_lo_m=2.25,             # D-082 open mouth: above a door's head (sim doors 2.02-2.14 m high) ...
+    poly_head_hi_m=2.5,              # ... and below the ceiling (2.55-2.80 m) a door has wall, an open alcove not
+    poly_mouth_min_m=0.5,            # an open mouth in a side's wall line: 0.5-2.5 m wide, wall seen on both sides
+    poly_mouth_max_m=2.5,
+    poly_mouth_open_above=0.3,       # ... rays above door-head height crossed >= 30% of it into the space beyond
+    poly_mouth_head_max=0.2,         # ... and a wall at the side line up there covers <= 20% of it (no door head)
+    poly_mouth_max_depth_m=1.5,      # ... an alcove, not a room: its far boundary within 1.5 m of the side
     poly_notch_wall_cover=0.4,       # a notch's walls toward the room must be >= 40% seen
     poly_side_min_overlap_m=0.3,     # a measured side's seen wall must overlap the room's extent along it by 0.3 m
     poly_skip_far_wall_lines=True,   # no notch line on a surface the far-wall rule set aside as furniture (D-077)
@@ -90,6 +106,7 @@ def collect(views: dict, yaws: dict, offs: dict, scale: float, p, lay: dict) -> 
     cam_h = lay["cam_height_m"]
     nb = int(round(360 / _par(p, "poly_vis_bin_deg")))
     W, NW, pid, cams, vis, names = [], [], [], [], [], []
+    H, HN, hid = [], [], []                             # D-082: points above door-head height (any surface)
     for k, n in enumerate(n for n in yaws if n in views and views[n].normal_cam is not None):
         v = views[n]
         t = np.asarray(offs.get(n, np.zeros(3)), float)
@@ -131,13 +148,18 @@ def collect(views: dict, yaws: dict, offs: dict, scale: float, p, lay: dict) -> 
             o = np.lexsort((r, b))
             last = np.r_[b[o][1:] != b[o][:-1], True]
             R[b[o][last]] = r[o][last]
+        hi = np.flatnonzero((h > _par(p, "poly_head_lo_m")) & (h < _par(p, "poly_head_hi_m")))
+        H.append((P[hi] @ Rm.T)[:, [0, 2]])
+        HN.append((N[hi] @ Rm.T)[:, [0, 2]])
+        hid.append(np.full(len(hi), len(names)))
         cams.append(tc[[0, 2]])
         vis.append(R)
         names.append(n)
     if not names:
         return dict(ok=False)
     return dict(ok=True, W=np.concatenate(W), N=np.concatenate(NW), pid=np.concatenate(pid), cams=np.array(cams),
-                vis=np.array(vis), names=names, nb=nb)
+                vis=np.array(vis), names=names, nb=nb, H=np.concatenate(H), HN=np.concatenate(HN),
+                hid=np.concatenate(hid))
 
 
 def visibility(data: dict, Q: np.ndarray, margin: float) -> tuple[np.ndarray, np.ndarray]:
@@ -270,7 +292,10 @@ def fit_polygon(lay: dict, data: dict, p, door_photos: list[str] | None = None, 
     # when corroborated (a second doorway photo there, or a wall seen just beyond it).
     # Depth: to the photo (- half a wall) or to a seen wall on that side just beyond it; tangent span: the photo(s)
     # +- half a door, stretched to the nearest seen perpendicular wall outside the rectangle within 1.5 m.
+    # D-082 (poly_ext_walls): the same alcove measured by its own walls first (_alcove_walls): the span cut to the
+    # mouth (where the side's wall line is open), the depth from the far wall seen anywhere in the mouth.
     alcoves = []
+    v2 = bool(_par(p, "poly_ext_walls"))
     for s in SIDES:
         if status[s] != "measured":
             continue
@@ -281,6 +306,18 @@ def fit_polygon(lay: dict, data: dict, p, door_photos: list[str] | None = None, 
               and lo_t - 0.3 <= c[1 - j] <= hi_t + 0.3]
         if not ps:
             continue
+        if v2:                                   # D-082 first; its rejections are final, "no note" leaves it to v1
+            al = _alcove_walls(s, ps, rect, segs, W, N, data, p, (lo_t, hi_t), inset)
+            if al.get("ok"):
+                rec = {k: v for k, v in al.items() if k not in ("ok", "far", "t_lo", "t_hi", "reach")}
+                a_pos = add_line(j, sg * al["reach"], s, al["far"], "alcove depth")
+                t0 = add_line(1 - j, al["t_lo"], s, None, "alcove span")
+                t1 = add_line(1 - j, al["t_hi"], s, None, "alcove span")
+                alcoves.append(dict(rec, j=j, a=(min(sg * rect[s], a_pos), max(sg * rect[s], a_pos)), t=(t0, t1)))
+                continue
+            if al.get("note"):
+                notes.append(al["note"])
+                continue
         reach = max(sg * c[j] for _, c in ps) - inset
         pt_lo, pt_hi = min(c[1 - j] for _, c in ps), max(c[1 - j] for _, c in ps)
         far = [g for g in segs[s] if reach - 0.1 <= g["offset"] <= reach + 1.0 and
@@ -343,6 +380,23 @@ def fit_polygon(lay: dict, data: dict, p, door_photos: list[str] | None = None, 
         t0 = add_line(1 - j, t_lo, s, None, "alcove span")
         t1 = add_line(1 - j, t_hi, s, None, "alcove span")
         alcoves.append(dict(rec, j=j, a=(min(sg * rect[s], a_pos), max(sg * rect[s], a_pos)), t=(t0, t1)))
+    # D-082: open mouths: a gap in a measured side's wall line, the alcove's own wall beyond it and no door head
+    # above it: the room continues there, without a doorway photo in it (_open_mouths)
+    if v2:
+        for s in SIDES:
+            if status[s] != "measured" or any(al["side"] == s for al in alcoves):
+                continue
+            ax, sg = _side_axis(s)
+            j = 0 if ax == 0 else 1
+            for m in _open_mouths(s, rect, segs, W, N, data, p, t_range(j)):
+                if not m.get("ok"):
+                    notes.append(m["note"])
+                    continue
+                rec = {k: v for k, v in m.items() if k not in ("ok", "far", "t_lo", "t_hi", "reach")}
+                a_pos = add_line(j, sg * m["reach"], s, m["far"], "alcove depth")
+                t0 = add_line(1 - j, m["t_lo"], s, None, "alcove span")
+                t1 = add_line(1 - j, m["t_hi"], s, None, "alcove span")
+                alcoves.append(dict(rec, j=j, a=(min(sg * rect[s], a_pos), max(sg * rect[s], a_pos)), t=(t0, t1)))
     # notch candidate lines: the other seen walls of each side, inside the rectangle
     for s in SIDES:
         ax, sg = _side_axis(s)
@@ -461,6 +515,195 @@ def fit_polygon(lay: dict, data: dict, p, door_photos: list[str] | None = None, 
                                          * (S["+z"]["offset"] + S["-z"]["offset"])), 3),
                 sides={s: dict(offset=rect[s], status=status[s], sigma=sig[s]) for s in SIDES},
                 photos=data["names"], door_photos=sorted(dcams))
+
+
+def _alcove_walls(s: str, ps: list, rect: dict, segs: dict, W: np.ndarray, N: np.ndarray, data: dict, p,
+                  room_t: tuple, inset: float) -> dict:
+    """D-082: an alcove beyond MEASURED side s, measured by its own walls. ps: this room's doorway photo(s) standing
+    >= poly_alcove_min_beyond_m beyond the side (as v1). Layout frame; j = the side's normal axis.
+
+      span:  the photo(s) +- half a door, stretched to the nearest perpendicular wall seen beyond the side within
+             1.5 m (as v1), then cut to the MOUTH: the longest stretch of it where the side's own wall line was not
+             seen (an alcove opens over its whole width; behind a seen wall there is none);
+      walls: a perpendicular wall at the span's edge that runs >= poly_alcove_side_wall_m beyond the side is the
+             alcove's own side wall (a door reveal is one wall thickness, 0.10-0.25 m); a wall of this side seen
+             beyond the photo inside the mouth is its far wall;
+      depth: the far wall (sim k38 living room: seen 0.4 m behind the doorway photos, which v1 looked for only
+             beside the photos); else, with two doorway photos, the farthest the side walls reach or the photos (- half
+             a wall), whichever is farther;
+      kept:  with a far wall or two doorway photos (as v1; a side wall alone is not enough: a door's reveals look the
+             same, sim k38 bedroom); the photo(s) within half a door of the mouth; the strip just past the side line
+             (poly_alcove_mouth_m) seen behind a wall on <= poly_alcove_max_blocked of it (the alcove's far corners
+             may hide behind its own side walls) and >= poly_alcove_min_free of the alcove seen free.
+    Returns dict(ok=True, reach, t_lo, t_hi, far, record fields) or dict(ok=False, note=None or a rejection); with
+    ok False and no note, v1 decides."""
+    ax, sg = _side_axis(s)
+    j = 0 if ax == 0 else 1
+    lo_t, hi_t = room_t
+    cell = p.layout_cell_m
+    names = [n for n, _ in ps]
+    reach = max(sg * c[j] for _, c in ps) - inset
+    pt_lo, pt_hi = min(c[1 - j] for _, c in ps), max(c[1 - j] for _, c in ps)
+    t_lo, t_hi = pt_lo - 0.45, pt_hi + 0.45
+    s_hi, s_lo = ("+z", "-z") if j == 0 else ("+x", "-x")
+    walls = {}
+    for side_t, sgn_t in ((s_hi, 1.0), (s_lo, -1.0)):
+        cand = []
+        for g in segs[side_t]:
+            pos = sgn_t * g["offset"]                     # perpendicular wall position on the tangent axis
+            a, b = g["t_lo"], g["t_hi"]                   # its extent along OUR normal axis
+            out_len = (b - max(a, rect[s])) if sg > 0 else (min(b, -rect[s]) - a)
+            edge = t_hi if sgn_t > 0 else t_lo
+            if out_len >= 0.3 and 0 <= sgn_t * (pos - edge) + 0.45 <= 1.5:
+                cand.append((pos, float(out_len), float(b if sg > 0 else -a)))
+        if cand:
+            walls[side_t] = min(cand, key=lambda q: sgn_t * q[0])
+    if s_hi in walls:
+        t_hi = walls[s_hi][0]
+    if s_lo in walls:
+        t_lo = walls[s_lo][0]
+    t_lo, t_hi = max(t_lo, lo_t), min(t_hi, hi_t)
+    rej = dict(kind="alcove_rejected", side=s, photos=names, rule="D-082 own walls")
+    # the mouth: the side's own wall line must be open there
+    on = (np.abs(sg * W[:, j] - rect[s]) < p.layout_inlier_m) & (N[:, j] * sg < -p.layout_normal_min)
+    kc, nc = np.unique(np.floor(W[on, 1 - j] / cell).astype(int), return_counts=True)
+    seen = set(kc[nc >= 2].tolist())                      # >= 2 points: one stray point does not close a mouth
+    ks = np.arange(int(np.floor(t_lo / cell)), int(np.ceil(t_hi / cell)))
+    best, run = None, None
+    for k in ks:
+        if k in seen:
+            run = None
+            continue
+        run = [k, k] if run is None else [run[0], k]
+        if best is None or run[1] - run[0] > best[1] - best[0]:
+            best = list(run)
+    if best is None or (best[1] + 1 - best[0]) * cell < _par(p, "poly_min_cell_m"):
+        return dict(ok=False, note=dict(rej, reason="the side's own wall was seen across the span: no mouth"))
+    covered = 1.0 - (best[1] + 1 - best[0]) * cell / max(t_hi - t_lo, 1e-9)
+    if covered > _par(p, "poly_alcove_mouth_open"):
+        return dict(ok=False, note=dict(rej, reason=f"the side's own wall was seen on {covered:.0%} of the span"))
+    t_lo, t_hi = max(t_lo, best[0] * cell), min(t_hi, (best[1] + 1) * cell)
+    if pt_lo < t_lo - 0.45 or pt_hi > t_hi + 0.45:
+        return dict(ok=False, note=dict(rej, reason="the doorway photo stands more than half a door from the mouth"))
+    side_walls = {k: w for k, w in walls.items() if w[1] >= _par(p, "poly_alcove_side_wall_m")
+                  and (abs(w[0] - t_lo) <= 0.15 or abs(w[0] - t_hi) <= 0.15)}
+    far = [g for g in segs[s] if reach - 0.1 <= g["offset"] <= reach + 1.0
+           and min(g["t_hi"], t_hi) - max(g["t_lo"], t_lo) > 0.2]
+    if far:
+        g = min(far, key=lambda g: g["offset"])
+        depth, how = g["offset"], "far wall seen in the alcove's mouth"
+    elif len(ps) >= 2:
+        g = None
+        depth = max([reach] + [w[2] for w in side_walls.values()])
+        how = "farthest seen point of the alcove's side wall(s) or the doorway photos"
+    else:
+        return dict(ok=False, note=None)                  # one photo and no far wall: v1 decides (not corroborated)
+    if depth - rect[s] > _par(p, "poly_max_ext_m"):
+        return dict(ok=False, note=dict(rej, reason="deeper than poly_max_ext_m: the next room"))
+    if t_hi - t_lo < _par(p, "poly_min_cell_m") or depth - rect[s] < _par(p, "poly_min_cell_m") * 0.75:
+        return dict(ok=False, note=dict(rej, reason="narrower or shallower than poly_min_cell_m once cut to the mouth"))
+    st = _par(p, "poly_sample_m")
+    ga = np.arange(rect[s] + st / 2, depth, st) * sg
+    gb = np.arange(t_lo + st / 2, t_hi, st)
+    Q = np.stack(np.meshgrid(ga, gb, indexing="ij"), -1).reshape(-1, 2)
+    if j == 1:
+        Q = Q[:, ::-1]
+    f, b = visibility(data, Q, _par(p, "poly_vis_margin_m"))
+    strip = np.abs(Q[:, j] - sg * rect[s]) < _par(p, "poly_alcove_mouth_m")
+    bm = float(b[strip].mean()) if strip.any() else 1.0
+    rec = dict(kind="alcove", side=s, photos=names, depth_m=round(float(depth - rect[s]), 3),
+               span_m=round(float(t_hi - t_lo), 3), free=round(float(f.mean()), 2), blocked=round(float(b.mean()), 2),
+               blocked_mouth=round(bm, 2), depth_from=how, span_bounded_by_walls=sorted(walls),
+               side_walls=sorted(side_walls), mouth_m=[round(float(t_lo), 3), round(float(t_hi), 3)],
+               rule="D-082 own walls")
+    if bm > _par(p, "poly_alcove_max_blocked"):
+        return dict(ok=False, note=dict(rec, kind="alcove_rejected", reason="the spin photos saw a wall in front of it"))
+    if f.mean() < _par(p, "poly_alcove_min_free"):
+        return dict(ok=False, note=dict(rec, kind="alcove_rejected", reason="no photo saw into it (not seen free)"))
+    return dict(rec, ok=True, reach=float(depth), t_lo=float(t_lo), t_hi=float(t_hi), far=g)
+
+
+def _open_mouths(s: str, rect: dict, segs: dict, W: np.ndarray, N: np.ndarray, data: dict, p, room_t: tuple) -> list:
+    """D-082: alcoves of MEASURED side s shown by the walls alone (no doorway photo in them). Layout frame.
+
+      mouth: a gap of poly_mouth_min_m..poly_mouth_max_m in the side's seen wall line, the wall seen on both sides of
+             it (sim k65 living room: the west wall seen on both sides of the 1.0 m lobby);
+      walls: a perpendicular wall at an end of the gap, facing into it, seen >= poly_alcove_side_wall_m beyond the
+             side (the alcove's own side wall);
+      no door head: a door has wall above its head (doors 2.0-2.1 m); rays of points above poly_head_lo_m crossed
+             >= poly_mouth_open_above of the gap into the space beyond, and a wall surface on the side line up there
+             covers <= poly_mouth_head_max of it;
+      depth: a wall of this side seen in the mouth within poly_mouth_max_depth_m (far wall), else the farthest point
+             of the side wall(s) (a lower bound; the edge is inferred);
+      kept when >= poly_alcove_min_free of it was seen free and <= poly_alcove_max_blocked behind a wall.
+    Returns a list of dict(ok, reach, t_lo, t_hi, far, record fields) or dict(note) for rejected mouths."""
+    ax, sg = _side_axis(s)
+    j = 0 if ax == 0 else 1
+    lo_t, hi_t = room_t
+    cell = p.layout_cell_m
+    d, t = sg * W[:, j] - rect[s], W[:, 1 - j]
+    on = (np.abs(d) < p.layout_inlier_m) & (N[:, j] * sg < -p.layout_normal_min) & (t > lo_t) & (t < hi_t)
+    kc, nc = np.unique(np.floor(t[on] / cell).astype(int), return_counts=True)
+    seen = np.sort(kc[nc >= 2])
+    H, HN, hid = data["H"], data["HN"], data["hid"]
+    dh, th = sg * H[:, j] - rect[s], H[:, 1 - j]
+    cam = data["cams"][hid] if len(hid) else np.zeros((0, 2))
+    dc, tcm = sg * cam[:, j] - rect[s], cam[:, 1 - j]
+    max_d = _par(p, "poly_mouth_max_depth_m")
+    out = []
+    for k1, k2 in zip(seen[:-1], seen[1:]):
+        g0, g1 = float((k1 + 1) * cell), float(k2 * cell)          # the gap between two seen stretches of wall
+        if not (_par(p, "poly_mouth_min_m") <= g1 - g0 <= _par(p, "poly_mouth_max_m")):
+            continue
+        rej = dict(kind="alcove_rejected", side=s, mouth_m=[round(g0, 3), round(g1, 3)], rule="D-082 open mouth")
+        ends = {}
+        for edge, face in ((g0, 1.0), (g1, -1.0)):
+            sel = (np.abs(t - edge) < 0.15) & (N[:, 1 - j] * face > p.layout_normal_min) & (d > 0.05) & (d < max_d)
+            if sel.sum() >= 5:
+                ends[f"{edge:.2f}"] = round(float(np.percentile(d[sel], 95)), 3)
+        walls = {e: x for e, x in ends.items() if x >= _par(p, "poly_alcove_side_wall_m")}
+        if not walls:
+            continue                                    # most gaps: a door with its reveals, or wall nobody saw
+        beyond = (dh > 0.15) & (dc < 0)
+        lam = -dc[beyond] / np.maximum(dh[beyond] - dc[beyond], 1e-9)
+        tx = tcm[beyond] + lam * (th[beyond] - tcm[beyond])          # where those rays crossed the side line
+        gc = set(range(int(round(g0 / cell)), int(round(g1 / cell))))
+        f_open = len(set(np.floor(tx / cell).astype(int).tolist()) & gc) / max(len(gc), 1)
+        head = (np.abs(dh) < 0.15) & (HN[:, j] * sg < -p.layout_normal_min) & (th > g0) & (th < g1)
+        f_head = len(set(np.floor(th[head] / cell).astype(int).tolist()) & gc) / max(len(gc), 1)
+        rej.update(open_above=round(f_open, 2), head=round(f_head, 2), side_walls_m=ends)
+        if f_open < _par(p, "poly_mouth_open_above") or f_head > _par(p, "poly_mouth_head_max"):
+            out.append(dict(ok=False, note=dict(rej, reason="not seen open above door-head height (a door, or "
+                                                             "unseen): the space beyond may be the next room")))
+            continue
+        far = [g for g in segs[s] if rect[s] + 0.3 <= g["offset"] <= rect[s] + max_d
+               and min(g["t_hi"], g1) - max(g["t_lo"], g0) > 0.2]
+        if far:
+            g = min(far, key=lambda g: g["offset"])
+            depth, how = g["offset"], "far wall seen in the mouth"
+        else:
+            g, depth = None, rect[s] + max(walls.values())
+            how = "farthest seen point of the alcove's side wall (a lower bound: its far wall was not seen)"
+        if depth - rect[s] < _par(p, "poly_min_cell_m") * 0.75:
+            continue
+        st = _par(p, "poly_sample_m")
+        ga = np.arange(rect[s] + st / 2, depth, st) * sg
+        gb = np.arange(g0 + st / 2, g1, st)
+        Q = np.stack(np.meshgrid(ga, gb, indexing="ij"), -1).reshape(-1, 2)
+        if j == 1:
+            Q = Q[:, ::-1]
+        f, b = visibility(data, Q, _par(p, "poly_vis_margin_m"))
+        strip = np.abs(Q[:, j] - sg * rect[s]) < _par(p, "poly_alcove_mouth_m")
+        bm = float(b[strip].mean()) if strip.any() else 1.0
+        rec = dict(kind="alcove", side=s, photos=[], depth_m=round(float(depth - rect[s]), 3),
+                   span_m=round(g1 - g0, 3), free=round(float(f.mean()), 2), blocked=round(float(b.mean()), 2),
+                   blocked_mouth=round(bm, 2), depth_from=how, mouth_m=[round(g0, 3), round(g1, 3)],
+                   side_walls_m=ends, open_above=round(f_open, 2), head=round(f_head, 2), rule="D-082 open mouth")
+        if bm > _par(p, "poly_alcove_max_blocked") or f.mean() < _par(p, "poly_alcove_min_free"):
+            out.append(dict(ok=False, note=dict(rec, kind="alcove_rejected", reason="the photos did not see into it")))
+            continue
+        out.append(dict(rec, ok=True, reach=float(depth), t_lo=g0, t_hi=g1, far=g))
+    return out
 
 
 def _connected(inside: np.ndarray) -> bool:

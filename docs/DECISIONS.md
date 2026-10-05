@@ -1825,6 +1825,78 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   k22 plans improve a lot. Before it goes on: repeat runs per flat, and make the photo front end's pose graph
   deterministic. Pictures: `MyHouse_Dataset/k65_photo_plan_vs_gt.png` (before) and `..._after.png`.
 
+## D-082 Photo tier: alcoves and L-shapes measured by their own walls
+
+- **Context.** "Why are we only making rectangles? Look at the living room and the bedroom, both have a small area
+  extending them." The photo tier fits one Manhattan rectangle per room (`layout.py`); `polygon.py` adds a step only
+  for a doorway photo of the room standing >= 0.4 m beyond a side, with a second doorway photo or a wall seen just
+  behind it. Rooms on the three simulated flats whose true outline is not a rectangle: k65 living room (8 vertices:
+  a 0.98 x 1.03 m lobby off the west wall, holding the bathroom and bedroom doors; 28.76 m2), k65 bedroom (6: a
+  0.73 x 0.74 m corridor to its door), k38 living room (10: a 1.35 x 1.97 m alcove holding two doors, and a 0.49 m
+  step in the north wall). k22 has rectangles only.
+- **What the photos saw** (wall points of each room in its own frame, the photos and the GT outline registered on
+  the points; `outputs/fixes/poly_shapes/diag_*`):
+  - k65 lobby: none of the three level spin photos looks west (they cover 106-212 deg). The balcony doorway photo,
+    looking north along the room, sees the west wall on both sides of a 1.0 m gap (lobby 1.03 m) and the lobby's
+    north wall 0.37 m into it; the gap's near corner hides the rest (the line of sight ends 0.36 m in). The lobby's
+    doorway photo (bedroom door) is placed 0.35 m beyond the wall line, under the 0.4 m the rule needs. No photo sees
+    its far wall (mostly the bathroom door). So no rule proposed it.
+  - k65 bedroom corridor: the bedroom's spin is not placed, so no doorway photo can be placed in its frame; one photo
+    sees the east wall run 0.3 m past the box's north side. Nothing else.
+  - k38 alcove: found before from two doorway photos (0.65 and 1.11 m beyond the side). Its far wall is seen at
+    2.37 m, 0.4 m behind the photos, outside the +-0.5 m window the rule searched beside them: the depth came from
+    the photo, 1.01 m (true 1.35 m). The north step: one wall line at 4.09 m over the whole width; not resolved.
+- **Decision** (`polygon.py`, `poly_ext_walls`, on; thresholds in `DEFAULTS`):
+  1. `_alcove_walls`, the doorway-photo alcove measured by its own walls. Span cut to the mouth, the longest stretch
+     where the side's own wall line was not seen. Depth from a wall of that side seen anywhere in the mouth. "A wall
+     in front of it" is judged on the 0.4 m strip past the side line: the far corners of a deep alcove hide behind
+     its own side walls (k38 at 1.48 m: 45% of the area behind a surface, 5% of the strip). Corroboration as before.
+     A side wall alone does not corroborate, because a door's reveals look the same: the k38 bedroom's one doorway
+     photo stands 0.68 m beyond its door wall, with reveals seen 0.3-0.6 m out; it became a 0.58 x 1.07 m phantom step
+     in a trial with that rule.
+  2. `_open_mouths`, an alcove with no doorway photo in it. A 0.5-2.5 m gap in a measured side's wall line, the wall
+     seen on both sides. A wall at an end of the gap, facing into it, seen >= 0.3 m beyond the side: longer than a
+     wall's thickness (sim walls 0.24 m; reveals measured 0.24-0.29 m). No door head: rays above 2.25 m crossed >= 30%
+     of the gap, and a wall on the side line up there covers <= 20% of it. Depth: a far wall seen within 1.5 m, else
+     the farthest point of the side wall (a lower bound; the edge is inferred). The strip past the side line is not
+     behind a surface; >= 20% of the alcove seen free.
+  Thin evidence keeps the rectangle: the bedroom corridor and the k38 north step are not drawn.
+- **Evidence.** One front-end run per flat with the current code (cached views, CPU, 09:03). Its room-layout inputs
+  were saved, so before (`poly_ext_walls=false`) and after differ only in this step. Then plan_beta and the scorer.
+  IoU is the scorer's per-room registration on the GT outline (`wall_match.align_room`). Phantom steps: steps beyond
+  the true outline's count.
+
+  | Flat | Room (true outline) | Before: vertices, IoU, area | After |
+  |---|---|---|---|
+  | k65 | living room (8 v, 28.76 m2) | 4, 0.817, -18.3% | 4, 0.817, -18.3%: the outline has the lobby (8 v, 0.37 x 1.00 m), the plan drops it (Limits) |
+  | k65 | bedroom (6 v, 14.70 m2) | 4, 0.912, -6.9% | unchanged |
+  | k38 | living room (10 v, 32.73 m2) | 8, 0.901, -5.9% (alcove 1.01 m deep) | 8, 0.917, -2.9% (alcove 1.48 m, true 1.35 m) |
+  | all | 12 rectangular rooms; bedrooms of 6 repeat takes | 4 v each; | unchanged, no step |
+  | own Room | lit and dim takes (real photos; pillars and a door-wall step, D-083) | 14 v each | unchanged, no alcove |
+
+  | Flat | Walls median, within 8%, footprint: before | After | Phantom steps |
+  |---|---|---|---|
+  | k65 | 6.6%, 10 of 26, -5.0% | the same | 0 -> 0 |
+  | k22 | 26.0%, 6 of 20, -44.3% | the same | 0 -> 0 |
+  | k38 | 14.0%, 7 of 26, +10.7% | 10.0%, 7 of 26, +12.2% (alcove walls 24.6% -> 9.8%, its far wall missed -> 10.0%) | 0 -> 0 |
+
+  These front-end runs differ from earlier ones of the same photos (k65 at 01:47: 5.6%, 15 of 26, -9.0%); the pose
+  graph is not deterministic (D-081). Pictures: `outputs/fixes/poly_shapes/overlay_rooms.png` (per room, before,
+  after, what-if), `overlay_plan_k38.png`, `diag_after/k65_01_living_room.png`.
+- **Limits.**
+  - The k65 lobby is in `polygon_local` but not in the plan: `tiers.layout_plan` drops the polygon of any room a
+    neighbour clips, and the kitchen cuts the living room's north side by 0.21 m. With the polygon kept and the clipped
+    side synced (`sync_sides`, measurement only): 8 vertices, IoU 0.826, area -17.0%, walls 11 of 26 within 8%,
+    footprint -4.3%. That is a plan_beta change, not made here.
+  - Margins are thin: the lobby's side wall 0.37 m against reveals of 0.24-0.29 m. The door-head test did not catch
+    the k38 balcony door (open above 0.84, head 0.0); its 0.24/0.29 m reveals did. A door with reveals over 0.3 m and
+    no head in view would become a phantom alcove.
+  - Without a far wall in view the depth is a lower bound: the k65 lobby is 0.37 m deep in the outline, 0.98 m true.
+  - Not tried: wall-ceiling lines from the ceiling photos; floor points continuing into the extension (the free-space
+    test covers part of that).
+  - k38's footprint error grows (+10.7% -> +12.2%) because the living room grows toward its true area while other
+    rooms there are already too large (bathroom +190%).
+
 ## D-083 Photo tier: pillars and wall steps cut into the room outline
 
 - **Context.** "It does not identify beams, doors or anything, just a rectangular block." CubiCasa's plan of my
