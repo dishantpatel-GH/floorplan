@@ -88,8 +88,9 @@ class SemParams:
     end_sigma_floor_m: float = 0.03     # segmentation edge (1-2 px of a 1/4-resolution mask) + depth noise
     geometry_overlap: float = 0.3       # a geometric opening overlapping this share is the same opening
     cut_end_extra_m: float = 0.45       # an end never seen: the opening may be this much wider than what was seen
-    see_through_doors: bool = False     # photo tier: open doorways from the depth seen through the walls
-                                        # (floorplan/openings/seethrough.py; the leaf of an open door is off the wall)
+    see_through_doors: bool = True      # photo tier: open doorways from the depth seen through the walls, both
+                                        # jambs in one view (floorplan/openings/seethrough.py; an open leaf is off
+                                        # the wall line)
 
     def to_dict(self) -> dict:
         return {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(self).items()}

@@ -330,10 +330,16 @@ def remove_jogs(poly: Polygon, p: BetaParams) -> Polygon:
     """Snap steps shorter than jog_max_m onto the longer neighbouring wall.
 
     A 2-4 cm step between two parallel wall lines is either two capture passes that disagree slightly or a
-    skirting/panel edge; a plan with a 3 cm jog is harder to read and its tiny "wall" cannot be measured."""
+    skirting/panel edge; a plan with a 3 cm jog is harder to read and its tiny "wall" cannot be measured.
+
+    A snap that gives back the same outline ends the loop: the step depends on the outline only, so it would repeat
+    forever (an invalid outline with a zero-width slit did this on the door-stitched k38 scenes, D-088). The step cap
+    is a backstop; each real snap removes a corner pair."""
     changed = True
-    while changed:
+    steps_left = 10 * len(poly.exterior.coords) + 100
+    while changed and steps_left > 0:
         changed = False
+        steps_left -= 1
         xy = _ccw_coords(poly)
         n = len(xy)
         if n <= 4:
@@ -352,8 +358,10 @@ def remove_jogs(poly: Polygon, p: BetaParams) -> Polygon:
             xy = xy.copy()
             for vi in (src, (src + 1) % n):                      # both vertices of the shorter neighbour edge
                 xy[vi, axis] = target
-            poly = Polygon(xy).simplify(1e-6)
-            changed = True
+            snapped = Polygon(xy).simplify(1e-6)
+            changed = not _same_corners(snapped, poly)
+            if changed:
+                poly = snapped
             break
     return poly
 
@@ -361,6 +369,12 @@ def remove_jogs(poly: Polygon, p: BetaParams) -> Polygon:
 def _ccw_coords(poly: Polygon) -> np.ndarray:
     xy = np.asarray(poly.exterior.coords)[:-1]
     return xy if poly.exterior.is_ccw else xy[::-1]
+
+
+def _same_corners(a: Polygon, b: Polygon) -> bool:
+    """Same outline corners (to 1e-6 m), whatever the start vertex or the order."""
+    ka, kb = (sorted(map(tuple, np.round(_ccw_coords(g), 6).tolist())) for g in (a, b))
+    return ka == kb
 
 
 def resolve_overlaps(polys: dict[int, Polygon], extents: dict[int, np.ndarray], grid: Grid) -> dict[int, Polygon]:

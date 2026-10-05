@@ -22,18 +22,20 @@ above the floor at the crossing. Each pixel's 3-D point says what the ray found:
      - the view sees the plane 2.2-2.5 m up over it and finds no wall there (no head: an opening to the ceiling).
   3. Jambs: the wall points beside each end (t within 0.3 m outside, 0.1 m inside). Their inner edge (95th / 5th
      percentile of their positions) is the jamb's room-side edge: measured on the wall line, not where the rays first
-     get through, so the reveal an oblique view sees does not narrow the opening. An end with no wall seen beside it
-     is not seen when the image border cuts the span there or furniture in front hides the jamb (the width is then a
-     lower bound); with neither, the see-through just stops: a reflection in a glossy wall or floor, dropped.
-Across views: spans on parallel walls within 0.45 m that overlap are one opening (semantic.py's rule). Width and centre
-= median of the views that saw both jambs: a photo's pose error moves both of its ends together, so jambs taken from
-two photos would put their pose difference into the width. No such view: a lower bound, the widest part one photo
-saw. Kept: both jambs seen and 0.55-1.20 m wide; or a lower bound of 0.4-0.95 m (wider is not a door the prior
-describes), in 2 views or one with 5% of the photo seen through it.
+     get through, so the reveal an oblique view sees does not narrow the opening. A jamb is wall up to door height:
+     where the view looks through the plane beside the end (over a fifth of the unhidden rays 0.3-1.8 m up), the wall
+     points there are something low standing at the line, not a jamb (k38: a kitchen counter in a 1.60 m opening).
+     An end with no jamb is not seen when the image border cuts the span there or furniture in front hides it; with
+     neither, the see-through just stops: a reflection in a glossy wall or floor, dropped.
+Across views: spans on parallel walls within 0.45 m that overlap are one opening (semantic.py's rule). Only a view that
+sees both jambs measures it: width and centre = median of those views, each jamb to jamb in its own photo (a photo's
+pose error moves both of its ends together; jambs taken from two photos would put their pose difference into the
+width). Kept: 0.55-1.20 m wide. With no such view what was seen is a lower bound with nothing at the other end, so it
+makes no door and no width, only a line in the report: k22's black glossy shower tiles read as a 0.94 m one-jamb
+doorway on 3 of 6 photo plans.
 Into the plan: a door or passage with a width (not from a prior) within 0.5 m on the same wall or the partition's other
-face wins, as in priors.py; so does a window there. A door there without a width (a doorway-pair door) takes this one
-when both jambs were seen. The rest are added: kind door, "source": "see_through", evidence "seen through". A lower
-bound has width status "inferred": the door prior rule d gives it the prior width from the jamb that was seen.
+face wins, as in priors.py; so does a window there. A door there without a width (a doorway-pair door) takes this
+one's width and centre. The rest are added: kind door, "source": "see_through", evidence "seen through".
 Measured: docs/modules/openings.md, "Open doorways seen through".
 """
 from __future__ import annotations
@@ -78,17 +80,21 @@ class GapParams:
     jamb_out_m: float = 0.3             # wall points this far outside an end ...
     jamb_in_m: float = 0.1              # ... or this far inside it are its jamb
     jamb_min_px: int = 15
+    beside_thru_max: float = 0.2        # a jamb: of the unhidden rays crossing the plane beside the end 0.3-1.8 m up,
+                                        # at most this share look through it (over a counter at the line they do)
     border_px: int = 3
-    width_m: tuple = (0.55, 1.20)       # both jambs seen
-    lower_bound_min_m: float = 0.4      # one jamb seen: what was seen must be this wide ...
-    lower_bound_max_m: float = 0.95     # ... and at most this (more than a standard door: not one the prior fits)
-    big_frac: float = 0.05              # ... and seen in 2 views, or one view with this share of the photo seen through
-    min_views: int = 2
+    width_m: tuple = (0.55, 1.20)       # one view sees both jambs: jamb to jamb in that view
     merge_m: float = 0.5                # a measured door or passage this close along the wall wins (priors.py)
     end_sigma_floor_m: float = 0.03
 
     def to_dict(self) -> dict:
         return {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(self).items()}
+
+
+def _thru_share(sel: np.ndarray, thru: np.ndarray, min_px: int = 20) -> float:
+    """Share of the selected rays that look through the plane (0 when fewer than min_px rays: nothing contradicts)."""
+    n = int(sel.sum())
+    return float((sel & thru).sum()) / n if n >= min_px else 0.0
 
 
 def view_spans(v: SemView, walls: list[WallLine], floor_y: float, floor_ids: np.ndarray,
@@ -180,9 +186,16 @@ def view_spans(v: SemView, walls: list[WallLine], floor_y: float, floor_ids: np.
                 continue
             # jambs: the wall points beside each end; their inner edge is the jamb's room-side edge
             jam = on & (hp >= 0.2) & (hp <= gp.door_h_m)
-            lo_pts = t_pt[jam & (t_pt >= t_lo - gp.jamb_out_m) & (t_pt <= t_lo + gp.jamb_in_m)]
-            hi_pts = t_pt[jam & (t_pt >= t_hi - gp.jamb_in_m) & (t_pt <= t_hi + gp.jamb_out_m)]
-            seen_lo, seen_hi = len(lo_pts) >= gp.jamb_min_px, len(hi_pts) >= gp.jamb_min_px
+            at_lo = (t_pt >= t_lo - gp.jamb_out_m) & (t_pt <= t_lo + gp.jamb_in_m)
+            at_hi = (t_pt >= t_hi - gp.jamb_in_m) & (t_pt <= t_hi + gp.jamb_out_m)
+            lo_pts, hi_pts = t_pt[jam & at_lo], t_pt[jam & at_hi]
+            # a jamb is wall beside the end up to door height: a kitchen counter or a table standing at the wall
+            # line inside the opening is wall there too, but over it the view looks through the plane (k38: a
+            # counter cut a 1.60 m opening to 0.95-1.15 m)
+            sh = [_thru_share(band & ~front & (t >= t_lo - gp.jamb_out_m) & (t < t_lo - gp.bin_m), thru),
+                  _thru_share(band & ~front & (t > t_hi + gp.bin_m) & (t <= t_hi + gp.jamb_out_m), thru)]
+            seen_lo = len(lo_pts) >= gp.jamb_min_px and sh[0] <= gp.beside_thru_max
+            seen_hi = len(hi_pts) >= gp.jamb_min_px and sh[1] <= gp.beside_thru_max
             e_lo = float(np.quantile(lo_pts, 0.95)) if seen_lo else t_lo
             e_hi = float(np.quantile(hi_pts, 0.05)) if seen_hi else t_hi
             bord_lo = bool((th & edge & (t < t_lo + 0.1)).any())
@@ -191,6 +204,7 @@ def view_spans(v: SemView, walls: list[WallLine], floor_y: float, floor_ids: np.
             hid_lo = int((front & (t >= t_lo - gp.jamb_out_m) & (t < t_lo)).sum()) >= gp.jamb_min_px
             hid_hi = int((front & (t > t_hi) & (t <= t_hi + gp.jamb_out_m)).sum()) >= gp.jamb_min_px
             rec.update(t0=e_lo, t1=e_hi, cut0=not seen_lo, cut1=not seen_hi, jamb_px=[len(lo_pts), len(hi_pts)],
+                       beside_thru=[round(x, 2) for x in sh],
                        border=[bord_lo, bord_hi], hidden=[hid_lo, hid_hi], width=round(e_hi - e_lo, 3),
                        used_px=int(th.sum()))
             if e_hi - e_lo < gp.min_span_m:
@@ -263,13 +277,11 @@ def merge_spans(items: list[dict], walls: dict[int, WallLine], gp: GapParams) ->
                 why = f"jamb to jamb {rec['width']:.2f} m outside {gp.width_m[0]}-{gp.width_m[1]} m"
         elif not (lo_obs or hi_obs):
             why = "no jamb seen in any view"
-        elif rec["width"] < gp.lower_bound_min_m:
-            why = f"one jamb seen, only {rec['width']:.2f} m seen through"
-        elif rec["width"] > gp.lower_bound_max_m:
-            why = (f"one jamb seen and {rec['width']:.2f} m seen through: wider than a standard door, so the door "
-                   f"prior cannot describe it")
-        elif len(views) < gp.min_views and rec["max_frac"] < gp.big_frac:
-            why = f"one jamb seen, in {len(views)} view(s), {rec['max_frac']:.1%} of the photo seen through"
+        else:
+            # one jamb: what was seen is a lower bound and nothing says where the other end is. k22's black glossy
+            # shower tiles read as a 0.94 m one-jamb doorway on 3 of 6 photo plans: logged, never a door or a width
+            why = (f"no view sees both jambs: {rec['width']:.2f} m seen through past one jamb in one photo, a lower "
+                   f"bound, evidence only")
         if not why and ((hi + lo) / 2 < 0 or (hi + lo) / 2 > host.L):
             why = "centre beyond the ends of its wall"
         (rejected if why else kept).append(dict(rec, reason=why) if why else rec)
@@ -317,7 +329,9 @@ def add_to_plan(plan: Plan, kept: list[dict], walls: dict[int, WallLine], gp: Ga
         ln = lines.get(host.wall.id)
         lo, hi = rec["t0"], rec["t1"]
         c = host.p0 + host.e * (lo + hi) / 2
-        both = rec["ends_seen"][0] > 0 and rec["ends_seen"][1] > 0
+        if not rec.get("whole_views"):               # merge_spans keeps only doorways one view saw jamb to jamb
+            log.append(dict(rec, action="no view saw both jambs: not a door"))
+            continue
         win = None
         for o in plan.openings:
             if o.kind != "window" or o.width is None or o.width.value is None:
@@ -338,16 +352,9 @@ def add_to_plan(plan: Plan, kept: list[dict], walls: dict[int, WallLine], gp: Ga
         sig = float(np.hypot(*rec["sigma_ends"]))
         how = (f"seen through: {rec['views']} photo(s) see 0.5 m or more beyond the wall here, from the floor up; "
                f"width = jamb to jamb on the wall line (wall seen beside each end in {rec['ends_seen'][0]} / "
-               f"{rec['ends_seen'][1]} views)")
-        if not both:
-            sig = max(sig, 0.45 / 1.96)
-            how += "; a jamb was never seen: the width is a lower bound"
-        width = Measurement.from_sigma(rec["width"], sig, method=how, status="measured" if both else "inferred")
+               f"{rec['ends_seen'][1]} views, both in {rec['whole_views']})")
+        width = Measurement.from_sigma(rec["width"], sig, method=how, status="measured")
         if meas is not None:                         # a door there without a width: it takes this one
-            if not both:
-                log.append(dict(rec, action="door there (width not measured) kept; this one is a lower bound too",
-                                opening_id=meas.id))
-                continue
             meas.width = width
             meas.center = (float(c[0]), float(c[1]))
             meas.evidence = (meas.evidence or "") + f"; width and centre seen through ({rec['width']:.2f} m)"
@@ -368,7 +375,7 @@ def add_to_plan(plan: Plan, kept: list[dict], walls: dict[int, WallLine], gp: Ga
             k += 1
         oid = f"T{k}"
         ids.add(oid)
-        conf = min(0.8, 0.5 + 0.1 * rec["views"]) if both else 0.45
+        conf = min(0.8, 0.5 + 0.1 * rec["views"])
         o = Opening(id=oid, kind="door", wall_ids=wall_ids, room_ids=[r for r in room_ids if r in rooms],
                     center=(float(c[0]), float(c[1])), width=width, confidence=round(conf, 2), source="see_through",
                     evidence=(f"seen through: an open doorway in {rec['views']} photo(s) "

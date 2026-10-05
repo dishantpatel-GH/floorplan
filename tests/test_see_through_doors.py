@@ -78,10 +78,11 @@ def _view(name, C, yaw_deg, rects, pitch_deg=15.0):
     return SemView(name, sem, depth.astype(np.float32), K, T)
 
 
-def _run(rects, plan=None):
+def _run(rects, plan=None, only_a=False):
     plan = plan or _plan()
-    views = [_view("a", np.array([0.8, 0.0, 0.6]), 0.0, rects),
-             _view("b", np.array([-0.6, 0.0, 0.8]), 32.0, rects)]
+    views = [_view("a", np.array([0.8, 0.0, 0.6]), 0.0, rects)]
+    if not only_a:
+        views.append(_view("b", np.array([-0.6, 0.0, 0.8]), 32.0, rects))
     walls = {wl.idx: wl for wl in _wall_lines(plan)}
     return plan, see_through_doors(views, LABELS, plan, FY, walls)
 
@@ -90,7 +91,7 @@ def test_open_doorway_is_a_door_of_its_width():
     plan, rep = _run(_scene(0.4, 1.2, 0.0, 2.05, "room"))
     assert len(rep["kept"]) == 1, rep["rejected"]
     k = rep["kept"][0]
-    assert k["host_id"] == "R1-W3" and k["ends_seen"] == [2, 2]
+    assert k["host_id"] == "R1-W3" and k["ends_seen"] == [2, 2] and k["whole_views"] == 2
     assert abs(k["width"] - 0.80) < 0.02             # jamb to jamb on the wall line, also from the oblique view
     door = [o for o in plan.openings if o.source == "see_through"]
     assert len(door) == 1 and door[0].kind == "door" and door[0].width.status == "measured"
@@ -110,3 +111,24 @@ def test_window_with_a_sill_is_not_a_door():
 def test_alcove_is_not_a_door():
     plan, rep = _run(_scene(0.4, 1.2, 0.0, 2.05, "alcove"))
     assert not rep["kept"] and not plan.openings
+
+
+def test_one_jamb_alone_is_no_door():
+    """Only view a, whose image border cuts the doorway (x 1.9-2.9 m; a sees up to x = 2.4 m): one jamb seen, so
+    what was seen (0.5 m) is a lower bound with nothing at the other end. Logged, never a door or a width (k22's
+    glossy shower tiles read as a 0.94 m one-jamb doorway)."""
+    plan, rep = _run(_scene(1.9, 2.9, 0.0, 2.05, "room"), only_a=True)
+    assert [s["cut0"] + s["cut1"] for s in rep["view_spans"]] == [1]
+    assert not rep["kept"] and not plan.openings
+    assert len(rep["rejected"]) == 1 and "both jambs" in rep["rejected"][0]["reason"]
+
+
+def test_low_block_at_the_line_is_not_a_jamb():
+    """A 1.6 m doorway (x 0-1.6 m) with a 0.9 m high block standing in it at the wall line (x 0-0.7 m), like k38's
+    kitchen counter: the block's face is wall-like at the line, but over it the views look through the plane, so it
+    is not a jamb and no 0.9 m door comes of it."""
+    blk = [(2, ZW - 0.1, (0.0, 0.7), (FY, FY + 0.9), WALL), (1, FY + 0.9, (0.0, 0.7), (ZW - 0.1, ZW + THICK), WALL),
+           (0, 0.7, (FY, FY + 0.9), (ZW - 0.1, ZW + THICK), WALL)]
+    plan, rep = _run(blk + _scene(0.0, 1.6, 0.0, 2.05, "room"))
+    assert not [o for o in plan.openings if o.width is not None and abs(o.width.value - 0.9) < 0.15]
+    assert any(max(s["beside_thru"]) > 0.2 for s in rep["view_spans"] + rep["spans_left_out"] if "beside_thru" in s)
