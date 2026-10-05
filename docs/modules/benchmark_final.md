@@ -1,5 +1,8 @@
 # Benchmark: final report generator (Deliverable 5), all three tiers
 
+> **5 Oct.** This page documents the report generator and quotes the runs of 4 Oct. The benchmark of the final code
+> is `docs/BENCHMARK_REPORT.md`; where the two differ, that report wins.
+
 What this is, in plain language: one script reads every benchmark run folder and writes the benchmark report
 (`outputs/benchmark/final/REPORT.md`): the gates at all three tiers, the repeatability table, the head-to-head table
 and timing. It never makes up a number: a run that has not happened yet becomes a "not run yet" or "pending" row,

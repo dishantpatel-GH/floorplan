@@ -58,12 +58,12 @@ to about 10 px on a 256 px map (decimetres), and their training data is research
 
 | Dataset | How we use it | Licence | Flag |
 |---|---|---|---|
-| **Provided sample captures** (3 Stray Scanner recordings: `single_room`, `single_scan_floor_only`, `single_scan_with_ceiling`) | LiDAR-tier development and benchmark; video and photo tiers derived from their `rgb.mp4` for cross-tier checks (D-014) | Provided by the company for this assessment | Not redistributed |
+| **Provided sample captures** (3 Stray Scanner recordings: `single_room`, `single_scan_floor_only`, `single_scan_with_ceiling`) | LiDAR-tier development and benchmark; video and photo tiers derived from their `rgb.mp4` for cross-tier checks (D-014) | Provided by the company for this assessment | Packed into this repo's data release (`sample.zip`, `scripts/fetch_data.py`) only so the benchmark can be re-run; the company's data, not ours to publish further |
 | **ARKitScenes** (Apple), 5 rooms with Faro laser scans: 47895909 (scan 191738, first validation room) plus 4 rooms fetched on 4 Oct for the bias study: 42445884 (visit 422009), 47331133 (visit 470348), 47430003 (visit 470537, Validation split), 47333561 (visit 469650) | **Evaluation only**: absolute accuracy of the LiDAR tier against a laser (`scripts/validate_arkitscenes.py`, `scripts/investigate_lidar_bias.py`, `scripts/bench_arkitscenes.py`, `floorplan/io/arkitscenes.py`). **One number was fitted on it**: the LiDAR inward offset b = 0.68 cm (D-021), on the 3 development rooms 47895909, 42445884, 47331133, pre-registered before the 2 hold-out rooms were analysed (`docs/modules/lidar_bias.md`). No model was trained on it. | Apple licence: personal, **non-commercial** by default; its commercial grant applies only to licensees under a 700 M monthly-active-user threshold (see `third_party/ARKitScenes/LICENSE`) | NC / EVAL-ONLY (plus one calibration constant: CHECK, §7) |
 | **Phone-format copies of the sample** (`outputs/phone_like/`): 16:9 30 fps H.264/HEVC re-encodes of `single_room/rgb.mp4` with and without rotation metadata; photo folders with EXIF Orientation 6, without EXIF, and as HEIC | Robustness tests of the video and photo front-ends against real phone-file quirks before own captures exist (`docs/modules/video_tier.md` V2-§5, `photo_tier.md` v2.5) | Derived from the provided data; synthetic and labelled as such (`outputs/phone_like/README.md`) | Not redistributed |
-| **InteriorAgent** (Hugging Face `spatialverse/InteriorAgent`, Kujiale): 3 of its 25 USD houses, `kujiale_0065` (1 BHK), `kujiale_0038` (1 BHK), `kujiale_0022` (2 BHK), fetched by `sim/fetch_scene.py` | **Simulation only** (`sim/`, D-035): rendered with Isaac Sim into phone-format captures with exact ground truth, to rehearse the walk-in test and measure fixes. No model was trained or tuned on it. Results from it are labelled "simulated" and never reported as the real benchmark | Dataset-specific "InteriorAgent Terms of Use" (https://kloudsim-usa-cos.kujiale.com/InteriorAgent/InteriorAgent_Terms_of_Use.pdf); not gated | CHECK (read the terms before any commercial or redistribution use; we do not redistribute the scenes) |
+| **InteriorAgent** (Hugging Face `spatialverse/InteriorAgent`, Kujiale): 3 of its 25 USD houses, `kujiale_0065` (1 BHK), `kujiale_0038` (1 BHK), `kujiale_0022` (2 BHK), fetched by `sim/fetch_scene.py` | **Simulation only** (`sim/`, D-035): rendered with Isaac Sim into phone-format captures with exact ground truth, to rehearse the walk-in test and measure fixes. No model was trained or tuned on it. Results from it are labelled "simulated" and never reported as the real benchmark | Dataset-specific "InteriorAgent Terms of Use" (https://kloudsim-usa-cos.kujiale.com/InteriorAgent/InteriorAgent_Terms_of_Use.pdf); not gated | CHECK (read the terms before any commercial or redistribution use). The scenes are not redistributed; the rendered k65 capture (photos, video, LiDAR, ground truth) is in the data release (`k65.zip`) |
 | **NVIDIA Isaac Sim 5.1** (pip, my existing install) | Renderer for the simulator only; not part of the pipeline | NVIDIA Isaac Sim licence (free for individual use) | OK for development; the shipped pipeline does not depend on it |
-| **Own home captures** (photos, video, tape ground truth, staged paper decals) | Own benchmark for the photo and video tiers, head-to-head (Part 3) | Own data, submitted as raw benchmark data | OK |
+| **Own home captures** (OnePlus Nord: one bedroom photographed lit and dim, one video walkthrough of the flat; tape ground truth; the CubiCasa export) | Own benchmark for the photo and video tiers, head-to-head (Part 3); `data/own_house/` | Own data, submitted as raw benchmark data | OK |
 | Training sets behind the pretrained models | MoGe-2, GeoCalib (Laval Indoor HDR credited), ALIKED, LightGlue, DPVO (TartanAir) | Per the model cards; we only run inference | as in §1 |
 
 ## 5. Libraries with notable licences
@@ -112,8 +112,8 @@ DPVO needs compiled CUDA extensions, so it lives in its own environment and is c
   files), Hugging Face Hub (pinned revisions). After `scripts/fetch_weights.py`, everything runs with
   `HF_HUB_OFFLINE=1`.
 - **Capture apps** (not part of the pipeline): Stray Scanner (iOS, free) for the LiDAR tier, the stock Camera app
-  for photos and video. Part 3 compares against a consumer scanning app: *name and version to be filled in when the
-  head-to-head is run* (placeholder).
+  for photos and video. Part 3 compares against **CubiCasa 3.14.1 (Android, Google Play, checked 5 Oct 2026)**
+  (§8).
 - **Development tools:** the code was written with AI coding assistance (allowed by the brief); no AI service is
   part of the pipeline.
 
@@ -130,15 +130,15 @@ DPVO needs compiled CUDA extensions, so it lives in its own environment and is c
 | DPVO build: evo (GPL-3.0), Eigen (MPL-2.0) | evo never imported (drop it); Eigen notices kept |
 | RoomFormer, Raster2Seq, PolyLayout, PixCuboid, DeepLSD's AGPL LSD core, evo, CloudCompare | Not in the shipped pipeline |
 
-## 8. Consumer apps used for the head-to-head (Part 3)
+## 8. Consumer app used for the head-to-head (Part 3)
 
 | App | How we use it | Terms | Note |
 |---|---|---|---|
-| **Matterport** (Android app, free plan) | Scan of 2 tape-measured rooms of the own home; readings from its Measurement Mode | Matterport terms of service, free plan (one active space) | First choice (D-073) |
-| **CubiCasa** (Android app, one free scan) | Same 2 rooms; plan with room width × length and area | CubiCasa terms of service | Second choice (D-073) |
-| magicplan | **Not used.** It removed the camera scan from Android in 2024.24.0 ("Android devices are not supported for magicplan's scan features", https://help.magicplan.app/supported-devices); on Android it only draws rooms from typed lengths | — | Deviation: the brief names magicplan or poly.cam as examples |
+| **CubiCasa 3.14.1 (Android, Google Play, checked 5 Oct 2026)**: "CubiCasa \| 2D & 3D Floor Plans", package `cubi.casa.cubicasaandroidapp`, listing last updated 9 Sep 2026, needs Android 12 or newer | One free scan of the own flat on the OnePlus Nord (4 Oct 2026, 16:34 GMT per its report). Export: the home data report (PDF: rooms with width × length and area) and the plan images with and without dimensions, in `data/own_house/cubicasa/` | CubiCasa terms of service, free scan | The version is the one the Play Store lists; it was current on the scan date (released 9 Sep). CubiCasa's plans are drawn by its service, and its help pages say people check and correct them before delivery (https://help.cubi.casa/en/articles/6662584-how-accurate-are-your-plans), so its numbers are not a raw on-device result |
+| Matterport (Android app, free plan) | **Not used.** Planned as the first choice (D-073); no Matterport scan was made, so it is not in the head-to-head | — | — |
+| magicplan | **Not used.** It removed the camera scan from Android in 2024.24.0 ("Android devices are not supported for magicplan's scan features", https://help.magicplan.app/supported-devices); on Android it only draws rooms from typed lengths | — | The brief names magicplan or poly.cam as examples |
 
-**Deviation from Part 3.** The brief compares our **LiDAR** tier with the app. My phone (OnePlus Nord) has
-no LiDAR, so the table compares our camera tiers (video, photo) with the app on the same rooms and the same tape; the
-LiDAR tier's accuracy is shown against laser scans (ARKitScenes) instead.
-
+**Deviation from Part 3.** The brief compares our **LiDAR** tier with the app on 2 benchmark rooms. My phone (OnePlus
+Nord) has no LiDAR, so the head-to-head compares our camera tiers (video, and photos on the bedroom) with CubiCasa,
+itself a camera-based (video) scan, on the same rooms and against the same tape. The LiDAR tier's accuracy is shown
+against laser scans (ARKitScenes) instead. The table is in `docs/BENCHMARK_REPORT.md`.

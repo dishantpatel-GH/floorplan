@@ -1,5 +1,10 @@
 # Module: video tier (`floorplan/video/`)
 
+> **Final defaults (5 Oct).** Camera path from DPVO (`path_source = "dpvo"`; the SfM path with its 80% gate is an
+> option). Scale step `"auto"` (D-087): PnP votes on MoGe-2 depth on every segment whose own votes cover half of it,
+> depth agreement elsewhere. The status below is the v1 record of 4 Oct; newer sections follow it to the end of the
+> note. The numbers of the final code are in `docs/BENCHMARK_REPORT.md`.
+
 Status: runs end to end on all three sample captures.
 
 - On the short capture (single_room, 37 s) it recovers metric scale to +1.2% to +4.2% (4 runs) with a 10–13 cm

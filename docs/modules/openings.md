@@ -1,5 +1,9 @@
 # Doors and windows from the segmenter (video and photo tiers)
 
+> **Final defaults (5 Oct).** Segmenter doors and windows on for the video and photo tiers; door priors rule `d`
+> only (D-085); see-through doorways on for the photo tier (judged on k65, last section); openings are matched to the
+> ground truth by position (D-085).
+
 Code: `floorplan/openings/semantic.py`. Step in `scripts/run_capture.py` after the plan step, on by default for the
 video and photo tiers (`--no-semantic-openings` turns it off). For runs made before it:
 `scripts/add_openings.py <run_dir> --out DIR`. Tests: `tests/test_semantic_openings.py`.

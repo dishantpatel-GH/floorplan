@@ -1,5 +1,12 @@
 # Module: photo_tier (per-room photo folders → one metric scene)
 
+> **Final defaults (5 Oct).** A room side sits on the wall, not on a pillar face (`pillar_face_side`, D-086); rooms
+> are stitched at the doors they share (`door_stitch`, D-088, judged on k65); open doorways come from the depth seen
+> through them (`see_through_doors`, `modules/openings.md`); the last photo of a series is the ceiling photo when it
+> is tilted up more than 10° (D-074). The photo tier is benchmarked on the own bedroom (lit and dim sets) and the
+> simulated k65 flat only. Newer sections follow the older ones to the end of the note; the numbers of the final
+> code are in `docs/BENCHMARK_REPORT.md`.
+
 Files:
 
 | File | What it is |
@@ -809,7 +816,7 @@ no layout is made (cached scenes, v3.2 table: v3 = v4). The corner rows are cont
    peaks ≥ 1 m apart that each span part of the side (the rival ratio is already stored per side).
 3. **Scale.** The proxy rooms are 5-10% small before any other error. The A4 sheet (D-013) was meant to fix that, but
    no capture uses one since D-067. Without it the photo tier cannot meet 8% here even on perfect walls. Sheet-free
-   options: scale fusion weighted by view type (`docs/LAYOUT_METHODS_RESEARCH.md` §1.3) and the door-height cue
+   options: scale fusion weighted by view type (`docs/archive/LAYOUT_METHODS_RESEARCH.md` §1.3) and the door-height cue
    (built, kept off: D-069).
 4. **Photos without capture times** (WhatsApp, `phone_like`): no spin order → no layout. Next: order by file name
    (phones name files by time).

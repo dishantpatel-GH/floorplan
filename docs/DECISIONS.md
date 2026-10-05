@@ -1,7 +1,11 @@
 # Decision log
 
 Every design choice, why it was made, what else was considered and what evidence supports it.
-Newest entries go at the bottom.
+Newest entries go at the bottom; a later entry overrides an earlier one.
+
+**Final defaults (5 Oct):** photo `pillar_face_side` on (D-086); video scale step `"auto"` (D-087); photo door
+stitching on, judged on k65 (D-088, its last follow-up); see-through doorways on (`docs/modules/openings.md`);
+`remove_jogs` stops when a snap changes nothing (D-088 follow-up). The LiDAR tier is unchanged.
 
 Template: **Context** (the problem) → **Options** (what we could do) → **Decision** → **Why** → **Evidence** →
 **Risks / revisit if**.
@@ -924,7 +928,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   - My review of the first simulated captures found the camera inside furniture (bedroom wardrobe, kitchen
     range hood, balcony curtains) and too many photos for small rooms.
   - I wanted a floor pass then a ceiling pass, and less jitter.
-  - The research (docs/CAPTURE_PRACTICES_RESEARCH.md, 31 sources) gave the industry practice to copy.
+  - The research (docs/archive/CAPTURE_PRACTICES_RESEARCH.md, 31 sources) gave the industry practice to copy.
 - **Protocol (docs/CAPTURE_PROTOCOL.md; scripted in sim/protocol_v2.py).**
   - **Photos.**
     - Normal rooms: turn on the spot from the open middle (Matterport, ZInD, magicplan, HorizonNet), 7 − doors photos,
@@ -1406,6 +1410,10 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   head-to-head compares our camera tiers (video, photo) with these apps on the same rooms and the same tape; the
   LiDAR tier's accuracy is shown on ARKitScenes laser data instead. Say this in the report.
 
+- **Follow-up (5 Oct).** The scan was made with CubiCasa 3.14.1 (Android, Google Play, checked 5 Oct 2026; the
+  listing's last update, 9 Sep 2026, predates the 4 Oct scan). No Matterport scan was made, so the head-to-head is
+  CubiCasa only; its export is in `data/cubicasa/` (`docs/DISCLOSURES.md` §8).
+
 ## D-074 Photo tier: the last photo of a room's series is its ceiling photo from 10° up
 
 - **Context.** On my phone the ceiling photo came out tilted up only 16.6° (lit take) and 16.7° (dim take), under the
@@ -1685,7 +1693,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 ## D-079 Video rooms: split between camera stays, and a short step into a space is not a visit (measured, both off)
 
 - **Context.** This is about how the video plan splits rooms (`floorplan/plan/beta`). It is judged by the rule
-  committed before any change (`docs/notes/video_better_rule.md`, `f267c97`). On take1, no cache gives hall |
+  committed before any change (`docs/archive/notes/video_better_rule.md`, `f267c97`). On take1, no cache gives hall |
   kitchen | passage | bedroom, and the kitchen never gets a room of its own. The segmentation (`segment.py`) starts a
   room only at a peak of the free-space distance transform. On presentable pnp r2 the whole house has 3 peaks: hall,
   passage and kitchen are one basin, because video sees too little wall for the free space to narrow between them.
@@ -1782,7 +1790,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     23:28 run had 8 rooms: the hall twice, the bedroom in two pieces
     (`outputs/own_house/diag/video/workflow_result.json`).
   - DPVO's run differs from run to run (I-007), so every run breaks somewhere else: the nine cached take1 runs give 1 to
-    9 rooms and 10.0 to 40.3 m² at today's defaults (`docs/notes/video_better_rule.md`). Today's four fresh runs: one
+    9 rooms and 10.0 to 40.3 m² at today's defaults (`docs/archive/notes/video_better_rule.md`). Today's four fresh runs: one
     room each with the default scale step (the bedroom, or the hall and passage), two with `--video-scale pnp` (the
     bedroom, and the hall, kitchen and passage as one room).
   - Where a room comes out whole, the video measures it as well as the stills: the fix loop's after r1 has the bedroom
@@ -2140,7 +2148,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 ## D-084 Video: steep keyframes (ceiling looks) out of the scale and the fusion; both scale steps replayed with it (defaults unchanged)
 
 - **Context.** The request "make sure video works better than it did". The rule and the baseline were committed
-  before any of this (`f267c97`, `docs/notes/video_better_rule.md`): a video change becomes the default only if it
+  before any of this (`f267c97`, `docs/archive/notes/video_better_rule.md`): a video change becomes the default only if it
   passes (a) my take1 on nine cached DPVO runs, (b) the sample videos and (c) other tiers unchanged; otherwise it ships
   behind a switch that is off. The own-video diagnosis (`outputs/own_house/diag/video/workflow_result.json`) found
   that filming the bedroom ceiling at the end of take1 (t 107–117 s) broke tracking. This entry leaves such keyframes
@@ -2372,7 +2380,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   0.67–1.00; single_room 0.31–0.39; floor_only's first segments, where PnP is far worse than depth agreement against
   ARKit, 0.37 (+13.8% against +3.3%) and 0.44 (d066: +200.6% against +18.1%); segments where PnP is closer 0.51
   (with_ceiling: −12.7% against −27.9%) and 0.61 (d066: −5.9% against +29.6%). 0.5 is also the PnP self-check's limit.
-- **Replays** of the 16 caches of `docs/notes/video_better_rule.md` (`outputs/video_auto/`: `run_arm.sh`, `replay/`,
+- **Replays** of the 16 caches of `docs/archive/notes/video_better_rule.md` (`outputs/video_auto/`: `run_arm.sh`, `replay/`,
   `summary.json`, `rule_check.txt`; code `20b8ece`, CPU, one at a time), against the baseline replays
   (`video_better/baseline`, re-scored with this code's scorer: the same numbers). Segments: P = PnP, D = depth
   agreement, with the coverage; ! = failed its self-check.

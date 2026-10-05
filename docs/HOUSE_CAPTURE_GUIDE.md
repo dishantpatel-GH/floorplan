@@ -1,5 +1,13 @@
 # House capture guide: what to capture and measure
 
+> **Status, 5 Oct.** This is the checklist as it was used on the phone on 4 Oct, kept as the record of how the own
+> benchmark was captured and measured. **How to capture is `docs/CAPTURE_PROTOCOL.md`; where the two differ, the
+> protocol wins.** What was captured: one bedroom photographed twice (lit, 7 photos; dim, 6 photos), one video
+> walkthrough of the flat (`take1`, 1× lens), tape measurements on a hand sketch, and one CubiCasa scan (CubiCasa
+> 3.14.1, Android, Google Play, checked 5 Oct 2026). Not done: the second video take, the low-light video, the staged
+> damage decals (step 3) and the Matterport scan. The files are in `data/own_house/` and `data/cubicasa/`
+> (`scripts/fetch_data.py`), not in `OwnCaptures/`.
+
 **Goal:** a benchmark of your own home at the **photo** and **video** tiers, with **tape-measured ground truth**. The
 case study requires it, and the recruiters confirmed: "capturing your data is mandatory". The LiDAR tier uses the sample
 data (allowed by the recruiters).
@@ -182,7 +190,7 @@ only draws rooms from lengths you type in, which would just repeat the tape numb
       each wall corner to corner along the floor line, floor to ceiling, and each door and window frame to frame.
       **Screenshot every reading.** Also save the space's share link.
 
-**B. CubiCasa** (one free scan, no card; **needs Android 12 or newer**: check Settings → About phone)
+**B. CubiCasa** (used: CubiCasa 3.14.1, Android, Google Play, checked 5 Oct 2026; one free scan, no card; **needs Android 12 or newer**: check Settings → About phone)
 - [ ] Install **CubiCasa** and sign up (country India). Turn on all the lights.
 - [ ] Do ONE scan that covers both rooms: walk slowly with the phone aimed at the line where the floor meets the walls,
       all the way round room 1, through the door, all the way round room 2. Submit it.

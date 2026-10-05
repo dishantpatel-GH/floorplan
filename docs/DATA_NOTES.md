@@ -1,6 +1,7 @@
 # What the sample data is (and what it is not)
 
-Source: `TakeHome/Dataset/`, provided with the take-home email ("Please run your code on this Sample Data").
+Source: `TakeHome/Dataset/`, provided with the take-home email ("Please run your code on this Sample Data"). In the
+repo the three captures are `data/sample/` (`scripts/fetch_data.py`). They run the video and LiDAR tiers only.
 Evidence for every statement below comes from `scripts/explore_capture.py`. The outputs are in
 `outputs/explore/<capture>/`: `overview.png`, `contact_sheet.jpg`, `height_hist.png` and `stats.json`.
 

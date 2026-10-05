@@ -1,6 +1,6 @@
 """Scripted capture person v2: the protocol designed ONCE from published practice + my review (D-051).
 
-Sources (docs/CAPTURE_PRACTICES_RESEARCH.md): photo spins from one open spot (Matterport, ZInD, magicplan, HorizonNet);
+Sources (docs/archive/CAPTURE_PRACTICES_RESEARCH.md): photo spins from one open spot (Matterport, ZInD, magicplan, HorizonNet);
 small rooms shot from the doorway (CubiCasa, Hover, ZInD); every corner incl. ceiling corners in view (DocuSketch,
 HorizonNet); doorway links from both sides of the threshold (Matterport, Metashape); video: walk forward slowly, never
 sideways, 1-3 m from walls, aimed at the baseboards, no panning from the middle of a room (CubiCasa), pause and pan

@@ -1,5 +1,8 @@
 # Simulator: what it is for, what it found, what it fixed (4 Oct 2026)
 
+> **5 Oct.** The photo tier is judged on k65 only; k22 and k38 are notes, not gates (D-088). The k65 capture the
+> benchmark uses ships as `data/k65/` (`scripts/fetch_data.py`).
+
 All numbers here are **simulated**: Isaac Sim renders of InteriorAgent houses, turned into iPhone-15-format files,
 scored against ground truth computed from the scene geometry. They rehearse the walk-in test (30% of the score) and
 measure fixes exactly. They do **not** replace the real benchmark (sample captures with laser GT, the own captures

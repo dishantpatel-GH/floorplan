@@ -14,7 +14,9 @@ from two sources:
 - the RGB frames of the same captures;
 - MoGe-2 single-image metric depth, the learned depth that the photo and video front-ends rely on, compared with LiDAR.
 
-My own home capture (OwnCaptures/) will replace this proxy with native phone photos and video.
+The own capture (`data/own_house/`: one bedroom photographed lit and dim, one video walkthrough, OnePlus Nord) adds
+native phone evidence for low light: the dim photo set (`docs/BENCHMARK_REPORT.md`). It has no large mirror, glass
+partition or wet floor, so those rows still rest on the sample proxy above.
 
 ## Summary table
 
@@ -77,7 +79,7 @@ centre.
 - Exclude the phantom points.
 - Treat the mirror plane as the wall surface and measure to it.
 - Widen that wall's interval, because fewer real points support it.
-- At capture time, the protocol says "mirrors not filling the view".
+- At capture time, the protocol says never to film a mirror head-on and to keep it under a quarter of the picture.
 
 **Residual risk.**
 - A mirror facing an open doorway reflects geometry that may lie out of range, so the reflection test has nothing to

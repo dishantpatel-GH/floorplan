@@ -1,5 +1,9 @@
 # plan_beta: space-first floor-plan extraction (LiDAR tier)
 
+> **Final state (5 Oct).** plan_beta is the extractor of every tier (tier-aware parameters, v4); plan_alpha is the
+> fallback when a plan step runs past its time limit (D-058, D-088). `remove_jogs` now stops when a snap changes
+> nothing (`floorplan/plan/beta/walls.py`; it looped without end on two stitched k38 scenes, D-088 follow-up).
+
 Code: `floorplan/plan/beta/` (package). Entry point: `extract_plan(scene, info, capture_id) -> floorplan.model.Plan`.
 Run: `scripts/run_plan_beta.py`. Evidence: `outputs/plan_beta/`.
 

@@ -14,6 +14,10 @@ benchmark (15%) must be measured on real data. Sim numbers are always labelled a
 (`photos/<room>/*.JPG` with EXIF, `video/*.MOV`, Stray Scanner `lidar/<take>/`, `gt/ground_truth.csv`). The same
 command processes both: `scripts/process_own_capture.py <capture folder>`.
 
+**What the submission uses (5 Oct).** One simulated flat, k65 (InteriorAgent `kujiale_0065`, 1 BHK), rendered in
+iPhone 15 format; it ships as `data/k65/` (`scripts/fetch_data.py`), so the photo tier can be re-scored without Isaac
+Sim. The photo tier is judged on k65 only; k22 and k38 are notes, not gates (D-088).
+
 ## The pieces
 
 | Step | Script | Interpreter | What it does |

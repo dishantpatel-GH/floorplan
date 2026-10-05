@@ -7,6 +7,12 @@ declaration itself is unchanged. Part 2 lists the candidates as they stood on 4 
 ranking rule (step 3) is word for word the one committed in `e042ca5`. Every number here is quoted from the file named
 next to it.
 
+Final state, 5 Oct (afternoon). The shipped fix lives on in the default. D-076 made the PnP scale opt-in again after
+it lost on the sample videos; since 14:55 the video scale step is `"auto"` (D-087), which keeps PnP's scale on every
+segment whose own votes cover at least half of it and takes depth agreement elsewhere: the per-segment rule that
+D-076's "revisit if" named. The declaration, the after runs and the verdict below are unchanged. What the final code
+gives on the declared gate is in `docs/BENCHMARK_REPORT.md`.
+
 Correction, 5 Oct (review). Part 1, item 1 says the rule was "committed before the own capture was scored". That is
 wrong. `e042ca5` went into git at 00:03 on 5 Oct, with the replayed history (`README.md`, History). The own capture was
 first scored before that: the photos at 23:30 and photos plus video at 23:38 on 4 Oct (`outputs/own_house/eval_photo/`,

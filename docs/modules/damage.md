@@ -1,5 +1,8 @@
 # Damage module (`floorplan/damage`)
 
+> **5 Oct.** No staged damage was captured in the own flat, so the detector is scored on simulated decals only
+> (`docs/COMPLIANCE.md`, row B2). It runs by default in `run_capture.py` (`--no-damage` turns it off).
+
 > **v2 (2026-10-04) is at the end of this file** ("Damage v2"). It fixes crack length (I-6), replaces the saturating
 > confidence (I-9), adds the photo-tier adapter, the `run_damage_on_plan` hook used by `scripts/run_capture.py`, and
 > checks the staged paper/tape decals. Sections 1-8 below are v1, kept unchanged as history.
@@ -14,7 +17,7 @@ evidence is in `outputs/damage/`.
 
 ## 1. Purpose and where it sits
 
-Stage [5] of `docs/PLAN.md`. It takes posed images from any tier, the aligned scene and the plan, and produces the
+Stage [5] of `docs/archive/PLAN.md`. It takes posed images from any tier, the aligned scene and the plan, and produces the
 Part 2 output contract:
 
 - **damage regions per surface.** Each region has a class (`water_stain` or `crack`), an area, a width × height and a
