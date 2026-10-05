@@ -287,7 +287,14 @@
       "max_rss_gb": 5.07,
       "pipeline_runtime_s": 35.6
      },
-     "plan_iou_vs_tape_outline": 0.92
+     "plan_iou_vs_tape_outline": 0.92,
+     "overlay_orientation": {
+      "agree_fit": 3,
+      "agree_turned": 0,
+      "iou_fit": 0.92,
+      "iou_turned": 0.919,
+      "turned": false
+     }
     },
     "photo_lit": {
      "walls": {
@@ -566,7 +573,14 @@
       "max_rss_gb": 5.11,
       "pipeline_runtime_s": 41.1
      },
-     "plan_iou_vs_tape_outline": 0.878
+     "plan_iou_vs_tape_outline": 0.879,
+     "overlay_orientation": {
+      "agree_fit": 0,
+      "agree_turned": 2,
+      "iou_fit": 0.878,
+      "iou_turned": 0.879,
+      "turned": true
+     }
     },
     "video_own_2328": {
      "walls": {

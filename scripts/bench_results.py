@@ -397,6 +397,66 @@ def write_tables(summ: dict, path: Path) -> None:
 
 
 # ------------------------------------------------------------------------------------------------ main
+def orient_by_openings(plan: dict, geom: dict, pm: dict, tie_iou: float = 0.02) -> dict:
+    """A near-rectangular room fits its tape outline almost as well turned 180 deg (own lit: 0.878 both ways), so
+    the IoU fit can come out upside down. Between the fit and the fit turned 180 deg about the plan's centre, keep
+    the one whose doors and windows land on tape walls holding that kind of opening; the IoU must stay within
+    tie_iou. The scorer (wall_match) breaks the same tie with the door walls."""
+    import eval_door_stitch as EDS
+    wm = EDS.wm
+    glob = pm.get("glob")
+    if not glob:
+        return pm
+    M = np.diag([1.0, -1.0]) if pm.get("mirror") else np.eye(2)
+    R, t = np.asarray(glob["R"], float), np.asarray(glob["t"], float)
+    polys = [np.asarray(r["polygon"], float) @ M.T for r in plan["rooms"] if len(r.get("polygon") or []) >= 3]
+    if not polys:
+        return pm
+    walls = [(name, w["a"], w["b"], room) for room, g in geom.items() for name, w in g["walls"].items()]
+    held = {(room, o["wall"], o["kind"]) for room, g in geom.items() for o in g["openings"]}
+
+    def seg_d(q, a, b):
+        ab = b - a
+        s = np.clip(np.dot(q - a, ab) / max(np.dot(ab, ab), 1e-12), 0, 1)
+        return float(np.linalg.norm(q - (a + s * ab)))
+
+    def score(R_, t_):
+        agree = 0
+        for o in plan.get("openings", []):
+            ctr = o.get("position") or o.get("center")
+            if ctr is None or o.get("kind") not in ("door", "window"):
+                continue
+            q = np.asarray(ctr, float) @ M.T @ R_.T + t_
+            name, a, b, room = min(walls, key=lambda w: seg_d(q, w[1], w[2]))
+            agree += (room, name, o["kind"]) in held
+        P = [p @ R_.T + t_ for p in polys]
+        iou = np.mean([max(wm.iou(p, np.asarray(g["poly"], float)) for g in geom.values()) for p in P])
+        return agree, float(iou)
+
+    a0, i0 = score(R, t)
+    R1 = -R                                     # turned 180 deg; its shift fitted again: centres matched, then the
+    from shapely.geometry import Polygon      # best IoU on a 2 cm grid, +-0.6 m around the matched area centres
+    gc = np.mean([Polygon(np.asarray(g["poly"], float)).centroid.coords[0] for g in geom.values()], axis=0)
+    t1 = gc - np.mean([Polygon(P @ R1.T).centroid.coords[0] for P in polys], axis=0)
+    best = score(R1, t1)[1], t1
+    for dx in np.arange(-0.6, 0.601, 0.02):
+        for dy in np.arange(-0.6, 0.601, 0.02):
+            tt = t1 + np.array([dx, dy])
+            P = [q @ R1.T + tt for q in polys]
+            i = np.mean([max(wm.iou(q, np.asarray(g["poly"], float)) for g in geom.values()) for q in P])
+            if i > best[0]:
+                best = i, tt
+    t1 = best[1]
+    a1, i1 = score(R1, t1)
+    out = dict(pm)
+    out["orientation"] = dict(agree_fit=a0, agree_turned=a1, iou_fit=round(i0, 3), iou_turned=round(i1, 3), turned=False)
+    if a1 > a0 and i1 >= i0 - tie_iou:
+        out["glob"] = dict(glob, R=R1, t=t1)
+        out["iou"] = round(i1, 3)
+        out["orientation"]["turned"] = True
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("fresh", type=Path, help="outputs/benchmark/fresh_<HHMM>")
@@ -495,9 +555,9 @@ def main() -> None:
                 plan = json.loads(p.read_text())
                 geom = {g: v for g, v in own_geom.items() if g in (oh.get(lab, {}).get("openings", {})
                                                                    .get("gt_rooms_in_plan") or own_geom)}
-                pm = EDS.plan_metrics(plan, geom)
+                pm = orient_by_openings(plan, geom, EDS.plan_metrics(plan, geom))
                 png = S / "own" / f"{lab}_vs_tape.png"
-                EDS.overlay(plan, geom, pm, f"own house {lab}: plan (red dashed) over the tape outline "
+                EDS.overlay(plan, geom, pm, f"own house {lab}: plan (red dashed; dots: its doors and windows) over the tape outline "
                             f"(filled; sketch layout + tape lengths); IoU {pm['iou']}", png)
                 images[f"own_{lab}"]["overlay_vs_tape"] = save_png(png, R / "overlays" / f"own_{lab}_vs_tape.png")
                 oh[lab]["plan_iou_vs_tape_outline"] = pm["iou"]

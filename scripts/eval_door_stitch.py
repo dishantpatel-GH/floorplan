@@ -187,9 +187,10 @@ def overlay(plan: dict, gt_geom: dict, pm: dict, title: str, out: Path) -> None:
         P = np.asarray(r["polygon"], float) @ M.T @ glob["R"].T + glob["t"]
         ax.plot(*np.vstack([P, P[:1]]).T, color="#cc2222", lw=2.2, ls="--", zorder=4)
     for o in plan.get("openings", []):
-        if glob is None or o.get("position") is None:
+        ctr = o.get("position") or o.get("center")
+        if glob is None or ctr is None:
             continue
-        q = np.asarray(o["position"], float) @ M.T @ glob["R"].T + glob["t"]
+        q = np.asarray(ctr, float) @ M.T @ glob["R"].T + glob["t"]
         ax.plot(q[0], q[1], "o", color="#cc2222", ms=6, zorder=6)
     ax.set_aspect("equal")
     ax.grid(alpha=0.3)
