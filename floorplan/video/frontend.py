@@ -286,7 +286,7 @@ def _rerun_vo_per_segment(video, work, rot, f_full, up_size, vo, kf, seg, params
 
 
 def segment_quality(D: np.ndarray, K: np.ndarray, T_m: np.ndarray, seg: np.ndarray, s_local: np.ndarray,
-                    params: VideoParams, votes: dict | None = None) -> dict:
+                    params: VideoParams, votes: dict | None = None, exclude: np.ndarray | None = None) -> dict:
     """Self-check of each segment's camera path, without ground truth (v2, V2-5; D-076 for the PnP scale).
 
     Symptoms of a VO run that is wrong in SHAPE (not just in scale), or of a scale that is not measured:
@@ -299,15 +299,17 @@ def segment_quality(D: np.ndarray, K: np.ndarray, T_m: np.ndarray, seg: np.ndarr
         so its spread is reported, not judged. The segment needs votes of its own on at least half of its keyframes
         (coverage); elsewhere its scale is interpolated and DPVO's motion is not measured (D-076: every sample
         segment that ARKit puts more than 100% off had coverage <= 0.44). The vote residual is reported only.
-    A segment is trusted only if every check passes and it has enough path to measure them."""
+    A segment is trusted only if every check passes and it has enough path to measure them. Steep keyframes
+    (`exclude`, D-078) are left out of the residual."""
     from floorplan.video.scale import TRUNC, _backproject, _cost
+    ex = np.zeros(len(seg), bool) if exclude is None else np.asarray(exclude, bool)
     out = {}
     for g in np.unique(seg):
         ids = np.where(seg == g)[0]
         costs = []
         for i in ids[:-1]:
             for j in (i + 1, i + 2):
-                if j <= ids[-1]:
+                if j <= ids[-1] and not (ex[i] or ex[j]):
                     Tji = np.linalg.inv(T_m[j]) @ T_m[i]
                     c, _ = _cost(_backproject(D[i], K, 8) @ Tji[:3, :3].T + Tji[:3, 3], D[j], K)
                     costs.append(min(c, TRUNC) if np.isfinite(c) else TRUNC)
@@ -709,13 +711,36 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     rot_ev.update(final_rotation=rot, flipped_by_pitch_check=flipped, median_pitch_deg=float(np.median(pitch)))
     log(f"[gravity] up from {ok.sum()} GeoCalib frames (spread {up_spread:.1f} deg); rotation {rot} "
         f"(flip {flipped}); median camera pitch {np.median(pitch):.1f} deg")
+
+    # 6b. D-078: steep keyframes (ceiling looks, straight down) leave the scale votes and the fusion; a look at the end
+    #     ends the walk where it starts, one in the middle cuts a scale segment after it (steep.py)
+    kf_all, ex, steep_cuts, steep_rep = kf, np.zeros(len(kf), bool), [], dict(applied=False)
+    if params.steep_frames:
+        from floorplan.video.steep import local_pitch, steep_keyframes
+        p_loc = local_pitch(T_kf[:, :3, :3], ups_kf, ups, up, params.steep_up_half_kf)
+        st = steep_keyframes(p_loc, params.steep_up_deg, params.steep_down_deg, params.steep_min_kf,
+                             params.steep_tail_kf)
+        k_end = st["walk_end"]
+        ex, steep_cuts = st["exclude"][:k_end], st["cuts"]
+        steep_rep = dict(applied=True, stretches=st["stretches"], walk_end_keyframe=k_end, cuts=steep_cuts,
+                         excluded_keyframes=int(ex.sum()), keyframes_cut_at_end=int(len(kf) - k_end),
+                         frames_cut_at_end=int(n - kf[k_end]) if k_end < len(kf) else 0)
+        if k_end < len(kf):
+            kf, files, pos, T_kf, pitch = kf[:k_end], files[:k_end], pos[:k_end], T_kf[:k_end], pitch[:k_end]
+            ok = ok & (geo["index"] < k_end)
+            keep = ups_kf < k_end
+            ups_kf, ups = ups_kf[keep], ups[keep]
+            up, up_spread = _robust_mean_direction(ups)
+        log(f"[steep] looks (keyframes, up/down): {st['stretches']}; walk ends at keyframe {k_end} of {len(kf_all)}"
+            f" (t {ts[kf_all[min(k_end, len(kf_all) - 1)]]:.1f} s); {int(ex.sum())} steep keyframes left out of "
+            f"votes and fusion; segment cuts after looks {steep_cuts}")
     tick("gravity")
 
     # 7. metric depth on upright keyframes at <= 504 px
-    dfiles = _export_cached(video, kf, rot, work / f"depth_frames_r{rot}", "d", params.depth_long_side)
+    dfiles = _export_cached(video, kf_all, rot, work / f"depth_frames_r{rot}", "d", params.depth_long_side)
     h_d, w_d = cv2.imread(str(dfiles[0])).shape[:2]
     K_d = _intrinsics(f_full * w_d / up_size[0], w_d, h_d)
-    D = _cached_depth(work / f"depth_{params.depth_model}.npz", dfiles, K_d, params.depth_model)
+    D = _cached_depth(work / f"depth_{params.depth_model}.npz", dfiles, K_d, params.depth_model)[:len(kf)]
     D = np.stack([depth_mod.clean_depth(d, params.depth_max_m, params.depth_edge_rel) for d in D])
     tick("depth")
 
@@ -739,9 +764,16 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
         ups = np.einsum("nij,nj->ni", T_kf[ups_kf, :3, :3], uc)
         up, up_spread = _robust_mean_direction(ups)
         pitch = np.degrees(np.arcsin(np.clip(T_kf[:, :3, 2] @ up, -1, 1)))
-        sc = estimate_scales(D, K_d, T_kf, files, params.scale_max_gap, forced_cuts=forced, **scale_args)
+        sc = estimate_scales(D, K_d, T_kf, files, params.scale_max_gap,
+                             forced_cuts=sorted(set(forced) | set(steep_cuts)), exclude=ex, **scale_args)
         seg = np.asarray(sc["segment"])
         log(f"[scale] after fresh VO runs: {len(sc['segments'])} segment(s), starts "
+            f"{[s['keyframes'][0] for s in sc['segments']]}")
+    elif ex.any() or steep_cuts:        # D-078: steep keyframes do not vote; a look in the middle cuts a segment
+        sc = estimate_scales(D, K_d, T_kf, files, params.scale_max_gap, forced_cuts=steep_cuts, exclude=ex,
+                             **scale_args)
+        seg = np.asarray(sc["segment"])
+        log(f"[scale] without steep keyframes: {len(sc['segments'])} segment(s), starts "
             f"{[s['keyframes'][0] for s in sc['segments']]}")
     sig_learned = {}
     for s in sc["segments"]:
@@ -758,7 +790,8 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     # quality self-check per segment; untrusted segments are reported and (by default) left out of the scene
     s_local = sc["s_local"].copy()
     votes = {s_["id"]: (s_.get("vote_coverage", 0.0), s_.get("vote_residual")) for s_ in sc["segments"]}
-    quality = segment_quality(D, K_d, rescale_trajectory(T_kf, s_local), seg, s_local, params, votes=votes)
+    quality = segment_quality(D, K_d, rescale_trajectory(T_kf, s_local), seg, s_local, params, votes=votes,
+                              exclude=ex)
     for s_ in sc["segments"]:
         s_.update(quality[s_["id"]])
     trusted = np.array([quality[int(g)]["trusted"] for g in seg])
@@ -775,6 +808,9 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
         D_fuse = D.copy()
         D_fuse[~trusted] = 0.0                      # their geometry never enters the scene (unobserved, not free)
         log(f"[quality] {int((~trusted).sum())} keyframes of untrusted segments left out of the scene")
+    if ex.any():                                    # D-078: steep keyframes never enter the scene
+        D_fuse = D_fuse.copy() if D_fuse is D else D_fuse
+        D_fuse[ex] = 0.0
 
     # 9-10. levelling per segment, pose graph (joins segments, closes loops), fusion, alignment
     geo_out = _geometry(D_fuse, K_d, files, T_kf, vo, kf, n, ts, s_local, seg, up, ups, ups_kf, params, log)
@@ -824,13 +860,14 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     log(f"[scale] scene 1-sigma {100 * sig_tot:.1f}% (worst large segment); whole_scene_consistent={consistent}")
 
     P, N, raw, R_lev2al = geo_out["P"], geo_out["N"], geo_out["raw"], geo_out["R_lev2al"]
-    T_all = geo_out["T_wc"]
+    n_walk = int(kf_all[len(kf)]) if len(kf) < len(kf_all) else n       # D-078: frames after the walk's end go
+    T_all, ts = geo_out["T_wc"][:n_walk], ts[:n_walk]
     R = geo_out["T_align"][:3, :3]
     scene = dict(points=P.astype(np.float32), normals=N.astype(np.float32), colors=geo_out["colors"],
                  raw_points=(raw["points"] @ R_lev2al.T).astype(np.float32), raw_range=raw["range"],
                  raw_ray=(raw["ray"].astype(np.float32) @ R_lev2al.T).astype(np.float16),
                  T_align=geo_out["T_align"], traj=(T_all[:, :3, 3] @ R.T).astype(np.float32), kf=kf, T_wc=T_all,
-                 timestamps=ts, kf_segment=seg.astype(np.int16), kf_trusted=trusted)
+                 timestamps=ts, kf_segment=seg.astype(np.int16), kf_trusted=trusted & ~ex)
     info = dict(geo_out["ainfo"], tier="video", source=str(video), frames=n, keyframes=int(len(kf)),
                 surface_points=int(len(P)), raw_points=int(len(raw["points"])),
                 floor_tilt_from_geocalib_deg=float(geo_out["tilt"]), gravity_spread_deg=up_spread,
@@ -854,6 +891,7 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                 levelling=geo_out["levelling"], pose_graph=graph,
                 dpvo=dict(frames=int(len(vo["frames"])), runtime_s=vo["runtime_s"], peak_gb=vo["peak_gb"],
                           fresh_runs=vo_reruns),
+                steep=dict(steep_rep, walk_frames=n_walk),
                 depth_model=params.depth_model, recommended_measurement_cloud="points", timings_s=timings,
                 runtime_s=round(time.time() - t0, 1), params=params.to_dict())
     log(f"[video] done in {info['runtime_s']} s: {len(P)} surface points, floor {info['floor_y']}, "

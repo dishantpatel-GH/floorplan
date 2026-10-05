@@ -295,7 +295,7 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
                     method: str = "pnp", sigma_kf: float = 15.0,
                     min_contrast: float = 0.005, jump: float = 1.5, n_boot: int = 2000, block: int = 10,
                     seed: int = 0, forced_cuts=(), min_step_m: float = 0.08, max_dir_deg: float = 35.0,
-                    max_rot_deg: float = 4.0, half_kf: int = 8, min_votes: int = 3) -> dict:
+                    max_rot_deg: float = 4.0, half_kf: int = 8, min_votes: int = 3, exclude=None) -> dict:
     """Per-keyframe (local) metric scale of an up-to-scale trajectory T (N,4,4) from metric depth D (N,h,w) and the
     keyframe images it was predicted from.
 
@@ -306,6 +306,7 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
        the local scale. Method "depth_agreement": the fine curves in a Gaussian window, clamped (_depth_agreement_local;
        `images` is not used)
     5. block bootstrap, per segment, for the statistical part of the uncertainty (over the votes, or over the pairs)
+    `exclude` (bool per keyframe, D-078): steep keyframes; no pair that contains one votes, in either method.
     """
     if method not in ("pnp", "depth_agreement"):
         raise ValueError(f"scale method {method!r}: 'pnp' or 'depth_agreement'")
@@ -314,6 +315,9 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
     coarse = np.exp(np.arange(np.log(1e-3), np.log(1e3), np.log(1.1)))
     Cc = _normalised(np.array([pair_cost_curve(D[i], D[j], K, T[i], T[j], coarse) for i, j in pairs]), coarse,
                      min_contrast)
+    ex = np.zeros(len(T), bool) if exclude is None else np.asarray(exclude, bool)
+    if ex.any():                            # D-078: a pair with a steep keyframe has no opinion
+        Cc[ex[[i for i, _ in pairs]] | ex[[j for _, j in pairs]]] = 0.0
     informative = Cc.max(axis=1) > 0
     argmins = np.where(informative, coarse[np.argmin(Cc, axis=1)], np.nan)
     seg = segment_scale_jumps(mid, argmins, len(T), 2 * max_gap, jump, min_len=20)
@@ -354,7 +358,7 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
     # local scale: running median of the PnP votes. It replaces a Gaussian window over the depth-agreement curves and
     # its +-1.5x clamp around the segment's value, which hid a 13x drop of DPVO's scale on my own video.
     I, J, vote = pnp_scale_votes(pnp_steps(images, D, K), T, min_step_m, max_dir_deg, max_rot_deg)
-    keep = seg[I] == seg[J]                                           # a pair across a cut has no single DPVO scale
+    keep = (seg[I] == seg[J]) & ~ex[I] & ~ex[J]                      # a pair across a cut has no single DPVO scale
     vote, mid_v, seg_v = vote[keep], 0.5 * (I[keep] + J[keep]), seg[I[keep]]
     s_local, measured = running_median_scale(len(T), seg, mid_v, vote, seg_v, half_kf, min_votes)
     for g in np.unique(seg):

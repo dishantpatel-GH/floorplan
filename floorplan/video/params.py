@@ -26,6 +26,17 @@ class VideoParams:
     gravity_max_pitch_deg: float = 45.0  # GeoCalib is trained within +-45 deg pitch; steeper frames are not trusted
     flip_min_pitch_deg: float = 10.0     # flip to upside-down only if the median camera pitch is > +10 deg (Issue 15)
 
+    # --- steep keyframes (D-078, steep.py): ceiling looks and straight-down looks ---
+    steep_frames: bool = False           # leave them out of the scale votes and the fusion; a look at the end ends
+                                         # the walk there, one in the middle cuts a scale segment after it
+    steep_up_deg: float = 30.0           # take1's ceiling look peaks at +33..+40 deg, inside GeoCalib's 45; walks look
+                                         # down (median pitch -15 to -33 deg on every capture)
+    steep_down_deg: float = 50.0         # straight down, beyond GeoCalib's +-45 deg (gravity ignores them already)
+    steep_min_kf: int = 3                # a look is at least 3 keyframes in a row; single ones are only left out
+    steep_tail_kf: int = 20              # fewer keyframes after the last look: the walk ends where the look starts
+    steep_up_half_kf: int = 15           # pitch against the local up (GeoCalib within +-15 keyframes): DPVO's
+                                         # rotation drifts 15-20 deg on some take1 runs
+
     # --- visual odometry (DPVO, separate interpreter: envs/dpvo) ---
     dpvo_stride: int = 0                 # 0 = auto: DPVO sees ~dpvo_target_fps (v1 used 2 on the 60 fps sample)
     dpvo_target_fps: float = 30.0        # consecutive frames still overlap > 95% at 30 fps
