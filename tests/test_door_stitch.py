@@ -99,6 +99,6 @@ def test_undo_stitch_puts_rooms_and_cameras_back():
     assert inf["room_layouts"]["B"]["anchor"]["centre_uv"] == [2.9, 0.0]
     assert "sides_plan" not in inf["room_layouts"]["B"]
     assert np.allclose(sc["T_wc"][1], np.eye(4)) and np.allclose(sc["traj"][1], 0.0)
-    # the stitched scene itself is left as it was (run_capture keeps it on disk with its undo record)
+    # the stitched scene itself is left as it was (undo_stitch works on copies)
     assert info["room_layouts"]["B"]["anchor"]["centre_uv"] == [3.2, 0.3]
     assert np.allclose(scene["T_wc"][1][:3, 3], [0.4, 0.0, -0.2])

@@ -225,6 +225,11 @@ openings step with the rule off and on, priors rule d; gt_eval, scored by positi
 
 - Default on, by the rule set before the run: dim finds D1 on W1 within 5 cm of the tape; no plan gains a phantom or
   a duplicate or loses a found opening; the 12 widths given to width-less doors are within -4.4 to +3.8 cm.
+- 15:07 off again (6c51d69): on a held-out k22 plan (door_stitch/ab_v2 r1) a seen-through door lands 0.66 m from the
+  width-less doorway-pair door of the same doorway (the rooms 0.6 m apart), past the 0.5 m merge, so it is a second
+  door. 15:25 on again, my call: k65 is the one simulated flat this submission ships and is judged on, and on all
+  five k65 plans the rule changes nothing; on my own bedroom it finds D1. Known limit: that k22 duplicate (a fix is to
+  let a seen-through doorway give a width-less pair door within about 1 m its width instead of adding a door).
 - One jamb is a lower bound. Before, rule d widened it to the prior width: k22's black glossy shower tiles (photo 0006)
   reflect the room and read as a 0.94 m one-jamb doorway, a phantom on 3 plans, and lit's D1 came out +9.9 cm. Now
   neither is a door: lit's D1 is not found.

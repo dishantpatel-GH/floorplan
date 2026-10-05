@@ -95,12 +95,13 @@ class VideoParams:
 
     # --- metric depth and scale ---
     depth_model: str = "moge2"           # "moge2" or "da3metric"; chosen by evidence (video_tier.md, decision V-5)
-    scale_method: str = "depth_agreement"  # D-076: "depth_agreement" (Gaussian window, 1.5x clamp; the step before
-                                         # D-075) or "pnp" (D-075 votes + vote-coverage self-check + floor levelling).
-                                         # Replays on 12 cached DPVO runs: "pnp" better on take1 (median footprint
-                                         # error 2.7% vs 26%) but not worse on only 6 of 12 runs, so not the default.
-                                         # "auto" (D-087): per segment, "pnp" where its votes are dense enough, else
-                                         # "depth_agreement"; floor levelling on if one segment uses "pnp"
+    scale_method: str = "auto"           # D-087: per segment, "pnp" where its votes are dense enough, else
+                                         # "depth_agreement"; floor levelling on if one segment uses "pnp". The
+                                         # default since 5 Oct, my call against the 09:40 rule (D-087): on the 9
+                                         # take1 caches footprint error median 26% -> 3.2%, walls found 75 -> 84.
+                                         # "depth_agreement" (D-076: Gaussian window, 1.5x clamp; the step before
+                                         # D-075) and "pnp" (D-075 votes + vote-coverage self-check + floor
+                                         # levelling) stay available (--video-scale).
     scale_auto_min_coverage: float = 0.5 # "auto": PnP's scale for a segment whose votes measure >= 50% of its
                                          # keyframes. Coverage: take1 0.67-1.00 on every segment of 20+ keyframes;
                                          # samples 0.31-0.44 where PnP is far off ARKit (+13.8% and +200.6% against

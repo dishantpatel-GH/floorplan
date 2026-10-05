@@ -1,6 +1,6 @@
 """Video scale follow-up (D-076): the PnP self-check judges vote coverage, not the spread of the scale; the floor
 levelling removes a vertical glitch of the camera path and ignores bed tops; the scale method is a parameter, and
-"depth_agreement" is the default. Synthetic depth maps and poses, no images.
+"auto" is the default (D-087). Synthetic depth maps and poses, no images.
 
 Run: env -u PYTHONPATH .venv/bin/python -m pytest tests/test_scale_followup.py -q
 """
@@ -97,7 +97,7 @@ def test_pnp_self_check_judges_votes_not_spread():
 
 def test_scale_method_is_checked():
     p = VideoParams()
-    assert p.scale_method == "depth_agreement" and p.floor_level is None    # D-076: "pnp" is opt-in
+    assert p.scale_method == "auto" and p.floor_level is None    # D-087: "auto" is the default, "pnp" opt-in
     with pytest.raises(ValueError):
         estimate_scales(np.zeros((3, H, W)), K, np.tile(np.eye(4), (3, 1, 1)), [], 2, method="clamp")
 

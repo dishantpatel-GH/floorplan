@@ -249,12 +249,14 @@ def main():
         moved = moved_rooms(info)
         if moved:
             # D-081 follow-up: a k38 run timed out on the door-stitched scene; plan_beta once more on the scene as
-            # it was before the stitch (the stitch-off plan) before the alpha extractor. scene/ keeps the stitched
-            # scene and its undo record.
+            # it was before the stitch (the stitch-off plan) before the alpha extractor. Every later step uses the
+            # unstitched scene, so scene/ is saved again: replan_run.py and add_openings.py read what plan.json used.
             log(f"PLAN STEP TIMED OUT after {a.plan_timeout} s ({a.extractor}) on the door-stitched scene; "
                 f"retrying without the stitch ({', '.join(moved)} back where the pose graph put them)")
             scene, info = undo_stitch(scene, info)
             report["plan_timeout"]["stitch_undone"] = moved
+            save_scene(scene, info, out / "scene")
+            log("scene saved again without the door stitch")
             try:
                 plan = _with_time_limit(lambda: _extract(a.extractor), a.plan_timeout)
                 report["plan_timeout"]["fallback"] = f"{a.extractor} without the door stitch"
