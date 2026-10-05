@@ -1,0 +1,31 @@
+{
+  "release": "data-v1",
+  "built_by": "scripts/pack_data.sh",
+  "fetched_by": "scripts/fetch_data.py",
+  "archives": [
+    {
+      "name": "own_house.zip",
+      "unpacks_to": "data/own_house",
+      "bytes": 178729470,
+      "sha256": "62cac742e6d7bb15662ba9ef6207edb4a8668d7764c793ab839cad6336794932",
+      "files": 19,
+      "what": "own house, one room: 7 lit + 6 dim photos and a walkthrough video (OnePlus Nord, 1x lens), the hand sketch; tape ground truth in gt/ (also in git)"
+    },
+    {
+      "name": "k65.zip",
+      "unpacks_to": "data/k65",
+      "bytes": 606950399,
+      "sha256": "bbafe1b788cdaa1c7c21897d3f1791df8d86852c5c42248a6ecc81e8ba78db76",
+      "files": 8399,
+      "what": "simulated k65 flat (Isaac Sim, iPhone 15 emulation): photos per room, video, LiDAR (Stray Scanner format), exact ground truth"
+    },
+    {
+      "name": "sample.zip",
+      "unpacks_to": "data/sample",
+      "bytes": 875226893,
+      "sha256": "5bf256a093a57c76b2f1e206f32be94248ea0d1330d269764943b7279ea6249f",
+      "files": 33434,
+      "what": "the case study's sample captures: single_room, single_scan_floor_only, single_scan_with_ceiling (Stray Scanner folders)"
+    }
+  ]
+}

@@ -38,12 +38,13 @@ def _seg_python() -> Path | None:
 
 
 def seg_hf_home(py: Path | None = None) -> Path:
-    """HF_HOME the segmenter runs with: $HF_HOME if set, else weights/hf_seg in the folder that holds envs/ (the repo's
-    parent by default, where setup/seg_env.sh builds the env). scripts/fetch_weights.py puts the model there."""
+    """HF_HOME the segmenter runs with: $HF_HOME if set (floorplan/paths.py sets it to weights/hf in the repo when
+    scripts/fetch_weights.py put the models there), else weights/hf_seg in the folder that holds envs/ (the repo,
+    or its parent on the dev machine)."""
     if "HF_HOME" in os.environ:
         return Path(os.environ["HF_HOME"])
     py = py or _seg_python()
-    root = py.parents[3] if py is not None else Path(__file__).resolve().parents[3]
+    root = py.parents[3] if py is not None else Path(__file__).resolve().parents[2]
     return root / "weights" / "hf_seg"
 
 

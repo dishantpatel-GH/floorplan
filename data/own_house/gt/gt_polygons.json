@@ -1,0 +1,172 @@
+{
+ "note": "outlines for wall pairing only (sketch layout + tape lengths, not to scale); scored lengths come from ground_truth.csv",
+ "rooms": [
+  {
+   "id": "hall",
+   "polygon": [
+    [
+     0,
+     2.845
+    ],
+    [
+     4.468999999999999,
+     2.845
+    ],
+    [
+     4.468999999999999,
+     0
+    ],
+    [
+     3.7639999999999993,
+     0
+    ],
+    [
+     2.388,
+     0
+    ],
+    [
+     0,
+     0
+    ]
+   ],
+   "walls_cw": [
+    {
+     "name": "W1",
+     "edge": 0,
+     "openings": [
+      "door_entrance"
+     ]
+    },
+    {
+     "name": "W2",
+     "edge": 1,
+     "openings": [
+      "window"
+     ]
+    },
+    {
+     "name": "W3",
+     "edge": 2,
+     "openings": []
+    },
+    {
+     "name": "W4",
+     "edge": 4,
+     "openings": []
+    },
+    {
+     "name": "W5",
+     "edge": 5,
+     "openings": []
+    }
+   ]
+  },
+  {
+   "id": "kitchen",
+   "polygon": [
+    [
+     3.7639999999999993,
+     -0.28800000000000003
+    ],
+    [
+     5.363999999999999,
+     -0.28800000000000003
+    ],
+    [
+     5.363999999999999,
+     -2.498
+    ],
+    [
+     3.153999999999999,
+     -2.498
+    ]
+   ],
+   "walls_cw": [
+    {
+     "name": "W1",
+     "edge": 0,
+     "openings": []
+    },
+    {
+     "name": "W2",
+     "edge": 1,
+     "openings": [
+      "window"
+     ]
+    },
+    {
+     "name": "W3",
+     "edge": 2,
+     "openings": []
+    }
+   ]
+  },
+  {
+   "id": "room",
+   "polygon": [
+    [
+     2.3789999999999987,
+     -2.648
+    ],
+    [
+     4.923999999999999,
+     -2.648
+    ],
+    [
+     4.923999999999999,
+     -2.774
+    ],
+    [
+     5.363999999999999,
+     -2.774
+    ],
+    [
+     5.363999999999999,
+     -6.382
+    ],
+    [
+     2.3789999999999987,
+     -6.382
+    ]
+   ],
+   "walls_cw": [
+    {
+     "name": "W1",
+     "edge": 0,
+     "openings": [
+      "door_R2"
+     ]
+    },
+    {
+     "name": "W2",
+     "edge": 1,
+     "openings": []
+    },
+    {
+     "name": "W3",
+     "edge": 2,
+     "openings": []
+    },
+    {
+     "name": "W4",
+     "edge": 3,
+     "openings": [
+      "door_R8"
+     ]
+    },
+    {
+     "name": "W5",
+     "edge": 4,
+     "openings": [
+      "window"
+     ]
+    },
+    {
+     "name": "W6",
+     "edge": 5,
+     "openings": []
+    }
+   ]
+  }
+ ]
+}

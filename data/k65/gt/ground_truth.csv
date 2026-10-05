@@ -1,0 +1,55 @@
+room_id,item_type,item_id,value_m,notes
+# simulated house kujiale_0065.usda: ground truth from scene geometry (sim/scene_gt.py)
+01_living_room,wall,W1,3.4549,"edge 1; surface +0.0 cm from rooms.json, spread 0.0 cm; mostly opening (wall surface on 9% at 0.8-1.7 m; length = corner to corner); openings door_0001 door_0002"
+01_living_room,wall,W2,8.0393,"edge 0; surface -1.8 cm from rooms.json, spread 1.8 cm"
+01_living_room,wall,W3,3.4519,"edge 7; surface +0.0 cm from rooms.json, spread 0.0 cm; openings door_0005"
+01_living_room,wall,W4,4.5366,"edge 6; surface -0.3 cm from rooms.json, spread 0.0 cm"
+01_living_room,wall,W5,0.9781,"edge 5; surface +0.0 cm from rooms.json, spread 0.0 cm; mostly opening (wall surface on 19% at 0.8-1.7 m; length = corner to corner); openings door_0004"
+01_living_room,wall,W6,1.0281,"edge 4; surface +0.0 cm from rooms.json, spread 0.0 cm; mostly opening (wall surface on 6% at 0.8-1.7 m; length = corner to corner); openings door_0003"
+01_living_room,wall,W7,0.9751,"edge 3; surface +0.0 cm from rooms.json, spread 0.0 cm"
+01_living_room,wall,W8,2.4746,"edge 2; surface -0.0 cm from rooms.json, spread 0.0 cm"
+01_living_room,ceiling_height,C1,2.7993,"near the middle; levels: 2.80 m (74%), 2.61 m (20%)"
+01_living_room,area,A1,28.7638,visible-surface polygon; rooms.json 28.922 m2
+02_bedroom,wall,W1,0.7351,"edge 4; surface -0.0 cm from rooms.json, spread 0.0 cm; mostly opening (wall surface on 0% at 0.8-1.7 m; length = corner to corner); openings door_0004"
+02_bedroom,wall,W2,4.2966,"edge 3; surface +0.0 cm from rooms.json, spread 0.0 cm"
+02_bedroom,wall,W3,3.9706,"edge 2; surface +0.0 cm from rooms.json, spread 0.0 cm; openings window_0002"
+02_bedroom,wall,W4,3.5671,"edge 1; surface +0.0 cm from rooms.json, spread 0.0 cm"
+02_bedroom,wall,W5,3.2355,"edge 0; surface -0.0 cm from rooms.json, spread 0.0 cm"
+02_bedroom,wall,W6,0.7295,"edge 5; surface +0.0 cm from rooms.json, spread 0.0 cm"
+02_bedroom,ceiling_height,C1,2.7993,"near the middle; levels: 2.80 m (70%), 2.61 m (15%), 2.60 m (9%)"
+02_bedroom,area,A1,14.6999,visible-surface polygon; rooms.json 14.700 m2
+03_kitchen,wall,W1,2.1892,"edge 1; surface -0.0 cm from rooms.json, spread 0.0 cm; mostly opening (wall surface on 0% at 0.8-1.7 m; length = corner to corner); openings door_0002"
+03_kitchen,wall,W2,2.4739,"edge 0; surface -0.0 cm from rooms.json, spread 0.0 cm"
+03_kitchen,wall,W3,2.1892,"edge 3; surface +0.0 cm from rooms.json, spread 0.0 cm; openings window_0000"
+03_kitchen,wall,W4,2.4739,"edge 2; surface +0.0 cm from rooms.json, spread 0.0 cm"
+03_kitchen,ceiling_height,C1,2.5550,"near the middle; levels: 2.56 m (71%), 2.55 m (29%)"
+03_kitchen,area,A1,5.4158,visible-surface polygon; rooms.json 5.416 m2
+04_bathroom,wall,W1,1.7576,"edge 3; surface -0.0 cm from rooms.json, spread 0.0 cm; openings door_0003"
+04_bathroom,wall,W2,2.9955,"edge 2; surface +0.0 cm from rooms.json, spread 0.0 cm"
+04_bathroom,wall,W3,1.7576,"edge 1; surface +0.0 cm from rooms.json, spread 0.0 cm; openings window_0003"
+04_bathroom,wall,W4,2.9955,"edge 0; surface +0.0 cm from rooms.json, spread 0.0 cm"
+04_bathroom,ceiling_height,C1,2.5938,near the middle; levels: 2.59 m (94%)
+04_bathroom,area,A1,5.2648,visible-surface polygon; rooms.json 5.265 m2
+05_balcony,wall,W1,3.4729,"edge 2; surface -0.0 cm from rooms.json, spread 0.0 cm; openings door_0005"
+05_balcony,wall,W2,1.4563,"edge 1; surface +0.0 cm from rooms.json, spread 0.0 cm"
+05_balcony,wall,W3,3.4729,"edge 0; surface -0.0 cm from rooms.json, spread 1.7 cm; mostly opening (wall surface on 0% at 0.8-1.7 m; length = corner to corner); openings window_0001"
+05_balcony,wall,W4,1.4563,"edge 3; surface -0.0 cm from rooms.json, spread 0.0 cm"
+05_balcony,ceiling_height,C1,2.6000,near the middle; levels: 2.60 m (100%)
+05_balcony,area,A1,5.0576,visible-surface polygon; rooms.json 5.058 m2
+01_living_room,door_width,door_0001,0.8300,wall hole 0.900 m; height 2.054 m; rooms 01_living_room
+01_living_room,door_width,door_0002,2.1192,wall hole 2.189 m; height 2.025 m; rooms 01_living_room+03_kitchen
+03_kitchen,door_width,door_0002,2.1192,wall hole 2.189 m; height 2.025 m; rooms 01_living_room+03_kitchen
+01_living_room,door_width,door_0003,0.7100,wall hole 0.800 m; height 2.054 m; rooms 01_living_room+04_bathroom
+04_bathroom,door_width,door_0003,0.7100,wall hole 0.800 m; height 2.054 m; rooms 01_living_room+04_bathroom
+01_living_room,door_width,door_0004,0.6451,wall hole 0.735 m; height 2.054 m; rooms 01_living_room+02_bedroom
+02_bedroom,door_width,door_0004,0.6451,wall hole 0.735 m; height 2.054 m; rooms 01_living_room+02_bedroom
+01_living_room,door_width,door_0005,2.2914,wall hole 2.400 m; height 2.364 m; rooms 01_living_room+05_balcony
+05_balcony,door_width,door_0005,2.2914,wall hole 2.400 m; height 2.364 m; rooms 01_living_room+05_balcony
+03_kitchen,window_width,window_0000,1.2000,"height 1.200 m, sill 0.900 m; rooms 03_kitchen"
+03_kitchen,window_sill,window_0000,0.9000,floor to the bottom of the wall opening
+05_balcony,window_width,window_0001,3.4729,"height 2.100 m, sill 0.200 m; rooms 05_balcony"
+05_balcony,window_sill,window_0001,0.2000,floor to the bottom of the wall opening
+02_bedroom,window_width,window_0002,2.8000,"height 2.200 m, sill 0.200 m; rooms 02_bedroom"
+02_bedroom,window_sill,window_0002,0.2000,floor to the bottom of the wall opening
+04_bathroom,window_width,window_0003,0.8000,"height 1.200 m, sill 0.900 m; rooms 04_bathroom"
+04_bathroom,window_sill,window_0003,0.9000,floor to the bottom of the wall opening

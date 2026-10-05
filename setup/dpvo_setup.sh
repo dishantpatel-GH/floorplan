@@ -6,11 +6,12 @@
 # and DPVO's dependencies pinned by setup/dpvo_constraints.txt, Eigen 3.4.0 headers, a build of DPVO's CUDA ops, the
 # torch_scatter shim (setup/dpvo_shims), and the weights dpvo.pth.
 #
-# Paths default to what vo.py looks for, in the folder that holds this repo:
+# Paths default to what vo.py looks for, in the repo folder (git-ignored; setup/install.sh calls this script):
 #   envs/dpvo                the env       (FLOORPLAN_DPVO_PYTHON = envs/dpvo/bin/python)
 #   third_party/dpvo         DPVO source   (FLOORPLAN_DPVO_REPO)
 #   third_party/dpvo_shims   the shim      (FLOORPLAN_DPVO_SHIMS)
-# vo.py reads the same variables (and FLOORPLAN_THIRD_PARTY_ROOT for another parent folder), so set them for both.
+# vo.py reads the same variables (and FLOORPLAN_THIRD_PARTY_ROOT for another folder), so set them for both.
+# The checkpoint goes to weights/hf in the repo when that folder exists (scripts/fetch_weights.py), else to $HF_HOME.
 #
 # Needs uv, git, curl, an NVIDIA GPU and the CUDA toolkit (built with nvcc 13.0; CUDA_HOME, default /usr/local/cuda).
 # TORCH_CUDA_ARCH_LIST defaults to 8.9, the GPU it was built on (RTX 2000 Ada); set it for another GPU.
@@ -20,7 +21,8 @@ set -euo pipefail
 unset PYTHONPATH          # packages on it (from a sourced ROS install, for example) leak into the build
 
 SETUP=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT=${FLOORPLAN_THIRD_PARTY_ROOT:-$(dirname "$(dirname "$SETUP")")}
+REPO=$(dirname "$SETUP")
+ROOT=${FLOORPLAN_THIRD_PARTY_ROOT:-$REPO}
 PY=${FLOORPLAN_DPVO_PYTHON:-$ROOT/envs/dpvo/bin/python}
 ENV=$(dirname "$(dirname "$PY")")
 DPVO=${FLOORPLAN_DPVO_REPO:-$ROOT/third_party/dpvo}
@@ -29,6 +31,7 @@ C=$SETUP/dpvo_constraints.txt
 DPVO_COMMIT=0ac95b656d1fda91c271d2a106460d19ad966fc7
 CKPT_REVISION=c998d3b57bf47c619f851d37dff0aa1fa43e1c34     # as in scripts/fetch_weights.py
 CKPT_SHA256=30d02dc2b88a321cf99aad8e4ea1152a44d791b5b65bf95ad036922819c0ff12
+if [ -z "${HF_HOME:-}" ] && [ -d "$REPO/weights/hf" ]; then export HF_HOME=$REPO/weights/hf; fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST:-8.9} MAX_JOBS=${MAX_JOBS:-6}
 
 # DPVO source at the pinned commit (shallow fetch)

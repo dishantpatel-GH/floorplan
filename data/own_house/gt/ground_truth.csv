@@ -1,0 +1,26 @@
+room_id,item_type,item_id,value_m,notes
+# own home (OnePlus Nord capture, 4 Oct 2026): tape measurements from the hand sketch; values without 'cm' on the sketch are inches (x 2.54). Room: lengths leave out beams and the recesses at both ends of the window wall (user note).
+room,wall,W1,2.5450,top wall: R1 46 in + door R2 31 in + R4 59 cm (door D1 on it)
+room,wall,W2,0.1260,step in the top wall (R5)
+room,wall,W3,0.4400,"top wall, right part (R6)"
+room,wall,W4,3.4800,right wall 115+22 in (door D2 on it)
+room,wall,W5,2.9970,window wall 118 in; tape leaves out the small recesses at both ends (user note)
+room,wall,W6,3.7340,left wall 110+37 in
+room,door_width,D1,0.7870,door on W1 (31 in)
+room,door_width,D2,0.7370,door on W4 (29 in)
+room,window_width,Win1,1.4730,window on W5 (58 x 47 in)
+room,ceiling_height,C1,2.6289,"tape, same in every room (user)"
+hall,wall,W1,4.4690,top wall: 104 cm open part + 118+17 in (column 5 x 9 in at the right end)
+hall,wall,W2,2.8830,right wall 113.5 in (window); top-right corner not 90 deg (user)
+hall,wall,W3,0.7050,"bottom wall, right part 70.5 cm (next to the kitchen)"
+hall,wall,W4,2.3880,"bottom wall, left part: written '9t', read as 94 in (check)"
+hall,wall,W5,2.8450,left wall 112 in
+hall,door_width,D1,1.0400,open entrance part of W1 (dashed on the sketch)
+hall,window_width,Win1,1.7530,window on W2 (69 x 46 in)
+hall,ceiling_height,C1,2.6289,"tape, same in every room (user)"
+kitchen,wall,W1,1.6000,top wall 63 in
+kitchen,wall,W2,2.2100,right wall 87 in (window 115.5 x 90 cm)
+kitchen,wall,W3,2.2100,bottom wall 87 in (kitchen side)
+kitchen,window_width,Win1,1.1550,window on W2
+kitchen,ceiling_height,C1,2.6289,"tape, same in every room (user)"
+passage,door_width,D1,0.7000,bathroom door on the passage's left wall (70 cm)

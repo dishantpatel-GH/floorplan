@@ -1,11 +1,20 @@
 # runs, data, weights and environments stay out of git (scripts fetch or regenerate them)
 /outputs
 /off/
-/data/
-/weights/
-/envs/
-/.venv/
-/third_party/
+/data/*
+!/data/README.md
+!/data/MANIFEST.json
+!/data/cubicasa/
+!/data/own_house/
+/data/own_house/*
+!/data/own_house/gt/
+!/data/k65/
+/data/k65/*
+!/data/k65/gt/
+/weights
+/envs
+/.venv
+/third_party
 /captures/
 photo_work/
 *.ply
@@ -34,3 +43,5 @@ __pycache__/
 *.pt
 *.pth
 *.safetensors
+# the CubiCasa export (Play Store app) is small enough for git
+!/data/cubicasa/*

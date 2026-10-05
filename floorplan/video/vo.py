@@ -1,8 +1,9 @@
 """Call DPVO in its own interpreter and return up-to-scale camera-to-world poses per video frame.
 
 DPVO needs compiled CUDA extensions (lietorch, cuda_corr, cuda_ba) built against its own environment, so it runs as
-a subprocess (`envs/dpvo/bin/python floorplan/video/dpvo_runner.py ...`). Paths come from environment variables so
-nothing machine-specific is hard-coded: FLOORPLAN_DPVO_PYTHON, FLOORPLAN_DPVO_REPO, FLOORPLAN_DPVO_SHIMS.
+a subprocess (`envs/dpvo/bin/python floorplan/video/dpvo_runner.py ...`). setup/dpvo_setup.sh builds envs/dpvo and
+third_party/dpvo in the repo folder; FLOORPLAN_DPVO_PYTHON, FLOORPLAN_DPVO_REPO and FLOORPLAN_DPVO_SHIMS override them
+(floorplan/paths.py).
 """
 from __future__ import annotations
 
@@ -13,11 +14,12 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-# default: envs/ and third_party/ sit next to the repo, in its parent folder
-MAPPING_ROOT = Path(os.environ.get("FLOORPLAN_THIRD_PARTY_ROOT", Path(__file__).resolve().parents[3]))
-DPVO_PYTHON = Path(os.environ.get("FLOORPLAN_DPVO_PYTHON", MAPPING_ROOT / "envs/dpvo/bin/python"))
-DPVO_REPO = Path(os.environ.get("FLOORPLAN_DPVO_REPO", MAPPING_ROOT / "third_party/dpvo"))
-DPVO_SHIMS = Path(os.environ.get("FLOORPLAN_DPVO_SHIMS", MAPPING_ROOT / "third_party/dpvo_shims"))
+from floorplan.paths import find
+
+# in the repo folder (setup/install.sh), else next to it (the dev machine)
+DPVO_PYTHON = find("envs/dpvo/bin/python", "FLOORPLAN_DPVO_PYTHON")
+DPVO_REPO = find("third_party/dpvo", "FLOORPLAN_DPVO_REPO")
+DPVO_SHIMS = find("third_party/dpvo_shims", "FLOORPLAN_DPVO_SHIMS")
 
 
 def run_dpvo(video: Path, out: Path, rot_cw: int, f_px: float, upright_size: tuple[int, int], params,

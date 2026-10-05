@@ -2,7 +2,7 @@
 # Builds the env for the photo tier's wall masks (SegFormer-B5 on ADE20K, D-060). It needs transformers, which must
 # stay out of the main env (docs/ISSUES.md I-002), so it gets its own env with its own torch. No sudo, no compiling.
 #
-# The env goes to envs/seg in the folder that holds this repo, where floorplan/photo/semantic.py looks; set
+# The env goes to envs/seg in the repo folder (git-ignored), where floorplan/photo/semantic.py looks first; set
 # FLOORPLAN_SEG_PYTHON (for both) to put it elsewhere. Versions: setup/seg_constraints.txt. The model itself is
 # fetched by scripts/fetch_weights.py. Without this env the photo tier still runs, from geometry only, and says so in
 # run_report.json and plan.json.
@@ -12,7 +12,8 @@ set -euo pipefail
 unset PYTHONPATH          # packages on it (from a sourced ROS install, for example) leak into the env
 
 SETUP=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PY=${FLOORPLAN_SEG_PYTHON:-$(dirname "$(dirname "$SETUP")")/envs/seg/bin/python}
+REPO=$(dirname "$SETUP")
+PY=${FLOORPLAN_SEG_PYTHON:-$REPO/envs/seg/bin/python}
 ENV=$(dirname "$(dirname "$PY")")
 C=$SETUP/seg_constraints.txt
 
@@ -25,7 +26,9 @@ uv pip install --python "$PY" -c "$C" transformers scipy numpy pillow
 uv pip install --python "$PY" -c "$C" torch torchvision --index-url https://download.pytorch.org/whl/cu130
 
 # Check the imports, and whether the pinned model is in the cache the segmenter reads (the same rule as
-# floorplan/photo/semantic.py: $HF_HOME, else weights/hf_seg next to envs/).
+# floorplan/photo/semantic.py: $HF_HOME, which floorplan/paths.py sets to weights/hf in the repo when that exists,
+# else weights/hf_seg next to envs/).
+if [ -z "${HF_HOME:-}" ] && [ -d "$REPO/weights/hf" ]; then export HF_HOME=$REPO/weights/hf; fi
 export HF_HOME=${HF_HOME:-$(dirname "$(dirname "$ENV")")/weights/hf_seg}
 HF_HUB_OFFLINE=1 "$PY" - "$SETUP/../scripts" <<'EOF'
 import sys
