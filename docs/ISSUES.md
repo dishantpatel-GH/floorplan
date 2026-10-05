@@ -128,6 +128,15 @@ Module-level issues live in `docs/modules/<module>.md`, section 4.
   - On own captures, check whether the protocol (doorway pauses, ≥ 1.5 m from walls) removes the restarts that make
     the outcome fragile.
 - **Status.** Open; documented, and mitigated only by honest intervals.
+- **Fix loop, 5 Oct (D-075).** The PnP scale did not make the video repeatable.
+  - take1 after the fix: 2 rooms / 28.8 m², then 1 room / 6.4 m² (before: 4 / 22.9 and 4 / 37.8 m²). The second run's
+    DPVO path was cut into 4 segments and the self-check dropped 208 of 228 keyframes; the first had 1 segment.
+  - Sample videos after the fix, one run each: single_room +25.3% footprint (d069: −1.6 to −4.5%), floor_only 0 rooms
+    (d066: 5), with_ceiling 1 room (final: 5). Replayed on the same cached DPVO runs, the old scale step is also far off
+    (+19.9%, 0 rooms, 3 rooms with one 48 m² room). So the DPVO run decides most of the outcome
+    (`FIX_LOOP.md`, after the fix; `outputs/fixloop/after/replay/`).
+  - A replay from the cache is close to its live run but not bit-identical: the cache keeps the depth as float16. On
+    with_ceiling that moved one segment cut.
 
 ## I-008 Isaac Sim's Replicator crashes in my env_isaaclab (numpy 2.4.2; Isaac Sim 5.1 needs numpy 1.26.0)
 
@@ -335,3 +344,8 @@ Useless/weak photos: 7/7 of 38 (v2.1: 6/9). For the next capture round:
   28.42 m² (+61%).
 - **Next step.** D-070: write the policy for briefly entered space first, then ship the three changes together and
   validate on every real LiDAR scene, the sample videos and the simulator. Candidate for the fix loop.
+- **Status, 5 Oct (fix loop).** Open. The after-fix single_room run shows the symptom again: the closet is 5.85 m²
+  against 1.93 m² on LiDAR, footprint +25.3% (`outputs/fixloop/after/sample_single_room`). Replayed on the same DPVO
+  run, the old scale step also makes the third room too big, 4.26 m² (d069: 1.24–1.61 m²), with the plan +19.9%; the
+  new step gives +29.3% (`outputs/fixloop/after/replay/single_room_{old,new}`). So the symptom is there without D-075,
+  and D-075 makes that plan 1.6 m² larger.

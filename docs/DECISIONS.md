@@ -1432,3 +1432,39 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     far, the wardrobe side 70 cm too near.
   - A weakly tilted ceiling photo that is not the last one is still missed (small-room protocol: a doorway photo
     follows it).
+
+## D-075 Video scale from PnP on MoGe-2 depth (fix loop; the gate still fails)
+
+- **Context.** The declared fix-loop gate (`FIX_LOOP.md` Part 1): video walls within ±3% on my take1, 0 of 14 in both
+  before runs. The local scale came from depth agreement between keyframe pairs, and few pairs voted: 31 and 25 of 902.
+  On the 23:28 run DPVO's scale dropped about 13× at t 34.5 s, no pair voted between t 12 and 37 s, and the ±1.5× clamp
+  hid the drop.
+- **Options.** Each was replayed on the 23:28 run and rejected (`FIX_LOOP.md` Part 1, item 2): another depth model
+  (MoGe-2 is within 6% inside one frame), the plan step (3 rooms on the PnP-scaled scene), the D-066 gate back at 0.005,
+  no clamp, and PnP votes plus a cut at the jump.
+- **Decision** (`floorplan/video/scale.py`, `dced951`, tag `after-fix`). For keyframe pairs 2, 4 and 6 apart: SIFT
+  matches, the MoGe-2 depth of the first frame, `solvePnPRansac` and an LM refine. A pair votes when its metric step is
+  at least 8 cm and it agrees with DPVO within 35° in direction and 4° in rotation. The vote is metric step / DPVO step.
+  The local scale is the running median of the votes within ±8 keyframes (at least 3 votes, log-interpolated in
+  between). The Gaussian window and the ±1.5× clamp are gone. Segment cuts, DPVO re-runs, the self-check, the pose graph
+  and the plan step are unchanged.
+- **Evidence** (`FIX_LOOP.md`, "After the fix": two runs, then each run replayed on its own cached DPVO run with the old
+  and the new scale step).
+  - Gate: 0 / 0 → 3 / 0 of 14 within 3% (predicted 0, range 0–2). On the same DPVO runs, old → new: 1 → 1 and 1 → 0.
+    The gate did not move beyond run-to-run noise.
+  - The walk holds together. On r1's DPVO run kf1–kf42 goes from 10.47 to 0.68 m (0.50 m by PnP), and the footprint from
+    37.8 to 29.2 m² (the house is about 29–31 m²). The real r1's bedroom is 11.02 m² against 11.09 m², with 3 walls
+    within 3%.
+  - Plans: 2 and 1 rooms, against 3 (3–4) predicted.
+- **Limits / revisit if.**
+  - The self-check's spread limit (2.0) assumed the clamp, which kept the spread at 2.25 or less. The PnP scale follows
+    DPVO's real drift (spreads of 2 to 107 here), so drifting segments are now dropped. On take1 r2's DPVO run 20
+    keyframes stay, against 121 with the old step: 1 room against 2.
+  - On the sample videos the after runs are worse than the before runs: single_room +25.3% footprint, floor_only 0
+    rooms, with_ceiling 1 room. The old step on the same DPVO runs is also far off (+19.9%, 0 rooms, and 3 rooms with one
+    48 m² room; for with_ceiling one DPVO segment had to be run again), so this is mainly the DPVO run (I-007), not this
+    change. On single_room the new step's plan is still 1.6 m² larger (+29.3% against +19.9%).
+  - Next, not done: a self-check that fits the PnP scale (for example the votes' scatter around the running median, not
+    the spread of the scale itself), then the after runs again.
+- **Status.** In the code since `dced951`. Keeping it, or going back to the clamp until the self-check is redone, is not
+  decided here.

@@ -1,10 +1,18 @@
 # Fix loop (Part 4): declaration, shipped fix, before/after
 
-Status, 5 Oct 02:31 IST. **Declared: the video wall gate.** Part 1 is filled in from the scored before runs and
-committed **before** any fix code (tag `before-fix`). The fix and the after runs are not in yet.
-Part 2 lists the candidates as they stood on 4 Oct. Part 3 is the procedure; its ranking rule (step 3) is word for
-word the one committed in `e042ca5`. Every number here is quoted from the file named next to it. Numbers in
-`<angle brackets>` do not exist yet.
+Status, 5 Oct 04:50 IST. **Declared: the video wall gate. Shipped: scale votes from PnP (`dced951`, tag `after-fix`).
+The gate still fails, and the prediction was wrong.** Part 1 was filled in from the scored before runs and committed
+**before** any fix code (tag `before-fix`). The after runs, the replays and the verdict are appended under it; the
+declaration itself is unchanged. Part 2 lists the candidates as they stood on 4 Oct. Part 3 is the procedure; its
+ranking rule (step 3) is word for word the one committed in `e042ca5`. Every number here is quoted from the file named
+next to it.
+
+Correction, 5 Oct (review). Part 1, item 1 says the rule was "committed before the own capture was scored". That is
+wrong. `e042ca5` went into git at 00:03 on 5 Oct, with the replayed history (`README.md`, History). The own capture was
+first scored before that: the photos at 23:30 and photos plus video at 23:38 on 4 Oct (`outputs/own_house/eval_photo/`,
+`outputs/own_house/eval_all/`). The rule's text is older than the capture: the scratch copy of this file was last saved
+at 21:17 on 4 Oct, its step 3 is the same as in `e042ca5`, and the photos were taken at 22:38–22:40 (their file names).
+That evidence is a file time on my laptop. Git does not show it.
 
 ---
 
@@ -91,15 +99,174 @@ Filled in on 5 Oct at 02:31 IST, before any fix code. The ranking behind it is i
 > git diff before-fix after-fix -- floorplan scripts/run_capture.py > docs/fixloop.diff
 > ```
 
-After the fix, appended under the declaration and never edited into it:
+After the fix, appended under the declaration and never edited into it.
 
-| | Before (`before-fix`) | Predicted | After (`after-fix`) |
+### After the fix: runs, replays and verdict (5 Oct, 02:59–04:47 IST)
+
+**What ran.**
+- Code `dced951` ("video: scale votes from pnp on moge depth"), tag `after-fix`, clean tree
+  (`outputs/fixloop/after/CODE_COMMIT.txt`).
+- Item 4 with `S=after` (`outputs/fixloop/after/run_after.sh`): take1 r1 at 02:59–03:09 and r2 at 03:10–03:21, one
+  after the other on the GPU, then the scoring.
+- Same scorer and tape GT as the before runs. `scripts/eval_own_capture.py` and `floorplan/benchmark/` have no change
+  since `7b1a40f`, and the two photo plans score exactly as before.
+- `outputs/fixloop/after/summarize.py` reads the four video runs (`summary.json`). All four have the same 228
+  keyframes, so kf1 / kf42 is the same pair of frames in each.
+
+**How walls are counted.** The scorer writes no rows for a tape room that has no plan room. After r1 has no kitchen
+and after r2 has one room, so the scorer's own fraction is over 11 and 6 walls. The gate counts all 14 tape walls, as
+declared. A wall of a missing room is a failure.
+
+| | Before (`before-fix`), r1 / r2 | Predicted | After (`after-fix`), r1 / r2 |
 |---|---|---|---|
-| `<gate>` | `<number>` | `<number ± range>` | `<number>` |
-| Side effects checked | `<e.g. LiDAR plan hashes>` | unchanged | `<result>` |
+| **Gate: walls within ±3%** | **0 / 0 of 14** | **0 of 14 (0–2)** | **3 / 0 of 14** |
+| Walls within 10% | 1 / 3 of 14 | 6 of 14 (3–6) | 4 / 1 of 14 |
+| Walls found | 9 / 9 of 14 | 13 of 14 | 10 / 3 of 14 |
+| Median error of the found walls | 20.1% / 28.6% | 10.5% (10.5–40.0%) | 15.9% / 34.9% |
+| Rooms | 4 / 4 | 3 (3–4) | 2 / 1 |
+| Footprint (the house is about 29–31 m²) | 22.9 / 37.8 m² | 29.5 m² (29.5–31.4) | 28.8 / 6.4 m² |
+| 95% interval coverage | 9 / 6 of 14 | 0.82 (0.65–0.82) | 11 of 14 / 1 of 3 |
+| Ceilings within 1.5 cm | 0 / 0 of 3 | 0 of 3 | 0 / 0 of 3 |
+| Door widths within 2 cm | 0 of 3 / 1 of 4 | 0 of 3–4 | 1 of 4 / 0 of 2 |
+| kf1 to kf42 in the scene (0.50 m by PnP) | 127.0 m (kf1 left out) / 9.39 m | 0.47 m | 0.70 m / both left out |
+| Keyframes in the scene | 177 / 228 of 228 | 228 | 228 / 20 |
+| Scale votes | 31 / 25 depth-agreement pairs | 177 PnP votes | 147 / 192 PnP votes |
+| Self-check | r1: kf 0–50 fail on residual; r2: pass | fails (spread 7.9 > 2.0) | r1: fails (spread 102.5), all kept; r2: 3 of 4 segments fail on spread |
+| Low-reliability flag | yes / no | yes | yes / yes |
 
-- Readable diff: `git diff before-fix after-fix -- <paths>` (saved as `docs/fixloop.diff`).
-- Verdict: `<pass / meaningful movement short of the gate, and why / prediction wrong, and why>`.
+Sources: `outputs/fixloop/after/eval/own_eval.md`, `summary.json`, `eval/step4_scale_check.json` and the run logs.
+The kf distances "by PnP" come from PnP on MoGe-2 depth (`outputs/own_house/diag/video/revisit_check.json`), the kind
+of measurement the fix votes with. They are not tape. The tape checks are the walls and the room areas.
+
+**After r1.**
+- The bedroom (R2) is 11.02 m² against 11.09 m² on the tape outline. W1 (+1.7%), W4 (+0.5%) and W6 (−2.1%) are within
+  3%; W5 is −5.7%. The short walls W2 (0.126 m) and W3 (0.44 m) are off by +3.3 and −9.0 cm. Door D2 is 0.731 m against
+  0.737 m.
+- R1 (17.82 m²) is the hall, the kitchen and the passage in one room: the camera is inside R1 for all of t 0–76 s.
+  It is paired with the hall (12.71 m² on the tape outline): W1 −82.7%, W2 −49.9%, W5 −61.3%, W4 +11.4%, W3 missed.
+- Places filmed twice now sit where they should (true distance by PnP / in the scene): kf1–kf42 0.50 / 0.70 m,
+  kf68–kf129 0.44 / 0.58, kf69–kf124 0.64 / 0.60, kf156–kf200 0.32 / 0.29, kf156–kf225 0.31 / 0.51,
+  kf158–kf205 0.06 / 0.60. The pose graph accepts 6 loops (3 revisits); each before run accepted 1.
+- The local scale runs from 0.27 to 47.8 inside one segment (174×). That is DPVO's own drift on this run, now
+  followed. The self-check fails on it (spread 102.5 > 2.0). No segment passes, so the front end keeps them all.
+- Ceilings: bedroom 1.918 m (−71.1 cm), hall 2.924 m (+29.5 cm), kitchen none.
+- Part 3, step 4: 6 short and 4 long of 10 found walls (60% one sign), median signed −3.9%. The rule no longer calls
+  it scale.
+
+**After r2.**
+- DPVO's first run was cut at kf 51, 71 and 127, and DPVO ran again from frame 2215. Only kf 51–70 passes the
+  self-check (spread 1.05). The other three segments fail on spread (11.16, 2.14, 10.37 > 2.0), so 208 of 228
+  keyframes are left out.
+- The one room (6.35 m²) is built from kf 51–70 (t 34.8–46.2 s), the walk from the hall into the kitchen. The scorer
+  pairs it with the bedroom by its label "room", so its 3 "found" walls are not bedroom walls.
+
+**The same DPVO run with the old and the new scale step.** The two after runs differ in their DPVO runs, as the before
+runs did (I-007). To separate the fix from that, I replayed each after run on its own cached DPVO (first and fresh
+runs), MoGe-2, GeoCalib and SfM arrays, once with the before-fix code and once with the after-fix code. CPU only, one
+job at a time (`outputs/fixloop/after/replay.py`, `run_replays.sh`, results in `replay/`).
+- Check: the after-fix replays are close to the real runs but not bit-identical. The cache holds the depth as float16,
+  the live run used float32. They give the same segments and the same self-check verdicts. r1: 2 rooms, 29.24 m² (real
+  28.84), kf1–kf42 0.68 m (real 0.70), but 1 wall within 3%, not 3. r2: 1 room, 6.27 m² (real 6.35).
+
+| take1 (`replay/eval/own_eval.md`) | r1's DPVO run: old → new | r2's DPVO run: old → new |
+|---|---|---|
+| Walls within 3% | 1 → 1 of 14 | 1 → 0 of 14 |
+| Walls within 10% / found | 1 / 6 → 3 / 8 | 1 / 8 → 1 / 3 |
+| Rooms, footprint | 2, 37.79 m² → 2, 29.24 m² | 2, 18.70 m² → 1, 6.27 m² |
+| Keyframes in the scene | 228 → 228 | 121 → 20 |
+| kf1–kf42 (0.50 m by PnP) | 10.47 → 0.68 m | left out in both |
+| kf68–kf129 (0.44 m by PnP) | 0.09 → 0.58 m | 26.62 m → left out |
+
+- On r1's DPVO run the fix puts the walk together: the footprint goes from 37.8 to 29.2 m², and kf1–kf42 from 10.47 to
+  0.68 m. The gate does not move: 1 → 1 of 14.
+- On r2's DPVO run the fix loses most of the plan. With the old step, segments 1 and 3 pass the spread test (1.00 and
+  1.50; the old clamp kept the spread at 2.25 or less), and 121 keyframes stay. With the new step their spreads are
+  1.05 and 10.60, so 20 keyframes stay.
+- So the 3 of 14 of the real r1 is within the noise: the same code on the same DPVO run, with float16 depth, gives 1.
+
+**Side effects.**
+- Photo and LiDAR plans cannot change. The diff touches `floorplan/video/{scale,frontend,params}.py` and adds a test.
+  `floorplan/video/scale.py` is imported only by `floorplan/video/frontend.py` and `tests/test_scale_votes.py` (grep
+  over the repo, `outputs/` left out). The photo tier's `floorplan/photo/frontend.py` imports `floorplan/photo/scale.py`,
+  a different module. Importing the LiDAR and photo entry points loads no `floorplan.video` module. The two photo plans
+  score exactly as before.
+- The recruiters' sample videos, video tier only (never the photo tier): one after run each, 03:22–04:07, in
+  `outputs/fixloop/after/sample_<capture>`. They ran with `--no-damage`; damage only adds annotations to a finished
+  plan. Each plan is scored against the LiDAR plan of the same capture with `scripts/bench_tier_ref.py`
+  (`compare_samples.py`, `samples.json`; the replays in `replay/samples_replay_vs_lidar.json`). "Sides" are the two
+  box dimensions of each matched room.
+
+| Sample (LiDAR plan) | Before | After, one run | Same DPVO run as the after run (with_ceiling: a re-run, see below): old → new scale step |
+|---|---|---|---|
+| single_room (3 rooms, 17.61 m²) | d069 r1–r3: 3 rooms, −1.6 / −4.5 / −2.7%; sides within 3%: 2, 3, 2 of 4 | 3 rooms, 22.07 m² (+25.3%); sides 0 of 6 | 3 rooms each, +19.9% → +29.3%; sides 0 of 4 → 2 of 6 |
+| floor_only (8 rooms, 61.90 m²) | d066: 5 rooms, 30.11 m² (−51.4%); sides 0 of 8 | 0 rooms | 0 rooms → 1 room, 7.62 m² |
+| with_ceiling (8 rooms, 62.50 m²) | final (4 Oct 05:55, older code): 5 rooms, 19.40 m² (−69.0%); sides 2 of 6 | 1 room, 5.20 m² (−91.7%) | 3 rooms, 54.28 m² → 2 rooms, 54.45 m² |
+
+- All three after runs are worse than the before runs. On the same DPVO runs the old scale step is also far off, so
+  the drop comes mainly from these DPVO runs (I-007), not from the fix.
+  - single_room: both steps give a plan 20–29% too large. In the after run the closet is 5.85 m² against 1.93 m² on
+    LiDAR (the I-014 symptom); the two main rooms are within 2.5% in area.
+  - floor_only: 4 of 6 segments pass the self-check. Their joins are not verified, and the first four segments end up
+    with the camera 4.5 m above the floor the plan uses. Both steps give 0 or 1 room. The before run d066 kept only its
+    first segment.
+  - with_ceiling: on the cached float16 depth one cut moved, so this replay pair ran one fresh DPVO run again (frames
+    214–1968, `run_replay_wc.sh`; GPU). Both steps then fail the same two long segments on spread (old 2.01 and 2.25,
+    new 3.47 and 10.99) and keep 211 of 836 keyframes. Both plans have one 48–50 m² room. The real after run kept 26.
+
+**Verdict: prediction wrong, and why.**
+- The gate fails, as predicted. After: 3 and 0 of 14 within 3%, against 14 needed. The rule's number (the better run)
+  goes from 0 to 3 of 14, a shortfall of 1.00 → 0.79. 3 is above the predicted range (0–2); r2's 0 is inside it. But on
+  the same DPVO runs the old and the new scale step give 1 and 1 (r1) and 1 and 0 (r2). So the gate did not move beyond
+  run-to-run noise.
+- The plan did not come out as predicted: 2 and 1 rooms against 3 (3–4); 10 and 3 walls found against 13; 28.8 and
+  6.4 m² against 29.5 (29.5–31.4).
+- Why the prediction missed: it came from replays of one run (23:28) with one segment. That segment failed the
+  self-check, and when no segment passes, the front end keeps everything. The fix left the spread test at 2.0. That
+  limit was set when the clamp kept the spread at 2.25 or less. The PnP scale follows DPVO's real drift, with spreads
+  of 2 to 107 on these runs. Once one segment passes, the drifting ones are dropped: on r2's DPVO run 20 keyframes stay
+  instead of 121. I did not replay a run with several segments before declaring.
+- What the fix does, measured on the same DPVO run: the walk holds together. On r1's run kf1–kf42 goes from 10.47 to
+  0.68 m (0.50 m by PnP), and the footprint from 37.8 to 29.2 m² (the house is about 29–31 m²).
+- Not done here: a self-check that fits the PnP scale, for example the votes' scatter around the running median
+  instead of the spread of the scale itself. The after runs would then have to be run again.
+
+- Readable diff: `git diff before-fix after-fix -- floorplan/ tests/`, saved as `docs/fixloop.diff`.
+  `scripts/run_capture.py`, named in item 4, has no change.
+
+### Follow-up after the loop (5 Oct, from 05:20 IST)
+
+This is not part of the loop. The declaration, the after runs and the verdict above stay as they are. The question:
+should the shipped video tier use the PnP scale (D-075) or the old depth-agreement scale? Notes and scripts are in
+`outputs/fixloop/followup/`.
+
+**Why before r2's DPVO run collapses with the PnP scale** (no segment dropped, 1 room, camera 3.25 m above the plan
+floor; `cause_b.py`, `probe.py`):
+- The camera path drops 2.2 m. 1.47 m of it is two keyframe steps, kf 135 to 137 (t 78-80 s).
+- DPVO's step kf 136 to 137 points mostly down (0.0259 units down, 0.0078 across). The local scale there is 44.2, so
+  it becomes 1.14 m. With the old scale (5.44) it is 0.14 m.
+- PnP solves no pair between kf 131 and 137. The one pair over the step, kf 136 to 138, says 0.95 m with 0.30 m down;
+  DPVO says 1.48 m with 1.23 m down. They differ by 38° in direction and 16.5° in rotation. So DPVO glitches where
+  PnP finds no matches.
+- Each keyframe's own depth puts its camera 1.33 m (median) above the floor it sees. The floor's height in the scene
+  is about -1.4 m before kf 137 and about -3.2 m after it.
+- The pose graph anchors only floors within 0.15 m of the lowest ones (3 fragments), so it does not level this. The
+  plan takes the lowest floor, and the hall and bedroom, filmed before t 80 s, sit 2 m above it.
+
+**Follow-up.** For the PnP scale only: (1) the self-check judges a segment by its vote coverage and vote residual,
+not by the spread of its scale; (2) before the pose graph, the camera path is moved vertically so that every
+keyframe puts the floor it sees at one height. `scale_method = "pnp" | "depth_agreement"` selects the scale step;
+"depth_agreement" is the code before D-075.
+
+**Decision rule, written before any follow-up replay was run** (`outputs/fixloop/followup/NOTES.md`):
+- Arms on each cached DPVO run: old = "depth_agreement"; new = "pnp" with the follow-up. Runs: take1 before r1, r2,
+  after r1, r2 and 23:28; single_room d069 r1-r3 and the after run; floor_only and with_ceiling (after runs).
+- Errors per run. Room count: own, distance from 3-4 rooms; samples, |rooms − LiDAR rooms|. Footprint:
+  |footprint / reference − 1|, reference 30 m² (own) or the LiDAR plan.
+- New is worse on a run if it has a larger room-count error, or a footprint error more than 5 points larger. It is
+  better if it is not worse and has a smaller room-count error or a footprint error more than 5 points smaller.
+- "pnp" becomes the default only if (A) it is not worse on more than half of all runs, and (B) on the 5 own runs it
+  has a lower median footprint error and a lower total room-count error. Otherwise "depth_agreement" is the default
+  again and "pnp" stays behind the parameter.
 
 ---
 
@@ -233,7 +400,8 @@ say that the prediction was the judge's.
 ## Part 3. Morning procedure (own capture → worst gate → declare → fix → before/after)
 
 **0. Before scoring anything.** Commit this file unchanged. Done in commit `e042ca5` ("fix loop: write the ranking
-rule before the own capture is scored"), so the rule in step 3 is provably fixed in advance.
+rule before the own capture is scored"). That commit came with the replayed history at 00:03 on 5 Oct, after the first
+scoring at 23:38 on 4 Oct, so git alone does not prove the rule came first (see the correction at the top).
 
 **1. Process and score the own capture** (`OWN_CAPTURE_RUNBOOK.md`):
 

@@ -98,7 +98,7 @@ GeoCalib (Apache-2.0 code, CC-BY-4.0 weights: attribution), ALIKED (BSD-3), Ligh
 | 5 | Camera path | `vo.py`, `dpvo_runner.py` | DPVO (deep patch visual odometry) on every 2nd frame at 480x640, in its own interpreter. | It gives a smooth, locally accurate camera path for every frame, including stretches with blank walls. | SfM breaks into fragments on this footage (V-3). |
 | 6 | Gravity + flip check | `orientation.py`, `frontend.py` | GeoCalib's per-frame "up" vector is rotated into the DPVO world by the camera orientations, and outliers are removed from the mean. Then a check: phones film walkthroughs looking down, so if the median camera pitch comes out *above* the horizon, the frames are upside down. In that case they are turned 180° and "up" is flipped. | Heights (ceiling, sills) need "up". GeoCalib alone cannot tell 0° from 180° (Issue 2). | The scene could be built upside down. |
 | 7 | Metric depth | `depth.py` | MoGe-2 depth for each upright keyframe (504 px), with the focal length passed in. Pixels beyond 4 m and "flying pixels" at depth edges are removed. | This is the only metric signal in an RGB video. | There would be no scale and no dense surface. |
-| 8 | Scale + drift correction | `scale.py` | For keyframe pairs, finds the translation scale at which the two metric depth maps agree. It sums those cost curves over a time window, cuts the window at scale *jumps*, and re-integrates the path with the local scale. It also estimates the scale uncertainty (block bootstrap plus a model-bias term). | DPVO's scale is unknown, drifts and can jump (V-6). | Wall lengths would be off by 20% or more (measured). |
+| 8 | Scale + drift correction | `scale.py` | For keyframe pairs, finds the translation scale at which the two metric depth maps agree, and cuts the path at scale *jumps*. Since D-075 (`dced951`, fix loop) the local scale inside a segment is the running median of PnP votes (SIFT matches on keyframes 2, 4 and 6 apart, MoGe-2 depth, metric step / DPVO step, ±8 keyframes); before, it was the sum of the depth-agreement curves over a time window, clamped to ±1.5× of the segment's scale. The path is re-integrated with the local scale. It also estimates the scale uncertainty (block bootstrap over the votes plus a model-bias term). | DPVO's scale is unknown, drifts and can jump (V-6). | Wall lengths would be off by 20% or more (measured). |
 | 9 | Fusion | `frontend.py` → `floorplan.recon.fusion.fuse_tsdf` | The predicted depth maps are fused with the **same TSDF code as the LiDAR tier**, through a small adapter object (`VideoCapture`). | Averaging many noisy depth maps gives one consistent surface. | Duplicate, noisy surfaces. |
 | 10 | Alignment | `floorplan.plan.align` | Gravity is refined on the floor plane (up to 10°). Then Manhattan yaw, floor level and ceiling level are computed with the shared LiDAR-tier code. | Heights are measured along "up", and walls should run along x and z. | Tilted floors and walls at odd angles. |
 
@@ -213,6 +213,8 @@ both models:
     keyframes.
   - Inside a segment, the local scale is clamped to within 1.5x of the segment's scale, because windows with
     little information (for example the last keyframes) otherwise wander.
+  - Changed by D-075 (5 Oct, fix loop): the Gaussian window and the 1.5x clamp were replaced by a running median of
+    PnP votes. The jump cuts and the merge below stay.
   - After the fine curves are computed, adjacent segments whose fine scales differ by less than sqrt(2) are merged
     again. This is a false-cut guard (Issue 13b).
   - Every scene reports `info.scale.vo_restarts` and `whole_scene_consistent`. After a restart, each segment is
@@ -612,6 +614,8 @@ In words:
 - **Thresholds.** Spread ≤ 2.0 and residual ≤ 0.058, with at least 20 keyframes.
   - The spread threshold started at 1.6. It was raised once the stride-1 h264 phone run's good segment (+1.5% error)
     measured 1.67, while broken segments sit at 2.18–2.25, where the clamps are hit.
+  - Since D-075 there is no clamp. In the fix-loop runs, segments failed on spreads of 2.1–107 while their residuals
+    passed (`FIX_LOOP.md`, after the fix). The limit has not been re-tuned for the PnP scale.
 - **Measured.**
   - Segments with a small error: spread 1.00–1.87, residual 0.036–0.055 (single_room, floor_only, with_ceiling,
     phones).

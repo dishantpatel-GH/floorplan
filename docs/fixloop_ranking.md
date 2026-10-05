@@ -3,6 +3,11 @@
 This is the ranking rule of `FIX_LOOP.md` (Part 3, step 3) applied to my own capture, at the code tagged `before-fix`.
 The rule was committed in `e042ca5`, before the own capture was scored. I scored the runs on 5 Oct at 02:24 IST.
 
+Correction, 5 Oct (review): `e042ca5` came into git with the replayed history at 00:03 on 5 Oct. The own capture was
+first scored before that: the photos at 23:30 and photos plus video at 23:38 on 4 Oct (`outputs/own_house/eval_photo/`,
+`eval_all/`). The four pre-fixes below came after that scoring. The rule's text is older than the capture;
+`FIX_LOOP.md` (top) gives the evidence, which is a file time, not git.
+
 ## What was scored
 
 - **Code:** `7b1a40f`, with a clean tree. It has the four pre-fixes: D-074 (the photo ceiling cut-off), the MoGe CPU
