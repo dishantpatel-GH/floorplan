@@ -754,8 +754,9 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
         else:
             from floorplan.video.path_mapanything import frontend_path
         sfm = frontend_path(files, D, T_kf, vo, kf, ts, work, f_sfm_res, geo, ok, ups_kf, flipped, ex, params, log)
-        T_kf, vo, ex, ups, up, up_spread, pitch = (sfm[k] for k in ("T_kf", "vo", "exclude", "ups", "up",
-                                                                     "up_spread", "pitch"))
+        if sfm:                         # None: the path failed its own check and the run keeps DPVO's path
+            T_kf, vo, ex, ups, up, up_spread, pitch = (sfm[k] for k in ("T_kf", "vo", "exclude", "ups", "up",
+                                                                         "up_spread", "pitch"))
         tick(f"path_{params.path_source}")
 
     # 8. metric scale with drift correction; segments = stretches between VO scale restarts; the local scale comes

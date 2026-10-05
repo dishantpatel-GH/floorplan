@@ -174,6 +174,11 @@ def main():
                     help="video/photo: skip the doors and windows from the segmenter (floorplan/openings/semantic.py)")
     ap.add_argument("--no-room-names", action="store_true",
                     help="skip room names (Bedroom, Kitchen, ...) from the classes seen in each room (D-078)")
+    ap.add_argument("--door-priors", default="d", metavar="RULES",
+                    help="doors from priors where the door itself is not seen (floorplan/openings/priors.py, D-085): "
+                         "a = gaps 0.55-1.15 m with wall on both sides, b = doorway photos, c = the video path "
+                         "crossing between rooms, d = segmenter doors cut by the frame get the prior width; default "
+                         "'d' (the only rule that measured better), 'none' turns them off")
     ap.add_argument("--video-rooms", type=Path, metavar="JSON",
                     help="video tier, experimental: measure each room from its own turning frames with the photo tier "
                          "(floorplan/video/rooms_as_photos.py; JSON: the rooms' time windows and a video-tier run "
@@ -288,6 +293,12 @@ def main():
         cache = {"photo": work, "video": out / "work", "lidar": out / "names"}[a.tier]
         rep = name_rooms(plan, scene, info, a.tier, a.input, work, cache, log=log)
         report["room_names"] = {k: v for k, v in rep.items() if k != "rooms"}
+
+    if a.door_priors and a.door_priors != "none":
+        # D-085: after the names (a bathroom door's prior is 0.70 m) and the widening (a prior width is not a scaled
+        # measurement)
+        from floorplan.openings.priors import add_prior_doors
+        report["door_priors"] = add_prior_doors(plan, scene, info, a.tier, log=log, rules=a.door_priors)
 
     from floorplan.export.dxf import export_dxf
     from floorplan.export.json_export import save_plan_json

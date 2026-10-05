@@ -497,8 +497,9 @@ class PlanRenderer:
 
     def draw_openings(self):
         for pl in self.geo.placements:
-            color = self.s.lowconf_color if pl.opening.confidence < 0.5 else None
-            ls = "--" if (pl.opening.confidence < 0.5 or not pl.width_observed) else "-"
+            prior = pl.opening.source == "prior"           # a door assumed, not seen (D-085): always dashed
+            color = self.s.lowconf_color if (pl.opening.confidence < 0.5 or prior) else None
+            ls = "--" if (pl.opening.confidence < 0.5 or not pl.width_observed or prior) else "-"
             kind = pl.opening.kind
             if kind == "door":
                 self._door(pl, color or self.s.door_color, ls)
@@ -753,7 +754,7 @@ class PlanRenderer:
             Line2D([], [], color=s.door_color, lw=1.1, label="door (leaf + swing)"),
             Line2D([], [], color=s.door_color, lw=0.6, ls=(0, (2, 2)), label="passage (no door)"),
             Line2D([], [], color=s.window_color, lw=0.9, label="window"),
-            Line2D([], [], color=s.lowconf_color, lw=0.9, ls="--", label="opening, low detection confidence"),
+            Line2D([], [], color=s.lowconf_color, lw=0.9, ls="--", label="opening, low confidence or assumed (prior)"),
         ]
         if any(d.get("plan_polygon") for d in self.plan.damage):
             items.append(Patch(facecolor=s.damage_color, alpha=0.3, edgecolor=s.damage_color, hatch="xx",

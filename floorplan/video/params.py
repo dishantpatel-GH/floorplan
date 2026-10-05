@@ -59,9 +59,21 @@ class VideoParams:
     path_sfm_long_every: int = 0         # + every keyframe against every n-th keyframe (0 = off)
     path_sfm_min_model: int = 10         # smaller models are dropped (their keyframes are filled or left out)
     path_sfm_threads: int = 1            # mapper threads; 1: the same matches give the same model
+    path_sfm_abs_pose_min_inliers: int = 30      # a keyframe registers with >= 30 2D-3D inliers (COLMAP's value)
+    path_sfm_abs_pose_min_inlier_ratio: float = 0.25  # ... and >= 25% of its matches (COLMAP's value)
+    path_sfm_structure_less: bool = False        # registration from 2D-2D matches alone: off. Tested on single_room
+                                                 # (5 models, 112 of 164 keyframes): 15 inliers, 15% and this on gave
+                                                 # 1 model of 126 keyframes, but ARKit puts it +299% off in scale and
+                                                 # 1.5 m off in shape, against +0.3, -0.7, -3.2, -6.0% and 1-7 cm for
+                                                 # the strict models; on take1 it bent 27 keyframes (none before)
     path_sfm_max_local_scale: float = 1.25   # keyframes whose +-10-keyframe median MoGe/SfM depth ratio is off the
                                              # model's by > 1.25x are left out (a bent model; take1: 0.91-1.07 on the
                                              # default pairs, 2.85 with every keyframe linked to every 4th one)
+    path_sfm_min_coverage: float = 0.8   # the SfM path replaces DPVO's only if its largest model holds >= 80% of
+                                         # the keyframes; else the walk is in pieces and DPVO's path is kept. take1:
+                                         # 93-99% on every cache; samples (ARKit): single_room 18-29% in 5-7 models
+                                         # (pieces 0.2-6% off, joined plan -57%); floor_only 59%, a model folded by a
+                                         # wrong link (2.4 m, 22 deg off ARKit)
     path_sfm_max_gap: int = 5            # unregistered keyframes filled from DPVO only in gaps of <= 5 (~2.5 s)
     path_sfm_fill_max_miss_m: float = 0.15   # ... and only if the fill meets the next registered keyframe within
                                              # 0.15 m + 30% of the gap's span

@@ -126,3 +126,12 @@ def test_local_scale_check_finds_a_bent_stretch():
     r[40:60] *= 2.85                                          # a stretch folded in at the wrong size
     keep, rep = ps.local_scale_check(r, float(np.median(r)))
     assert not keep[45:55].any() and keep[:30].all() and keep[70:].all() and rep["local_scale_max_dev"] > 2
+
+
+def test_largest_coverage():
+    T_true = _walk()
+    A = _model(0, T_true, np.arange(0, 50), 1.0, 1)
+    B = _model(1, T_true, np.arange(50, 60), 1.0, 2)
+    assert abs(ps.largest_coverage([A, B], 60) - 50 / 60) < 1e-9
+    assert ps.largest_coverage([], 60) == 0.0
+    assert VideoParams().path_sfm_min_coverage == 0.8

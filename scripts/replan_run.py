@@ -2,13 +2,14 @@
 """Re-run the plan step, and every step after it, on a finished run's saved scene with the current code.
 
     python scripts/replan_run.py <run_dir> --out DIR [--sem NPZ] [--no-semantic-openings] [--no-room-names]
-                                 [--rotate DEG]
+                                 [--door-priors RULES] [--rotate DEG]
 
 The front end (poses, depth, scale) is not re-run: <run>/scene is used as saved. So a replanned run differs from the
 original only where the plan code, the openings, the room names or the drawings changed since the run was made.
 
 Same steps and order as run_capture.py after the front end: plan extraction, implausible openings dropped, the
-segmenter's doors and windows (video/photo), the LiDAR bias correction, the tier widening, room names, then plan.json,
+segmenter's doors and windows (video/photo), the LiDAR bias correction, the tier widening, room names, the doors from
+priors (D-085), then plan.json,
 the technical drawing, the presentation drawing and the DXF.
 
 Video: the run's work/ folder is linked into <out>/work one entry at a time, so the caches the later steps write
@@ -62,6 +63,8 @@ def main():
     ap.add_argument("--sem", type=Path, help="video: class maps of the keyframes (default <out>/work/semantic_kf.npz)")
     ap.add_argument("--no-semantic-openings", action="store_true")
     ap.add_argument("--no-room-names", action="store_true")
+    ap.add_argument("--door-priors", default="d", metavar="RULES",
+                    help="doors from priors (D-085; run_capture.py --door-priors): rules a-d, default 'd', 'none' off")
     ap.add_argument("--rotate", type=float, default=0.0, help="presentation drawing only: turn it DEG degrees")
     a = ap.parse_args()
     run, out = a.run.resolve(), a.out.resolve()
@@ -117,6 +120,10 @@ def main():
         cache = {"photo": work, "video": out / "work", "lidar": out / "names"}[tier]
         rep = name_rooms(plan, scene, info, tier, inp, work, cache, log=log)
         report["room_names"] = {k: v for k, v in rep.items() if k != "rooms"}
+
+    if a.door_priors and a.door_priors != "none":
+        from floorplan.openings.priors import add_prior_doors
+        report["door_priors"] = add_prior_doors(plan, scene, info, tier, log=log, rules=a.door_priors)
 
     from floorplan.export.dxf import export_dxf
     from floorplan.export.json_export import save_plan_json

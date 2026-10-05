@@ -112,8 +112,15 @@ def write_pairs(path: Path, names: list[str], pairs) -> None:
 
 
 def map_models(image_dir: Path, names: list[str], pairs_file: Path, feats: Path, matches: Path, out: Path,
-               f_px: float, min_model: int = 10, seed: int = 0, threads: int = 1, log=print) -> dict:
-    """pycolmap incremental mapping of every model, the focal and principal point fixed (one radial term refined)."""
+               f_px: float, min_model: int = 10, seed: int = 0, threads: int = 1, log=print,
+               abs_pose_min_inliers: int = 30, abs_pose_min_inlier_ratio: float = 0.25,
+               structure_less: bool = False) -> dict:
+    """pycolmap incremental mapping of every model, the focal and principal point fixed (one radial term refined).
+
+    abs_pose_*: how many 2D-3D inliers a keyframe needs to be registered (COLMAP: 30 and 25%); structure_less: a
+    keyframe with too few of them may still be registered from its 2D-2D matches to registered ones. Relaxing them
+    joins the fragments of close sweeps past blank walls into one model, but a wrong one (single_room against ARKit:
+    +299% in scale, 1.5 m in shape), so the defaults stay strict (params.py)."""
     import pycolmap
     from hloc.reconstruction import create_empty_db, get_image_ids, import_images
     from hloc.triangulation import estimation_and_geometric_verification, import_features, import_matches
@@ -137,6 +144,9 @@ def map_models(image_dir: Path, names: list[str], pairs_file: Path, feats: Path,
     opts.min_model_size = int(min_model)
     opts.random_seed = int(seed)
     opts.num_threads = int(threads)                 # 1 thread: the same matches give the same model (I-007)
+    opts.mapper.abs_pose_min_num_inliers = int(abs_pose_min_inliers)
+    opts.mapper.abs_pose_min_inlier_ratio = float(abs_pose_min_inlier_ratio)
+    opts.structure_less_registration_fallback = bool(structure_less)
     (out / "models").mkdir(exist_ok=True)
     t0 = time.time()
     recs = pycolmap.incremental_mapping(db, image_dir, out / "models", options=opts)
@@ -493,7 +503,9 @@ def build_models(files: list[Path], work: Path, f_px: float, params, log=print, 
         match(pairs_file, feats, matches)
     key = dict(names=names, pairs=len(pairs), f=round(float(f_px), 3), min_model=params.path_sfm_min_model,
                seed=params.seed, window=params.path_sfm_window, k=params.path_sfm_retrieval_k,
-               every=params.path_sfm_long_every)
+               every=params.path_sfm_long_every, abs_pose=[params.path_sfm_abs_pose_min_inliers,
+                                                           params.path_sfm_abs_pose_min_inlier_ratio],
+               structure_less=params.path_sfm_structure_less)
     meta = work / "models.json"
     import pycolmap
     if meta.exists() and json.loads(meta.read_text()).get("key") == key:
@@ -501,8 +513,15 @@ def build_models(files: list[Path], work: Path, f_px: float, params, log=print, 
                 if p.is_dir()}
         log(f"[path-sfm] reusing {len(recs)} cached model(s)")
     else:
+        if (work / "sfm").is_symlink():             # models of other settings: never mixed in
+            (work / "sfm").unlink()
+        elif (work / "sfm").exists():
+            import shutil
+            shutil.rmtree(work / "sfm")
         recs = map_models(image_dir, names, pairs_file, feats, matches, work / "sfm", f_px,
-                          params.path_sfm_min_model, params.seed, params.path_sfm_threads, log)
+                          params.path_sfm_min_model, params.seed, params.path_sfm_threads, log,
+                          params.path_sfm_abs_pose_min_inliers, params.path_sfm_abs_pose_min_inlier_ratio,
+                          params.path_sfm_structure_less)
         meta.write_text(json.dumps(dict(key=key)))
     models = [model_arrays(r, names, int(i)) for i, r in sorted(recs.items())]
     stats = dict(pairs=len(pairs), window_pairs=n_win, retrieval_pairs=len(ret - window_pairs(n, params.path_sfm_window)),
@@ -562,6 +581,11 @@ def sfm_camera_path(files: list[Path], D: np.ndarray, T_vo: np.ndarray, ts_kf: n
     return path
 
 
+def largest_coverage(models: list[Model], n: int) -> float:
+    """Share of the walk's n keyframes in the largest model (after the bent-model check)."""
+    return max((len(m.kf) for m in models), default=0) / max(n, 1)
+
+
 def scale_report(path: dict, n: int, params) -> dict:
     """The front end's scale-step result (estimate_scales' keys) for an SfM path: the path is metric already, so the
     local scale is 1 everywhere; each segment carries the statistical sigma of its models' MoGe-2 scales."""
@@ -597,6 +621,14 @@ def frontend_path(files: list[Path], D: np.ndarray, T_kf: np.ndarray, vo: dict, 
     SfM world, and the scale-step result."""
     from floorplan.video.evaluate import camera_axes_after_rotation
     path = sfm_camera_path(files, D, T_kf, ts[kf], work / "path_sfm", f_px, params, log)
+    cov = largest_coverage(path["models"], len(kf))
+    path["stats"]["largest_model_coverage"] = cov
+    (work / "path_sfm" / "path_report.json").write_text(json.dumps(dict(path["stats"], scales={
+        int(k): v for k, v in path["scales"].items()}), indent=1, default=float))
+    if cov < params.path_sfm_min_coverage:
+        log(f"[path-sfm] the largest model holds {100 * cov:.0f}% of the keyframes (< "
+            f"{100 * params.path_sfm_min_coverage:.0f}%): the walk is in pieces, DPVO's path is kept")
+        return None
     T = path["T_wc"]
     uc = geo["up_cam"][ok][: len(ups_kf)]
     if flipped:                              # same re-expression as after DPVO's fresh runs (frontend step 8)

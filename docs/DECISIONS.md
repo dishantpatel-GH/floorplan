@@ -2254,3 +2254,66 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   - The limits (30° up, 50° down, 3 keyframes, 20 keyframes) were set on these 16 caches; there is no held-out set.
   - Revisit if the protocol films the ceiling as a separate clip (the walk then has no look to cut, and the ceiling is
     still filmed; not tested), or if the look's ceiling points can be placed with a measured phone height.
+
+## D-085 Doors from priors where the door itself is not seen; openings scored by position
+
+- **Context.** The user (5 Oct): "where we cannot identify the door itself we might need to use door priors, and
+  based on the gap assume that there must be a door." The segmenter (D-078) finds a door only when its leaf is in
+  frame. A doorway photo or a walk-through stands in the doorway and sees no leaf.
+- **The scorer first** (`aa07b31`, `floorplan/benchmark/gt_eval.py`). It paired a room's predicted openings with
+  its true ones by width alone. On the k65 photo plan that paired the entrance door the segmenter measured (0.825 m
+  for 0.830) with the bedroom door (+18.0 cm), and a phantom 1.062 m door with the bathroom door (+35.2 cm). Now:
+  - sim GT (`sim_gt.json` has every opening's centre): each prediction goes into the GT frame with its room's
+    transform, the one the walls use, and pairs with the true opening of its type (door or passage with a door,
+    window with a window) on the same wall line (within 0.45 m) nearest its centre (within max(0.5 m, half the true
+    width)). One Hungarian over all of them, so a door shared by two rooms counts once.
+  - own house (`gt_polygons.json` names the wall of each opening, not the place on it): a prediction on that wall
+    pairs with it, width breaks ties. A door of a room without an outline (the bathroom door in the passage) pairs by
+    width within 10 cm, with a prediction at no known door's place.
+  - Reported per type: found, missed, phantom (a second prediction at a found opening is a duplicate and counts as a
+    phantom), width errors of the found ones, distance from the true centre. A tape GT without outlines keeps the
+    width pairing.
+  - Today's k65 plans re-scored. Photo: the width pairing had 0 of 9 door rows within 2 cm; by position the plan
+    has a door at all 5 places (the entrance -0.5 cm; the four doorway-pair doors have no width) and one phantom.
+    LiDAR: 7 of 9 rows within 2 cm by width; by position 4 of 5 found within 2 cm (+0.1, -0.6, -2.0, -0.1 cm,
+    0-3 cm from the centres), the entrance missed, one phantom (O2, a second opening at the kitchen door).
+- **Change** (`floorplan/openings/priors.py`; `run_capture.py` and `replan_run.py --door-priors RULES` after the
+  room names; `add_openings.py --priors-only --rules`; `"source": "prior"` in the schema; the technical drawing
+  dashes those doors, the presentation drawing draws them as doors). Four rules, each door marked with its evidence
+  and a confidence under 0.5:
+  - a. A plan-step passage 0.55-1.15 m wide with wall on both sides is a door; width = the gap.
+  - b. Photo: each doorway-pair photo stands on a threshold. The wall of its own room within 0.6 m of the camera,
+    the camera looking away from it into the room, gets a door at the camera's projection; a camera more than 0.2 m
+    off that line keeps its own position (on k65 the bedroom door is in an alcove the photo plan does not have, and
+    projecting it 0.34 m onto the plan's wall took it from 0.37 to 0.71 m from its true centre). The pair's two doors
+    on one partition are one door.
+  - c. Video: where the camera path goes from one plan room into the next (0.5 m of path on each side, no pose jump
+    over 0.3 m), a door at the crossing.
+  - d. A segmenter door cut by the frame in every view (a lower bound): the prior width from the end that was seen.
+  - Prior width 0.80 m, 95% ±0.20 m; 0.70 m into a bathroom or toilet by the room's name. A measured door or
+    passage within 0.5 m on the same wall wins.
+- **Measured** (`outputs/presentable/door_priors/`: `run_measure.sh`, `score_all.py`, `eval/summary.md`; all four
+  rules on the saved plans). Doors found / missed / phantom, before -> after:
+  - k65 photo 5/0/1 -> 5/0/1. b gives the four pair doors widths: bathroom -1.0 cm, bedroom +15.5 cm, and 0.80 m
+    for the 2.12 and 2.29 m glazed kitchen and balcony openings (-132, -149 cm, outside the interval).
+  - k65 LiDAR 4/1/1 -> 4/1/1: no passage in 0.55-1.15 m (a never fires on these plans).
+  - k65 video 2/3/1 -> 2/3/2: c adds a phantom. That run's camera path is broken (2080 steps over 0.3 m, 23.7 km of
+    path) and its plan is two unjoined parts, 134 m² for 59.
+  - own photo lit and dim 1/3/0 -> 1/3/0 (the bedroom's 2 doors, the entrance and the bathroom door): d takes the
+    bedroom door seen cut by the frame from 0.54 and 0.51 m to 0.80 m, error -19.7 and -22.4 -> +6.3 cm (tape 0.737).
+  - own video pnp r1 2/2/1 -> 2/2/1: its one walk-through lands on the measured bedroom door (O1, -10.6 cm); the
+    bathroom door stays the segmenter's (-0.4 cm). On clean paths c is precise but adds nothing: 7 walk-through doors
+    (k65 LiDAR 4, own pnp r1, default r2, pnp r2) all land on doors the plan step measured.
+  - Windows unchanged on every plan. Drawings: before `outputs/presentable/{k65_photo,photo_lit,photo_dim}/`,
+    after `outputs/presentable/door_priors/<plan>/plan_presentation.png` and `plan.png`.
+- **Default: rule d only.** The bar was: on only if doors found go up and phantoms do not. No rule found a door the
+  plans lacked, so a, b and c stay off (`--door-priors abcd` turns them on); c adds a phantom on a broken path and b
+  claims 0.80 m where the opening is 2.1-2.3 m. d does not meet that bar either, since it adds no door; it is on
+  because it changes no count and its two widths both get better.
+- **What is still missed has no evidence.** k65 LiDAR's entrance (the walk starts and ends in the living room), the
+  own bedroom's second door in the photos (no pair photo, no gap, no door pixels) and in the video (the walk never
+  goes through it). A prior needs a place.
+- **Limits.** A standard-door width is not a measurement. A doorway photo looks along the room and cannot tell a door
+  from a wide opening. The thresholds were set on these plans; there is no held-out set. On k65 photo the two extra
+  living-room "windows" are the glass of the wide openings next to the pair doors; using that (a floor-length window
+  at a doorway is a glazed door, with its width) is not tried.
