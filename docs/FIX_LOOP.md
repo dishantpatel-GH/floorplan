@@ -514,7 +514,7 @@ runs.
 # one commit per root cause: <module>: <the declared fix>
 git tag -a after-fix -m "Fix loop: after"
 # the same commands as step 5, with --out outputs/fixloop/after/...
-git diff before-fix after-fix -- floorplan scripts/run_capture.py > docs/fixloop.diff   # the readable diff
+git diff before-fix after-fix -- floorplan/ tests/ > docs/fixloop.diff   # the readable diff (byte-identical to the committed one)
 ```
 
 Anyone can regenerate both runs with `git worktree add ../before before-fix` and `git worktree add ../after after-fix`,

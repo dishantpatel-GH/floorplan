@@ -1,7 +1,7 @@
 # Benchmark results
 
-Fresh runs of every benchmark capture with the code at **`0c97b0e`** (HEAD on 5 Oct 2026, "photo: door stitching on,
-judged on k65"), made on 5 Oct 2026 between 16:00 and 16:38 IST, scored by `scripts/bench_results.py` at 16:44.
+Fresh runs of every benchmark capture with the code at **`0c97b0e`** (HEAD on 5 Oct 2026, "defaults judged on k65:
+auto video scale, door stitching, see-through doors"), made on 5 Oct 2026 between 16:00 and 16:38 IST, scored by `scripts/bench_results.py` at 16:44.
 
 | File | What |
 |---|---|
