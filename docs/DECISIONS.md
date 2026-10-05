@@ -1468,3 +1468,70 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     the spread of the scale itself), then the after runs again.
 - **Status.** In the code since `dced951`. Keeping it, or going back to the clamp until the self-check is redone, is not
   decided here.
+
+## D-077 Photo tier: a wall seen beside furniture replaces it in the room box (far-wall rule; fix-loop follow-up)
+
+- **Context.** On my own Room the side fit took a wardrobe front (lit and dim takes) and an open door leaf (dim) as
+  walls; the segmenter labels both "wall" (layout diagnosis, `outputs/own_house/diag/photo_workflow_result.json`). The
+  diagnosis's rule B (farthest peak with >= 0.8 m of wall, at most 1.5 m beyond the nearest such peak) fixed those
+  sides but cost the simulator. This is a follow-up to the closed fix loop; `FIX_LOOP.md` is unchanged.
+- **Why rule B lost walls** (sim truth poses and GT outlines, `fw_gt.py`):
+  1. One wall seen by two photos at two depths: k65 living room 1.57 m (two photos) vs 1.91 m (a third), truth
+     1.69 m; k65 bedroom 1.11 vs 1.48 m (a close-up of a blank wall), truth 1.19 m; k38 living room 2.62 vs 3.08 m,
+     truth 2.60 m. Such peaks are 0.30-0.45 m apart (ratios 1.15-1.33). B takes the farther one.
+  2. B starts from the nearest >= 0.8 m peak, not from the code's choice, so it can move a side in: k38 living room
+     2.46 m -> 0.65 m (an inner wall; truth 4.30 m).
+  Not doorways, small rooms or L-shapes as such.
+- **Decision** (`layout._far_wall`, `layout._far_wall_in_room`, `params.layout_far_wall*`). Start from the code's
+  choice and only move out. A farther wall-length peak replaces the chosen surface when it has >= 0.8 m of wall and
+  >= 40 points; lies 0.5-1.5 m and >= 1.33x farther; at most 20% of its rays cross the chosen plane where the chosen
+  surface was seen (a wall cannot be seen through it); at least 80% cross it past an END of that surface (the door
+  line: the wardrobe ends at the door and the wall continues beyond it; a wall seen on both sides of the far patch has
+  an opening and stays); and, once the 4 sides are fitted, it overlaps the room's extent along it by >= 0.3 m (else it
+  is the next room through that door). Main side fits only; the D-060 geometry-only fits keep the old rule.
+- **Evidence** (same cached photos and depth, CPU; rule off = `--photo-param layout_far_wall=false`, the same as
+  the code before `5dfd531`; tape GT with `gt_polygons.json`, sim with `sim_gt.json`; `outputs/own_house/diag/far_wall/`):
+
+  | Set | Rule off | Rule on | Sides moved |
+  |---|---|---|---|
+  | Own lit: walls median / within 8% / area (outline 11.09 m²) | 9.1%, 1 of 6, 9.25 m² (−17%) | 8.3%, 2 of 6, 10.66 m² (−4%) | W1 side 1.09 -> 1.78 m (wardrobe -> wall) |
+  | Own dim: the same | 22.5%, 0 of 6, 7.68 m² (−31%) | 21.7%, 1 of 6, 10.69 m² (−4%) | W6 side 0.57 -> 1.58 m (door leaf), W1 side 1.11 -> 1.73 m (wardrobe) |
+  | Own box W5–W1 × W4–W6 (tape 3.73 × 3.00 m) | lit 3.38 × 2.74, dim 3.60 × 2.13 | lit 4.07 × 2.74, dim 3.59 × 3.15 | |
+  | k65 (sheet cue on): walls median / within 8% / footprint | 5.6%, 15 of 26, −9.0% (3 runs) | 5.6%, 15 of 26, −9.0% (2 runs) | none |
+  | k22 | 23.5-26.0%, 5-6 of 20, −43.8 to −49.5% (3 runs) | 26.0%, 6 of 20, −44.2 and −44.5% (2 runs) | living room 2.95 -> 4.41 m (truth 4.49 m) |
+  | k38 | 5.8-6.2%, 12 of 26, +7.6% (4 runs; 2 more crashed) | 5.8-7.3%, 11-12 of 26, +7.6 to +10.4% (3 runs; 1 crashed) | none |
+  | 13 held-out sim takes (other takes of k65, k22, k38) | | same score in 10; k65v23 6 -> 10 of 26 with no side moved | k65v2_dim living 1.21 -> 2.73 m (truth 2.89 m), 11 -> 12 of 26; k65v23 take 2 bedroom 0.90 -> 1.89 m (furniture -> wall), 0 -> 2 of 6; k38_s1 bathroom 1.15 -> 2.43 m rejected (next room, overlap −0.13 m) |
+
+  Other rules on the same caches (one run each; walls median, within 8%, area or footprint):
+
+  | Rule | Own lit | Own dim | k65 | k22 | k38 |
+  |---|---|---|---|---|---|
+  | B (diagnosis) | 9.2%, 1/6, +21% | 21.7%, 1/6, −4% | 5.6%, 12/26, −3.6% | 13.9%, 7/20, −34.2% | 8.9%, 9/26, −7.4% |
+  | B2 (guarded B, fix decision) | 9.2%, 1/6, +21% | 21.7%, 1/6, −4% | 5.6%, 14/26, −2.8% | 24.1%, 5/20, −49.5% | plan step crashed |
+  | Pose-graph camera positions (C) | 10.5%, 2/6, −12% | 19.1%, 0/6, −23% | 5.6%, 15/26, −9.0% | 23.5%, 5/20, −47.3% | 6.2%, 10/26, +4.1% |
+  | B + C | 11.8%, 2/6, +17% | 10.8%, 2/6, −18% | 5.6%, 12/26, −3.3% | 14.3%, 6/20, −37.6% | plan step crashed |
+  | This rule, reach 2.0 m (before the room-extent check) | as above | as above | as above | as above | 12.6%, 7/26 and 8.7%, 10/26 |
+
+  The earlier numbers for B (k65 15 -> 11, k38 12 -> 4 of 26) came from scripts that imported `dummy_repo`'s older
+  `floorplan/` (outputs/ is a symlink into it).
+- **Ideas measured, not used.**
+  - Upper band (1.9-2.4 m) or the wall-ceiling line: the own Room's spin photos (22-31° down) see these planes only up
+    to 1.41-1.65 m. No points.
+  - Far wall seen in >= 2 photos: each own-Room far wall is seen by one photo (223846, 223956, 223938). It would
+    remove all three moves.
+  - Floor reaching the far wall: the floor reaches the wardrobe too (1.02-1.03 of its range); the lit W1 wall has
+    none (a box in front, 0.0). It does not separate.
+  - C (above): with it this rule moves no own-Room side; alone it costs k38 12 -> 10 of 26 and k22 6 -> 5 of 20.
+  - Reach 2.0 m: also moves the k38 living room side to its wall (2.46 -> 4.09 m, truth 4.30 m), but k38 then gave 7
+    and 10 of 26.
+- **Limits.**
+  - Lit W5–W1 is now 4.07 m against 3.73 m (+9%): the photos were not taken from one spot. The rule picks the right
+    surface; the distance still carries the camera offset (C did not fix it robustly).
+  - The polygon step now cuts a false notch at the wardrobe corner (lit 0.69 × 0.70 m, dim 1.01 × 0.63 m), and W5 is
+    scored against the cut wall (−32%, −29%). With notches off (measurement only): lit 8.8%, 1 of 6, 11.14 m²; dim
+    4.4%, 3 of 6, 11.33 m². Next: no notch behind a surface this rule set aside as furniture (`polygon.py`).
+  - The thresholds rest on 3 own-Room sides (2 takes of one room) and the simulator: gaps 0.57-1.01 m against
+    0.30-0.45 m, ratios 1.51-2.78 against 1.15-1.33. Not covered: furniture standing more than 1.5 m out, a wall seen
+    only in a gap between two pieces of furniture, and furniture less than 0.5 m deep.
+  - k38's plan step crashes in some runs (GEOS TopologyException in `plan/beta/extract.py` `_canonical_outlines`, not
+    caught): 2 of 6 runs without the rule, 1 of 4 with it. Not this change.

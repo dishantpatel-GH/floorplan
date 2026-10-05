@@ -107,6 +107,20 @@ class PhotoParams:
     layout_band_hi_m: float = 2.0        # ... and the ceiling, cornice and door heads above 2.0 m
     layout_farthest_per_column: bool = True  # wall = farthest band point of each image column (furniture in front)
     layout_prefer_near_ratio: float = 0.6  # nearest wall peak at least 60% as long as the longest (through-door)
+    layout_far_wall: bool = True         # D-077: a wall seen BESIDE the chosen surface, farther out, replaces it (a
+                                         #     wardrobe front or an open door leaf labelled "wall"; layout._far_wall)
+    layout_far_wall_min_len_m: float = 0.8   # ... with >= 0.8 m of wall (own Room: 1.0-2.5 m; 1.2 lost 2 of 3 sides)
+    layout_far_wall_min_gap_m: float = 0.5   # ... 0.5-1.5 m behind the chosen surface: own Room 0.57-1.01 m (wardrobe,
+    layout_far_wall_max_gap_m: float = 1.5   #     door leaf); one wall seen by two photos: 0.30-0.45 m apart (sim)
+    layout_far_wall_min_ratio: float = 1.33  # ... and >= 1.33x as far: two photos' depth scales differ < 33% (as
+                                             #     edge_max_scale_ratio); own Room 1.51-2.78, same wall 1.15-1.33
+    layout_far_wall_max_shadow: float = 0.2  # <= 20% of its rays cross the chosen plane where that surface was seen
+                                             #     (sim peaks that must stay: 0.25-1.00; own Room 0.00)
+    layout_far_wall_min_beyond: float = 0.8  # >= 80% of its rays cross the chosen plane past an END of that surface,
+                                             #     not between two parts of it (an opening in a wall: own lit 0.0)
+    layout_far_wall_min_overlap_m: float = 0.3  # ... and it overlaps the room's extent along it by >= 0.3 m (as the
+                                             #     polygon's poly_side_min_overlap_m): beyond a perpendicular wall it
+                                             #     is the next room through a door (sim k38_s1 bathroom -0.13 m)
     layout_normal_min: float = 0.8       # a point belongs to a side when its normal faces the centre within ~37 deg
     layout_min_dist_m: float = 0.3       # ... and it is at least 0.3 m from the centre on that side
     layout_min_wall_pts: int = 200      # 500 dropped floor_only R5 (329 points); 200 keeps it (6/6 rooms, v3 results)

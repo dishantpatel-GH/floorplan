@@ -10,6 +10,9 @@ feature match. From that local cloud:
   3. for each of the 4 sides, the wall offset is the 5 cm bin whose wall-facing points cover the largest wall AREA
      (distinct 10 x 10 cm (tangent, height) cells), not the most points: a far wall seen through a door covers a
      door-sized patch, a real wall most of the room's width. The offset is the median of the inliers;
+     3b. D-077: the chosen surface can be furniture (a wardrobe front, an open door leaf) when the room's wall is
+     seen BESIDE it, 0.5-1.5 m farther out, past the end of that surface and inside the room's extent: then that
+     wall is the side (_far_wall, _far_wall_in_room);
   4. each photo that sees a side gives its own offset; the per-wall uncertainty is a Monte Carlo over the photo
      position (spin sway), per-photo depth scale and the surface noise, so walls seen by one photo are wider;
   5. a side no photo saw is INFERRED: at least as far as the observed extent of the neighbouring walls (a corner
@@ -118,18 +121,20 @@ def fit_room_layout(views: dict, yaws: dict[str, float], scale: float, p, offset
     Rm = _ry(m)                                    # rotate by +m about y: a normal at angle m -> angle 0 (x axis)
     W, NW = W @ Rm.T, NW @ Rm.T
     GW, GN = GW @ Rm.T, GN @ Rm.T
-    sides = {}
+    sides, side_pts = {}, {}
     for side in SIDES:
         ax, sgn = _side_axis(side)
         tan = 2 if ax == 0 else 0
         sel = (NW[:, ax] * sgn < -p.layout_normal_min) & (W[:, ax] * sgn > p.layout_min_dist_m)
-        sides[side] = _fit_side(W[sel, ax] * sgn, W[sel, tan], W[sel, 1], pid[sel], p)
+        side_pts[side] = (W[sel, ax] * sgn, W[sel, tan], W[sel, 1], pid[sel])
+        sides[side] = _fit_side(*side_pts[side], p, far_wall=True)
         if sides[side]["status"] != "measured" and sem_used:
             # D-060: no wall-labelled side here (a kitchen side is all cabinets): keep the geometric fit, as before
             gsel = (GN[:, ax] * sgn < -p.layout_normal_min) & (GW[:, ax] * sgn > p.layout_min_dist_m)
             g = _fit_side(GW[gsel, ax] * sgn, GW[gsel, tan], GW[gsel, 1], gid[gsel], p)
             if g["status"] == "measured":
                 sides[side] = dict(g, how=str(g.get("how", "")) + " (geometry only: no wall-labelled points)")
+    _far_wall_in_room(sides, side_pts, p)
     # extent of the fitted walls along their tangent: a perpendicular wall cannot be nearer than where they end
     for side in SIDES:
         s = sides[side]
@@ -166,8 +171,9 @@ def fit_room_layout(views: dict, yaws: dict[str, float], scale: float, p, offset
     return out
 
 
-def _fit_side(d: np.ndarray, tan: np.ndarray, y: np.ndarray, pid: np.ndarray, p) -> dict:
-    """Wall offset along one side: the bin with the longest observed wall (distinct 10 cm tangent cells)."""
+def _fit_side(d: np.ndarray, tan: np.ndarray, y: np.ndarray, pid: np.ndarray, p, far_wall: bool = False) -> dict:
+    """Wall offset along one side: the bin with the longest observed wall (distinct 10 cm tangent cells).
+    far_wall: D-077, a wall seen beside the chosen surface, farther out, replaces it (_far_wall)."""
     none = dict(status="unseen", offset=None, sigma=None, photos=[], len_m=0.0, tan_extent=(0.0, 0.0))
     if len(d) < p.layout_min_side_pts:
         return none
@@ -192,6 +198,15 @@ def _fit_side(d: np.ndarray, tan: np.ndarray, y: np.ndarray, pid: np.ndarray, p)
     centre = (best - 1 + kmin + 0.5) * b
     inl = np.abs(d - centre) < 1.5 * b
     off = float(np.median(d[inl]))
+    moved = None
+    if far_wall and getattr(p, "layout_far_wall", False):
+        fw = _far_wall(d, tan, pid, sm, kmin, off, p)
+        if fw is not None:
+            best, moved = fw
+            centre = (best - 1 + kmin + 0.5) * b
+            inl = np.abs(d - centre) < 1.5 * b
+            off = float(np.median(d[inl]))
+            moved["to_m"] = round(off, 3)
     inl = np.abs(d - off) < p.layout_inlier_m
     photos = {}
     for q in np.unique(pid[inl]):
@@ -202,10 +217,109 @@ def _fit_side(d: np.ndarray, tan: np.ndarray, y: np.ndarray, pid: np.ndarray, p)
     far = np.abs((np.arange(len(sm)) - 1 + kmin + 0.5) * b - off) > 0.3
     rival = float(sm[far].max()) if far.any() else 0.0
     t_in = tan[inl]
-    return dict(status="measured", offset=off, photos=photos, len_m=float(sm[best]),
-                rival_ratio=round(rival / max(float(sm[best]), 1e-9), 3), inliers=int(inl.sum()),
-                fit_mad_m=float(1.4826 * np.median(np.abs(d[inl] - off))),
-                tan_extent=(float(np.percentile(t_in, 1)), float(np.percentile(t_in, 99))))
+    out = dict(status="measured", offset=off, photos=photos, len_m=float(sm[best]),
+               rival_ratio=round(rival / max(float(sm[best]), 1e-9), 3), inliers=int(inl.sum()),
+               fit_mad_m=float(1.4826 * np.median(np.abs(d[inl] - off))),
+               tan_extent=(float(np.percentile(t_in, 1)), float(np.percentile(t_in, 99))))
+    if moved is not None:
+        out["far_wall"] = moved
+    return out
+
+
+def _seen_cells(tan: np.ndarray, pid: np.ndarray, sel: np.ndarray, cell: float, min_pts: int = 10) -> np.ndarray:
+    """10 cm tangent cells of the points in sel, from photos with >= min_pts of them (a few stray points of another
+    photo do not make a surface)."""
+    keep = np.zeros(len(tan), bool)
+    for q in np.unique(pid[sel]):
+        s = sel & (pid == q)
+        if s.sum() >= min_pts:
+            keep |= s
+    return np.unique(np.floor(tan[keep] / cell).astype(np.int64))
+
+
+def _far_wall(d: np.ndarray, tan: np.ndarray, pid: np.ndarray, sm: np.ndarray, kmin: int, off: float, p):
+    """D-077: is the chosen surface (offset off) furniture standing in front of the room's wall?
+
+    Own Room (tape): the rule above took a wardrobe front (lit and dim takes) and an open door leaf (dim) as walls;
+    the segmenter labels both "wall". In each case one photo sees the real wall BESIDE that surface, 0.57-1.01 m
+    farther out: on the other side of the door next to the wardrobe, or past the door leaf. A farther wall-length
+    peak wins when all of these hold:
+      - >= layout_far_wall_min_len_m of wall and >= layout_min_side_pts points within 0.3 m (what any side needs;
+        sim k65: 8 points of one doorway photo made a 0.8 m peak), layout_far_wall_min/max_gap_m behind the chosen
+        surface, and >= layout_far_wall_min_ratio x its distance. One wall seen by two photos (another photo's depth
+        scale, or a photo away from the spin centre) gave peaks 0.30-0.45 m apart on the simulator, at ratios
+        1.15-1.33;
+      - shadow: <= layout_far_wall_max_shadow of its rays (from the spin centre) cross the chosen plane where the
+        chosen surface was seen. Nothing behind a surface is visible through it, so such a peak is the same surface
+        at another depth scale (sim k65 bedroom: a blank wall close-up 30% too deep);
+      - past an end: >= layout_far_wall_min_beyond of its rays cross the chosen plane OUTSIDE the chosen surface's
+        extent, not in a gap between two of its parts. A wardrobe ends (at the door) and the wall line continues
+        beyond it; a wall seen on both sides of the far patch is a wall with an opening (own lit: the white door
+        between a pillar face and the door frame), and it stays.
+    The longest qualifying peak wins; inside +-0.3 m of it the longest bin, as for the code's own choice. Once all
+    4 sides are fitted, _far_wall_in_room drops a far wall that lies outside the room (the next room through a door).
+    Returns (bin index, diagnostics) or None."""
+    b = p.layout_bin_m
+    c = p.layout_cell_m
+    near = np.abs(d - off) < p.layout_inlier_m
+    cells = _seen_cells(tan, pid, near, c)
+    if len(cells) == 0:
+        return None
+    covered = np.unique(np.concatenate([cells - 1, cells, cells + 1]))      # one cell of slack either side
+    # the chosen surface's extent: its cells joined across gaps <= 0.3 m, pieces < 0.3 m dropped
+    runs = []
+    for q in cells:
+        if runs and q - runs[-1][1] <= 4:
+            runs[-1][1] = q
+        else:
+            runs.append([q, q])
+    runs = [r for r in runs if (r[1] + 1 - r[0]) * c >= 0.3 - 1e-9]
+    if not runs:
+        return None
+    lo, hi = runs[0][0] * c, (runs[-1][1] + 1) * c
+    best, info = None, None
+    for i in range(1, len(sm) - 1):
+        if not (sm[i] >= sm[i - 1] and sm[i] >= sm[i + 1] and sm[i] >= p.layout_far_wall_min_len_m):
+            continue
+        D = (i - 1 + kmin + 0.5) * b
+        if not (off + p.layout_far_wall_min_gap_m <= D <= off + p.layout_far_wall_max_gap_m
+                and D >= p.layout_far_wall_min_ratio * off):
+            continue
+        if (np.abs(d - D) <= 0.3).sum() < p.layout_min_side_pts:
+            continue
+        t = tan[np.abs(d - D) < 2 * b] * (off / D)            # where the far peak's rays cross the chosen plane
+        if len(t) == 0:
+            continue
+        shadow = float(np.isin(np.floor(t / c).astype(np.int64), covered).mean())
+        beyond = float(((t < lo) | (t > hi)).mean())
+        if shadow > p.layout_far_wall_max_shadow or beyond < p.layout_far_wall_min_beyond:
+            continue
+        if best is None or sm[i] > sm[best]:
+            best, info = i, dict(from_m=round(off, 3), peak_m=round(float(D), 3), len_m=round(float(sm[i]), 2),
+                                 shadow=round(shadow, 2), beyond_end=round(beyond, 2))
+    if best is None:
+        return None
+    win = [i for i in range(len(sm)) if abs((i - best) * b) <= 0.3 + 1e-9]
+    return int(max(win, key=lambda i: (sm[i], -i))), info
+
+
+def _far_wall_in_room(sides: dict, side_pts: dict, p) -> None:
+    """D-077, once all 4 sides are fitted: a far wall must be THIS room's wall, so it must overlap the room's extent
+    along it (between the measured perpendicular sides) by >= layout_far_wall_min_overlap_m. A patch beyond a
+    perpendicular wall is the next room seen through a door at the end of the chosen surface (sim k38_s1 bathroom:
+    1.15 -> 2.43 m, truth 1.06 m; overlap -0.13 m, own Room 0.96-1.94 m). Such a side keeps its first choice."""
+    for side, s in list(sides.items()):
+        if not s.get("far_wall"):
+            continue
+        hi_s, lo_s = ("+z", "-z") if side[1] == "x" else ("+x", "-x")
+        hi = sides[hi_s]["offset"] if sides[hi_s]["status"] == "measured" else np.inf
+        lo = -sides[lo_s]["offset"] if sides[lo_s]["status"] == "measured" else -np.inf
+        a, b = s["tan_extent"]
+        overlap = min(b, hi) - max(a, lo)
+        if overlap < p.layout_far_wall_min_overlap_m:
+            sides[side] = dict(_fit_side(*side_pts[side], p),
+                               far_wall_rejected=dict(s["far_wall"], overlap_m=round(float(overlap), 2),
+                                                      reason="outside the room's extent along it (next room)"))
 
 
 def _monte_carlo(lay: dict, names: list[str], p, rng) -> dict:
