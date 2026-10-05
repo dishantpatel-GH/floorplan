@@ -8,13 +8,14 @@ Pipeline (each step is explained in docs/modules/video_tier.md):
   5. camera path for every 2nd frame with DPVO (up to scale)        (vo.py)
   6. gravity from GeoCalib up vectors; flip check from camera pitch  (orientation.py, here)
   7. metric depth per keyframe with MoGe-2                           (depth.py)
-  8. metric scale: segment cuts from depth agreement, local scale from PnP votes   (scale.py)
+  8. metric scale: segment cuts from depth agreement, local scale from PnP votes or depth agreement (scale.py, D-076)
   9. TSDF fusion of the predicted depth with the shared LiDAR-tier code (floorplan.recon.fusion)
  10. floor refinement + Manhattan alignment with the shared code     (floorplan.plan.align)
 v2 (docs/modules/video_tier.md, "Video tier v2"):
   * focal = robust fusion of container metadata (ffprobe), SfM and GeoCalib, with a 1-sigma that enters the scale sigma
   * scale segments at VO restarts; a fresh DPVO run per segment; per-segment self-check (untrusted -> left out)
   * per-segment gravity levelling + restart continuity; fragment pose graph on predicted depth (posegraph.py)
+  * PnP scale (D-076): the path is moved vertically so that every keyframe sees the floor at one height
   * optional paper-sheet cue (floorplan.scale; off by default, D-067) with flatness and consistency gates
   * info["scale_sigma_rel"] and info["whole_scene_consistent"] are the honest summary for downstream code
 The result plugs into the same plan extractors as the LiDAR tier; only the uncertainty is wider.
@@ -285,15 +286,20 @@ def _rerun_vo_per_segment(video, work, rot, f_full, up_size, vo, kf, seg, params
 
 
 def segment_quality(D: np.ndarray, K: np.ndarray, T_m: np.ndarray, seg: np.ndarray, s_local: np.ndarray,
-                    params: VideoParams) -> dict:
-    """Self-check of each segment's camera path, without ground truth (v2, V2-5).
+                    params: VideoParams, votes: dict | None = None) -> dict:
+    """Self-check of each segment's camera path, without ground truth (v2, V2-5; D-076 for the PnP scale).
 
-    Two symptoms of a VO run that is wrong in SHAPE (not just in scale):
-      * spread: the depth-agreement scale has to change a lot inside the segment (local scale p90/p10); a healthy
-        DPVO segment drifts slowly (measured 1.2-1.35 on good segments, 2.25 = both clamps hit on broken ones);
-      * residual: under the metric poses, neighbouring keyframes' depth maps disagree (median truncated
-        |log depth ratio| of pairs 1-2 keyframes apart; 0.040-0.041 on good segments, 0.063 on a broken one).
-    A segment is trusted only if both are below their thresholds and it has enough path to measure them."""
+    Symptoms of a VO run that is wrong in SHAPE (not just in scale), or of a scale that is not measured:
+      * residual (both methods): under the metric poses, neighbouring keyframes' depth maps disagree (median truncated
+        |log depth ratio| of pairs 1-2 keyframes apart; 0.040-0.041 on good segments, 0.063 on a broken one);
+      * scale_method "depth_agreement", spread: the scale has to change a lot inside the segment (local scale
+        p90/p10); a healthy DPVO segment drifts slowly (measured 1.2-1.35 on good segments, 2.25 = both clamps hit
+        on broken ones);
+      * scale_method "pnp" (votes = {segment: (coverage, vote residual)}): the PnP scale follows DPVO's real drift,
+        so its spread is reported, not judged. The segment needs votes of its own on at least half of its keyframes
+        (coverage); elsewhere its scale is interpolated and DPVO's motion is not measured (D-076: every sample
+        segment that ARKit puts more than 100% off had coverage <= 0.44). The vote residual is reported only.
+    A segment is trusted only if every check passes and it has enough path to measure them."""
     from floorplan.video.scale import TRUNC, _backproject, _cost
     out = {}
     for g in np.unique(seg):
@@ -310,7 +316,11 @@ def segment_quality(D: np.ndarray, K: np.ndarray, T_m: np.ndarray, seg: np.ndarr
         res = float(np.median(costs)) if costs else float("nan")
         path = float(np.linalg.norm(np.diff(T_m[ids, :3, 3], axis=0), axis=1).sum()) if len(ids) > 1 else 0.0
         reasons = []
-        if spread > params.trust_max_scale_spread:
+        if params.scale_method == "pnp":
+            cov = (votes or {}).get(int(g), (0.0, None))[0]
+            if cov < params.trust_min_vote_coverage:
+                reasons.append(f"vote coverage {cov:.2f} < {params.trust_min_vote_coverage}")
+        elif spread > params.trust_max_scale_spread:
             reasons.append(f"local scale spread {spread:.2f} > {params.trust_max_scale_spread}")
         if not res <= params.trust_max_residual:
             reasons.append(f"depth residual {res:.3f} > {params.trust_max_residual}")
@@ -394,6 +404,77 @@ def _apply_kf_corrections(C_kf: np.ndarray, kf: np.ndarray, seg: np.ndarray, ts:
                 C[:, a, 3] = np.interp(tq, tk, C_kf[ks, a, 3])
         out[fr] = C @ T_all[fr]
     return out
+
+
+def floor_heights(D: np.ndarray, K: np.ndarray, T: np.ndarray, stride: int = 4, min_drop: float = 0.5,
+                  max_drop: float = 2.2) -> np.ndarray:
+    """Height of each keyframe's camera above the floor it sees in its own metric depth map, gravity from the levelled
+    pose T (+y up): the lowest strong horizontal level 0.5-2.2 m below the camera (2 cm bins), refined by the median
+    of its points. NaN where no such level is seen (camera looking up or ahead, dropped keyframe)."""
+    v, u = np.mgrid[0:D.shape[1]:stride, 0:D.shape[2]:stride]
+    out = np.full(len(D), np.nan)
+    for k in range(len(D)):
+        z = D[k][v, u]
+        ok = z > 0
+        if ok.sum() < 300:
+            continue
+        X = np.stack([(u[ok] - K[0, 2]) * z[ok] / K[0, 0], (v[ok] - K[1, 2]) * z[ok] / K[1, 1], z[ok]], 1)
+        y = X @ T[k, 1, :3]                                       # height relative to the camera
+        y = y[(y < -min_drop) & (y > -max_drop)]
+        if len(y) < 300:
+            continue
+        h, e = np.histogram(y, np.arange(y.min() - 0.01, y.max() + 0.03, 0.02))
+        h = np.convolve(h, np.ones(3) / 3, mode="same")
+        strong = np.where(h >= max(150, 0.3 * h.max()))[0]
+        if len(strong):
+            near = np.abs(y - (e[strong.min()] + 0.01)) < 0.02
+            out[k] = -float(np.median(y[near]))
+    return out
+
+
+def level_to_floor(D: np.ndarray, K: np.ndarray, T_lev: np.ndarray, seg: np.ndarray,
+                   params: VideoParams) -> tuple[np.ndarray, dict]:
+    """D-076: vertical correction of each keyframe so that the floor it sees sits at one height.
+
+    The PnP scale follows DPVO's real drift, so where DPVO's scale is small a glitch in DPVO's step direction becomes
+    metres: on take1 (before r2's DPVO run) one step went 1.1 m down at a local scale of 44, and the floor seen after
+    t 80 s sat 1.6-2 m below the floor seen before. Each keyframe measures its camera's height above the floor in its
+    own metric depth, which does not depend on the path. The floor's height in the scene, path y minus that height,
+    should be one value. Its running median inside each segment (+-floor_level_half_kf, >= 3 keyframes, interpolated
+    in between) is the path's vertical error there, and it is removed. A keyframe counts only if its camera height is
+    within floor_level_band_m of the run's median: a bed or table top seen as the lowest level is 0.5-0.8 m closer.
+    Real camera motion moves the path and the measured height together, so it is kept. Returns dy per keyframe."""
+    h = floor_heights(D, K, T_lev)
+    n = len(T_lev)
+    dy = np.zeros(n)
+    ok = np.isfinite(h)
+    rep = dict(keyframes_with_floor=int(ok.sum()), applied=False)
+    if ok.sum() < 3 * params.floor_level_half_kf:
+        return dy, rep
+    h_ref = float(np.median(h[ok]))
+    for _ in range(2):                                            # median, then the median of the accepted ones
+        acc = ok & (np.abs(h - h_ref) <= params.floor_level_band_m)
+        h_ref = float(np.median(h[acc]))
+    f = T_lev[:, 1, 3] - h                                        # the floor's height as seen by each keyframe
+    m = np.full(n, np.nan)
+    idx = np.arange(n)
+    for g in np.unique(seg):
+        ids = idx[seg == g]
+        for k in ids:
+            sel = acc & (seg == g) & (np.abs(idx - k) <= params.floor_level_half_kf)
+            if sel.sum() >= 3:
+                m[k] = np.median(f[sel])
+        meas = ids[np.isfinite(m[ids])]
+        if len(meas):
+            m[ids] = np.interp(ids, meas, m[meas])
+    F = float(np.median(f[acc]))
+    dy = np.where(np.isfinite(m), F - m, 0.0)
+    f_after = f[acc] + dy[acc]
+    rep.update(applied=True, accepted=int(acc.sum()), camera_height_m=h_ref, floor_y=F,
+               dy_min_m=float(dy.min()), dy_max_m=float(dy.max()),
+               floor_p10_p90_before_m=[float(np.percentile(f[acc], 10)), float(np.percentile(f[acc], 90))],
+               floor_p10_p90_after_m=[float(np.percentile(f_after, 10)), float(np.percentile(f_after, 90))])
+    return dy, rep
 
 
 def _sheet_probe(args):
@@ -487,6 +568,21 @@ def _geometry(D, K_d, files, T_kf_vo, vo, kf, n, ts, sc_local, seg, up, ups, ups
     T_all = interpolate_poses(vo["frames"], T_vo_m, n)
     T_all[kf] = T_kf_m
     T_lev, T_all_lev, R_up, lev = _level_segments(T_kf_m, T_all, kf, seg, ts, up, ups, ups_kf, params)
+    floor_level = params.floor_level if params.floor_level is not None else params.scale_method == "pnp"
+    if floor_level:                                        # D-076: one floor height for every keyframe
+        dy, lev["floor_level"] = level_to_floor(D, K_d, T_lev, seg, params)
+        if lev["floor_level"]["applied"]:
+            C_kf = np.tile(np.eye(4), (len(T_lev), 1, 1))
+            C_kf[:, 1, 3] = dy
+            T_all_lev = _apply_kf_corrections(C_kf, kf, seg, ts, T_all_lev)
+            T_lev = T_lev.copy()
+            T_lev[:, 1, 3] += dy
+            T_all_lev[kf] = T_lev
+            r = lev["floor_level"]
+            log(f"[floor] {r['accepted']} of {r['keyframes_with_floor']} keyframes see the floor "
+                f"{r['camera_height_m']:.2f} m below the camera; path moved {r['dy_min_m']:+.2f}.."
+                f"{r['dy_max_m']:+.2f} m vertically; floor p10-p90 {np.ptp(r['floor_p10_p90_before_m']):.2f} -> "
+                f"{np.ptp(r['floor_p10_p90_after_m']):.2f} m")
     if params.debug_dir:                                   # graph inputs, to iterate on posegraph.py offline
         np.savez(Path(params.debug_dir) / "graph_inputs.npz", T_lev=T_lev, seg=seg, ts_kf=ts[kf], K_d=K_d,
                  s_local=sc_local)
@@ -624,8 +720,9 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
     tick("depth")
 
     # 8. metric scale with drift correction; segments = stretches between VO scale restarts; the local scale comes
-    #    from PnP votes on the keyframe images and their metric depth
-    scale_args = dict(jump=params.scale_jump, min_contrast=params.scale_min_contrast, n_boot=params.bootstrap,
+    #    from depth agreement (default) or from PnP votes on the keyframe images and their depth (scale_method, D-076)
+    scale_args = dict(method=params.scale_method, sigma_kf=params.scale_sigma_kf, jump=params.scale_jump,
+                      min_contrast=params.scale_min_contrast, n_boot=params.bootstrap,
                       block=params.bootstrap_block, seed=params.seed, min_step_m=params.scale_vote_min_step_m,
                       max_dir_deg=params.scale_vote_max_dir_deg, max_rot_deg=params.scale_vote_max_rot_deg,
                       half_kf=params.scale_vote_half_kf)
@@ -652,19 +749,27 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
         s["sigma_rel_learned"] = float(np.sqrt(st ** 2 + params.scale_model_sigma ** 2
                                                + (params.focal_scale_sensitivity * sig_f) ** 2))
         sig_learned[s["id"]] = s["sigma_rel_learned"]
+    votes_txt = (f"; {sc['votes']} PnP votes, {sc['measured_keyframes']}/{len(kf)} keyframes measured"
+                 if params.scale_method == "pnp" else f" ({params.scale_method})")
     log(f"[scale] {len(sc['segments'])} scale segment(s); local scale {sc['s_local'].min():.3f}-"
-        f"{sc['s_local'].max():.3f}; statistical 1-sigma {100 * sc['sigma_rel_stat']:.1f}%; {sc['votes']} PnP votes, "
-        f"{sc['measured_keyframes']}/{len(kf)} keyframes measured")
+        f"{sc['s_local'].max():.3f}; statistical 1-sigma {100 * sc['sigma_rel_stat']:.1f}%{votes_txt}")
     tick("scale")
 
     # quality self-check per segment; untrusted segments are reported and (by default) left out of the scene
     s_local = sc["s_local"].copy()
-    quality = segment_quality(D, K_d, rescale_trajectory(T_kf, s_local), seg, s_local, params)
+    votes = {s_["id"]: (s_.get("vote_coverage", 0.0), s_.get("vote_residual")) for s_ in sc["segments"]}
+    quality = segment_quality(D, K_d, rescale_trajectory(T_kf, s_local), seg, s_local, params, votes=votes)
     for s_ in sc["segments"]:
         s_.update(quality[s_["id"]])
     trusted = np.array([quality[int(g)]["trusted"] for g in seg])
-    log(f"[quality] " + "; ".join(f"seg {g}: spread {q['scale_spread']:.2f}, residual {q['depth_residual']:.3f}, "
-                                  f"{'trusted' if q['trusted'] else 'UNTRUSTED'}" for g, q in quality.items()))
+
+    def _votes_txt(g):
+        cov, vres = votes.get(int(g), (0.0, None))
+        return "" if params.scale_method != "pnp" else \
+            f"vote coverage {cov:.2f}, vote residual {'-' if vres is None else f'{vres:.3f}'}, "
+    log(f"[quality] " + "; ".join(f"seg {g}: spread {q['scale_spread']:.2f}, {_votes_txt(g)}residual "
+                                  f"{q['depth_residual']:.3f}, {'trusted' if q['trusted'] else 'UNTRUSTED'}"
+                                  for g, q in quality.items()))
     D_fuse = D
     if params.drop_untrusted_segments and trusted.any() and not trusted.all():
         D_fuse = D.copy()
@@ -743,8 +848,8 @@ def build_scene_from_video(capture_dir_or_mp4, params: VideoParams | None = None
                            sigma_rel_total=sig_tot, sigma_rel=sig_tot, ci95_rel_total=1.96 * sig_tot,
                            sheets_found=len(sheets), status=status,
                            trusted_keyframes=int(trusted.sum()),
-                           pairs=sc["pairs"], informative_pairs=sc["informative_pairs"], votes=sc["votes"],
-                           measured_keyframes=sc["measured_keyframes"]),
+                           pairs=sc["pairs"], informative_pairs=sc["informative_pairs"], method=params.scale_method,
+                           votes=sc.get("votes"), measured_keyframes=sc.get("measured_keyframes")),
                 scale_sigma_rel=sig_tot, whole_scene_consistent=consistent,
                 levelling=geo_out["levelling"], pose_graph=graph,
                 dpvo=dict(frames=int(len(vo["frames"])), runtime_s=vo["runtime_s"], peak_gb=vo["peak_gb"],

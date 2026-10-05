@@ -9,12 +9,15 @@ relative pose whose translation is multiplied by a candidate scale s, and compar
 metric depth at the pixels it lands on. Only the right s makes the two depth maps agree. A running median of these
 per-pair scales finds the jumps, and the path is cut into segments there.
 
-Local scale (fix loop, docs/FIX_LOOP.md): votes from PnP on the same metric depth. The depth-agreement votes were too
-few to follow DPVO's scale: on my own video 30 of 902 pairs voted, none between t 12 and 37 s, where DPVO's scale
-dropped about 13x, and the +-1.5x clamp hid the drop. For keyframes i and i+2/4/6, SIFT matches, i's metric depth at
-its keypoints and PnP give the camera step in metres. Where it agrees with DPVO's step, metric step / DPVO step is one
-vote. The running median of the votes within +-8 keyframes is the local scale, and re-integrating the trajectory with
-it removes the drift.
+Local scale, two methods (VideoParams.scale_method, D-076):
+  * "pnp" (fix loop, docs/FIX_LOOP.md, D-075): votes from PnP on the same metric depth. The depth-agreement votes were
+    too few to follow DPVO's scale: on my own video 30 of 902 pairs voted, none between t 12 and 37 s, where DPVO's
+    scale dropped about 13x, and the +-1.5x clamp hid the drop. For keyframes i and i+2/4/6, SIFT matches, i's metric
+    depth at its keypoints and PnP give the camera step in metres. Where it agrees with DPVO's step, metric step / DPVO
+    step is one vote. The running median of the votes within +-8 keyframes is the local scale, and re-integrating the
+    trajectory with it removes the drift.
+  * "depth_agreement" (before D-075): the fine depth-agreement curves summed in a Gaussian window (sigma 15
+    keyframes), clamped to 1.5x of the segment's value.
 """
 from __future__ import annotations
 
@@ -246,7 +249,50 @@ def running_median_scale(n: int, seg: np.ndarray, mid: np.ndarray, vote: np.ndar
     return s, measured
 
 
+def _depth_agreement_local(C, fine, mid, seg, seg_pair, same, informative, sigma_kf, n_boot, block, seed):
+    """Local scale from the depth-agreement curves (the step before D-075, kept as scale_method "depth_agreement"):
+    the fine curves summed in a Gaussian time window that does not cross a segment boundary, clamped to 1.5x of the
+    segment's value, and a block bootstrap over pairs per segment."""
+    n = len(seg)
+    s_local = np.full(n, np.nan)
+    has_info = C.max(axis=1) > 0
+    for k in range(n):
+        w = np.exp(-0.5 * ((mid - k) / sigma_kf) ** 2) * (seg_pair == seg[k])
+        if (w * has_info).sum() > 1e-3:                               # else: no information near k, fill below
+            s_local[k] = curve_minimum(fine, (w[:, None] * C).sum(0))
+    s_local = np.exp(_fill_nan_nearest(np.log(s_local)))
+    for g in np.unique(seg):
+        # inside one segment the scale drifts slowly; a local value more than 1.5x away from the segment's value
+        # comes from a window with too little information (typically the last few keyframes) and is clamped
+        rows = np.where((seg_pair == g) & same)[0]
+        if len(rows):
+            s_seg = curve_minimum(fine, C[rows].sum(0))
+            s_local[seg == g] = np.clip(s_local[seg == g], s_seg / 1.5, s_seg * 1.5)
+    rng = np.random.default_rng(seed)
+    segments = []
+    for g in np.unique(seg):
+        rows = np.where((seg_pair == g) & same & informative)[0]
+        kfs = np.where(seg == g)[0]
+        if len(rows) == 0:
+            segments.append(dict(id=int(g), keyframes=[int(kfs[0]), int(kfs[-1])], pairs=0, sigma_rel_stat=None))
+            continue
+        total = C[rows].sum(0)
+        c0 = int(np.argmin(total))
+        cols = np.arange(max(0, c0 - 40), min(len(fine), c0 + 41))
+        starts = np.arange(0, len(rows), block)
+        boots = []
+        for _ in range(n_boot):
+            pick = np.concatenate([rows[b:b + block] for b in rng.choice(starts, len(starts))])
+            boots.append(curve_minimum(fine[cols], C[pick][:, cols].sum(0)))
+        lo, hi = np.percentile(boots, [2.5, 97.5])
+        segments.append(dict(id=int(g), keyframes=[int(kfs[0]), int(kfs[-1])], pairs=int(len(rows)),
+                             s=curve_minimum(fine, total), ci95_stat=[float(lo), float(hi)],
+                             sigma_rel_stat=float((np.log(hi) - np.log(lo)) / (2 * 1.96))))
+    return s_local, segments
+
+
 def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, max_gap: int,
+                    method: str = "pnp", sigma_kf: float = 15.0,
                     min_contrast: float = 0.005, jump: float = 1.5, n_boot: int = 2000, block: int = 10,
                     seed: int = 0, forced_cuts=(), min_step_m: float = 0.08, max_dir_deg: float = 35.0,
                     max_rot_deg: float = 4.0, half_kf: int = 8, min_votes: int = 3) -> dict:
@@ -256,9 +302,13 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
     1. coarse cost curve per keyframe pair on a wide grid (10% steps over 6 decades)
     2. scale-jump segmentation from the running median of the per-pair coarse minima
     3. fine curves (1% steps, +-35% around the local coarse value): merge cuts with nearly the same scale both sides
-    4. scale votes from PnP (pnp_steps, pnp_scale_votes); their running median inside each segment is the local scale
-    5. block bootstrap over the votes, per segment, for the statistical part of the uncertainty
+    4. method "pnp": scale votes from PnP (pnp_steps, pnp_scale_votes); their running median inside each segment is
+       the local scale. Method "depth_agreement": the fine curves in a Gaussian window, clamped (_depth_agreement_local;
+       `images` is not used)
+    5. block bootstrap, per segment, for the statistical part of the uncertainty (over the votes, or over the pairs)
     """
+    if method not in ("pnp", "depth_agreement"):
+        raise ValueError(f"scale method {method!r}: 'pnp' or 'depth_agreement'")
     pairs = keyframe_pairs(len(T), max_gap)
     mid = np.array([(i + j) / 2 for i, j in pairs])
     coarse = np.exp(np.arange(np.log(1e-3), np.log(1e3), np.log(1.1)))
@@ -295,6 +345,11 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
     seg = _merge_similar_segments(seg, seg_pair, same, C, fine, jump, protected=set(int(k) for k in forced_cuts))
     seg_pair = seg[np.array([i for i, _ in pairs])]
     same = seg_pair == seg[np.array([j for _, j in pairs])]
+    if method == "depth_agreement":
+        s_local, segments = _depth_agreement_local(C, fine, mid, seg, seg_pair, same, informative, sigma_kf, n_boot,
+                                                   block, seed)
+        return dict(s_local=s_local, segment=seg, segments=segments, sigma_rel_stat=_scene_sigma(segments),
+                    pairs=len(pairs), informative_pairs=int((informative & same).sum()), method=method)
 
     # local scale: running median of the PnP votes. It replaces a Gaussian window over the depth-agreement curves and
     # its +-1.5x clamp around the segment's value, which hid a 13x drop of DPVO's scale on my own video.
@@ -319,9 +374,12 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
         kfs = np.where(seg == g)[0]
         sel = np.where(seg_v == g)[0]
         s_g = float(np.median(s_local[kfs]))
+        # self-check signals of this scale (frontend.segment_quality): the share of the segment's keyframes that have
+        # min_votes votes nearby, and how far the votes sit from the local scale (median |log|)
+        cov = float(measured[kfs].mean())
         if len(sel) < min_votes:
             segments.append(dict(id=int(g), keyframes=[int(kfs[0]), int(kfs[-1])], votes=int(len(sel)), s=s_g,
-                                 sigma_rel_stat=None))
+                                 sigma_rel_stat=None, vote_coverage=cov, vote_residual=None))
             continue
         # the votes' offset from the local scale, resampled in blocks of consecutive votes (neighbours share frames)
         r = np.log(vote[sel] / s_local[np.round(mid_v[sel]).astype(int)])
@@ -331,16 +389,20 @@ def estimate_scales(D: np.ndarray, K: np.ndarray, T: np.ndarray, images: list, m
         lo, hi = np.percentile(boots, [2.5, 97.5])
         segments.append(dict(id=int(g), keyframes=[int(kfs[0]), int(kfs[-1])], votes=int(len(sel)), s=s_g,
                              ci95_stat=[s_g * float(np.exp(lo)), s_g * float(np.exp(hi))],
-                             sigma_rel_stat=float((hi - lo) / (2 * 1.96))))
+                             sigma_rel_stat=float((hi - lo) / (2 * 1.96)), vote_coverage=cov,
+                             vote_residual=float(np.median(np.abs(r)))))
+    return dict(s_local=s_local, segment=seg, segments=segments, sigma_rel_stat=_scene_sigma(segments),
+                pairs=len(pairs), informative_pairs=int((informative & same).sum()), method=method,
+                votes=int(len(vote)), measured_keyframes=int(measured.sum()))
+
+
+def _scene_sigma(segments: list[dict]) -> float:
+    """Statistical sigma reported for the scene: keyframe-weighted mean over segments (segments without information
+    inherit the worst one)."""
     sig = [g["sigma_rel_stat"] for g in segments if g["sigma_rel_stat"] is not None]
-    # statistical sigma reported for the scene: keyframe-weighted mean over segments (segments without information
-    # inherit the worst one)
     worst = max(sig) if sig else np.nan
     w_sig = [((g["keyframes"][1] - g["keyframes"][0] + 1), g["sigma_rel_stat"] or worst) for g in segments]
-    sigma_stat = float(sum(n * s for n, s in w_sig) / sum(n for n, _ in w_sig))
-    return dict(s_local=s_local, segment=seg, segments=segments, sigma_rel_stat=sigma_stat, pairs=len(pairs),
-                informative_pairs=int((informative & same).sum()), votes=int(len(vote)),
-                measured_keyframes=int(measured.sum()))
+    return float(sum(n * s for n, s in w_sig) / sum(n for n, _ in w_sig))
 
 
 def rescale_trajectory(T: np.ndarray, s_local: np.ndarray) -> np.ndarray:

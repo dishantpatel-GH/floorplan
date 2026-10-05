@@ -41,6 +41,11 @@ class VideoParams:
 
     # --- metric depth and scale ---
     depth_model: str = "moge2"           # "moge2" or "da3metric"; chosen by evidence (video_tier.md, decision V-5)
+    scale_method: str = "depth_agreement"  # D-076: "depth_agreement" (Gaussian window, 1.5x clamp; the step before
+                                         # D-075) or "pnp" (D-075 votes + vote-coverage self-check + floor levelling).
+                                         # Replays on 12 cached DPVO runs: "pnp" better on take1 (median footprint
+                                         # error 2.7% vs 26%) but not worse on only 6 of 12 runs, so not the default
+    scale_sigma_kf: float = 15.0         # depth_agreement: Gaussian time window (keyframes) for the local scale
     scale_max_gap: int = 4               # scale cost curves from keyframe pairs up to 4 keyframes apart
     scale_jump: float = 2.0              # a >2x step in the running-median scale = VO scale restart (segment cut)
     scale_min_contrast: float = 0.015    # D-066: a pair votes on scale only if +-20% changes its cost by this much
@@ -81,9 +86,22 @@ class VideoParams:
     vo_rerun_segments: bool = True       # fresh DPVO run from every VO restart (V2-1)
     vo_rerun_min_keyframes: int = 60     # D-061: ... only for segments with at least this many keyframes
     vo_rerun_max: int = 8                # ... and at most this many (longest first): live-run time
-    trust_max_scale_spread: float = 2.0  # segment self-check (V2-5): good 1.17-1.67, broken 2.18-2.25 (clamps hit)
+    trust_max_scale_spread: float = 2.0  # segment self-check (V2-5): good 1.17-1.67, broken 2.18-2.25 (clamps hit);
+                                         # scale_method "depth_agreement" only: the PnP scale follows DPVO's real
+                                         # drift (spreads 2-107 on take1), so a spread says nothing about it (D-076)
     trust_max_residual: float = 0.058    # good 0.040-0.048, broken 0.063 (median truncated |log depth ratio|)
     trust_min_keyframes: int = 20        # shorter segments cannot be checked (and their scale is weak)
+    trust_min_vote_coverage: float = 0.5 # D-076, "pnp": at least half of the segment's keyframes have >= 3 votes
+                                         # within +-8 keyframes; elsewhere the scale is interpolated and DPVO's motion
+                                         # is not measured. Sample segments that ARKit puts 113-213% off: 0.00-0.44;
+                                         # take1: 0.67-1.00; single_room (ARKit +1.8 to +3.4%): 0.31-0.39 (one segment,
+                                         # kept anyway). The vote residual (0.015-0.215) separates nothing: reported
+    floor_level: bool | None = None      # D-076: move the camera path vertically so that every keyframe puts the
+                                         # floor it sees at one height (a DPVO glitch times a large PnP scale dropped
+                                         # take1's path 2.2 m). None: on with "pnp", off with "depth_agreement"
+    floor_level_band_m: float = 0.30     # ... a keyframe's floor counts if its camera is within 0.30 m of the run's
+                                         # median height above the floor (bed and table tops are 0.5-0.8 m closer)
+    floor_level_half_kf: int = 8         # ... running median of the floor heights within +-8 keyframes (>= 3)
     drop_untrusted_segments: bool = True # leave untrusted segments' geometry out of the scene (unobserved)
     untrusted_sigma_floor: float = 0.25  # 1-sigma claimed when no segment passes the self-check
     use_pose_graph: bool = True          # join segments + loop closures on predicted-depth fragments (posegraph.py)

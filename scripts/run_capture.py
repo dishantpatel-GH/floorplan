@@ -50,6 +50,7 @@ def drop_implausible_openings(plan) -> list[dict]:
 
 
 PHOTO_OVERRIDES: dict = {}
+VIDEO_SCALE: str | None = None        # --video-scale: VideoParams.scale_method (D-076); None = its default
 SEMANTIC_HINT = {"no segmentation env": "build it with setup/seg_env.sh",
                  "disabled": "turned off with --photo-param semantic_walls=false"}
 
@@ -83,8 +84,9 @@ def front_end(inp: Path, tier: str, cfg: Config, out: Path, drift: bool, log):
         scene, info, _ = build_scene(inp, cfg, T_wc=T_wc, log=log)
         return scene, info, report, 0.0, "LiDAR depth is metric; no scale term"
     if tier == "video":
-        from floorplan.video import build_scene_from_video
-        scene, info = build_scene_from_video(inp, work_dir=out / "work", log=log)
+        from floorplan.video import VideoParams, build_scene_from_video
+        params = VideoParams(scale_method=VIDEO_SCALE) if VIDEO_SCALE else None
+        scene, info = build_scene_from_video(inp, params, work_dir=out / "work", log=log)
         rel = float(info.get("scale_sigma_rel", info.get("scale", {}).get("sigma_rel", 0.03)) or 0.03)
         reason = "video scale from learned metric depth + priors; no reference object needed (D-067)"
         if info.get("whole_scene_consistent") is False:
@@ -160,7 +162,11 @@ def main():
     ap.add_argument("--damage-timeout", type=int, default=300, help="seconds before damage detection is skipped")
     ap.add_argument("--photo-param", action="append", default=[], metavar="KEY=VALUE",
                     help="override a photo-tier parameter (floorplan/photo/params.py), e.g. f35_rule=diagonal")
+    ap.add_argument("--video-scale", choices=["depth_agreement", "pnp"],
+                    help="video tier: local scale method (D-076); default from floorplan/video/params.py")
     a = ap.parse_args()
+    global VIDEO_SCALE
+    VIDEO_SCALE = a.video_scale
     for kv in a.photo_param:
         k, v = kv.split("=", 1)
         try:
