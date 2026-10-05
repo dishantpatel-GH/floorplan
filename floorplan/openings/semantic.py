@@ -81,7 +81,10 @@ class SemParams:
     min_views: int = 2
     min_views_end_unseen: int = 4       # an opening with an end no view saw needs this many views (take1: a 3-view
                                         # "door" on the bedroom's window wall, left end never seen)
-    single_view_min_frac: float = 0.01  # one view is enough only with both ends seen and a blob this big
+    single_view_min_frac: float = 0.01  # one view is enough only with both ends seen and a blob this big ...
+    partial_min_frac: float = 2.0       # ... or with one end seen and a blob this big (off; photo tier: 0.05)
+    lower_bound_min_m: float = 0.3      # an opening with an end never seen: its seen width (a lower bound) only has
+                                        # to be this wide
     end_sigma_floor_m: float = 0.03     # segmentation edge (1-2 px of a 1/4-resolution mask) + depth noise
     geometry_overlap: float = 0.3       # a geometric opening overlapping this share is the same opening
     cut_end_extra_m: float = 0.45       # an end never seen: the opening may be this much wider than what was seen
@@ -639,6 +642,12 @@ def merge_views(items: list[dict], walls: dict[int, WallLine], p: SemParams) -> 
                        walls_voted={walls[k].wall.id: int(v) for k, v in votes.items()})
             why = None
             wmin, wmax = p.door_width_m if kind == "door" else p.window_width_m
+            both = bool(lo_obs and hi_obs)
+            # a large blob with one end seen (a photo taken close to a door): the opening is there, its width is a
+            # lower bound (drawn as low confidence; photo tier only, see params_for)
+            big_partial = not both and bool(lo_obs or hi_obs) and rec["max_frac"] >= p.partial_min_frac
+            if not both:
+                wmin = min(wmin, p.lower_bound_min_m)
             if rec["width"] < wmin or rec["width"] > wmax:
                 why = f"width {rec['width']:.2f} m outside {wmin}-{wmax} m"
             elif kind == "door" and rec["bottom"] is not None and rec["bottom"] > p.door_max_bottom_m:
@@ -648,9 +657,10 @@ def merge_views(items: list[dict], walls: dict[int, WallLine], p: SemParams) -> 
             elif kind == "door" and rec["bottom"] is None and rec["top"] is None and \
                     max(m["top"] - m["bottom"] for m in mem) < p.door_min_visible_m:
                 why = "frame cut it at the top and the bottom, and less than 1.2 m of it is seen"
-            elif len(views) < p.min_views and not (lo_obs and hi_obs and rec["max_frac"] >= p.single_view_min_frac):
+            elif len(views) < p.min_views and not (both and rec["max_frac"] >= p.single_view_min_frac) \
+                    and not big_partial:
                 why = f"seen in {len(views)} view(s) only, without both ends or with a small blob"
-            elif not (lo_obs and hi_obs) and len(views) < p.min_views_end_unseen:
+            elif not both and len(views) < p.min_views_end_unseen and not big_partial:
                 why = (f"one end never seen (cut by the frame in all {len(views)} views): needs "
                        f"{p.min_views_end_unseen} views")
             elif (hi + lo) / 2 < -p.wall_extent_margin_m or (hi + lo) / 2 > host.L + p.wall_extent_margin_m:
@@ -700,10 +710,11 @@ def add_to_plan(plan: Plan, kept: list[dict], walls: dict[int, WallLine], tier: 
         how = (f"segmenter ({tier}): {rec['kind']} pixels of {rec['views']} view(s) on the wall surface or seen "
                f"through it; ends = median of the views that saw them ({rec['ends_seen'][0]} / {rec['ends_seen'][1]})")
         both = rec["ends_seen"][0] > 0 and rec["ends_seen"][1] > 0
+        if not both:          # a lower bound; symmetric so that the tier widening (also symmetric) keeps it covered
+            sig = max(sig, p.cut_end_extra_m / 1.96)
         width = Measurement.from_sigma(rec["width"], sig, method=how, status="measured" if both else "inferred")
         if not both:
             width.method += "; an end was cut by the image frame in every view: the width is a lower bound"
-            width.hi = max(width.hi, rec["width"] + p.cut_end_extra_m)
         if same is not None:
             has_w = same.width is not None and same.width.value is not None
             note = (f"; segmenter: {rec['kind']} seen in {rec['views']} view(s), width {rec['width']:.2f} m"
@@ -809,11 +820,21 @@ def detect_openings(views: list[SemView], labels: list[str], plan: Plan, floor_y
     return dict(items=items, dropped_blobs=dropped, kept=kept, rejected=rejected, walls=walls)
 
 
+def params_for(tier: str) -> SemParams:
+    """Video keyframes come about 1 s apart, so a real opening is in several of them: 3 views, no one-view openings
+    (take1: the one-view detections were pieces of windows already found, on other walls). A room's 6-8 photos
+    often show an opening once: 2 views, or one large view with both ends, or a blob of 5% of the photo with one end
+    seen (taken close to a door: the door is there, its width is a lower bound)."""
+    if tier == "video":
+        return SemParams(min_views=3, single_view_min_frac=2.0)
+    return SemParams(partial_min_frac=0.05)
+
+
 def add_semantic_openings(plan: Plan, scene: dict, info: dict, tier: str, work: Path, log=print,
                           p: SemParams | None = None, sem_npz: Path | None = None) -> dict:
     """The whole step for a run: views -> detections -> plan. Never raises: on any failure the plan is unchanged
     and the report says why."""
-    p = p or SemParams()
+    p = p or params_for(tier)
     t0 = time.time()
     try:
         floor_y = info.get("floor_y")
