@@ -2355,3 +2355,66 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   box already 0.16 m too wide). The simulator has no pillars, so it only shows that nothing moves there.
   Dim W1 1.3% -> 6.1%: dim's box is 0.16 m too wide, and the step no longer takes up the excess. A step whose photo
   run stops short of the corner (something in front of it) would come out short; not seen on these takes.
+
+## D-087 Video: scale step "auto", PnP's scale where a segment's own votes are dense (replayed; off)
+
+- **Context.** The PnP scale (D-075) fixes take1 and loses on the sample videos (D-076, D-084). There SIFT finds few
+  matches on blurred white walls: single_room has 22 votes over 164 keyframes, take1 147–193 over 228, and between
+  votes the PnP scale is interpolated. D-076's "revisit if" named the depth-agreement scale where votes are sparse.
+- **Change** (`20b8ece`; `VideoParams.scale_method = "auto"`, `run_capture.py --video-scale auto`). Both local scales
+  are computed on the same segments. A segment keeps PnP's scale if its vote coverage (share of its keyframes with
+  ≥ 3 votes within ±8 keyframes, D-076) is at least `scale_auto_min_coverage` = 0.5, else it takes depth agreement's.
+  Each segment is self-checked by its own method (coverage or spread) and records `scale_method` and `vote_coverage`
+  in `scene_info.json` (`scale.segments`, `scale.segment_methods`). Floor levelling (D-076) is on when a segment uses
+  PnP (`scale.floor_levelled`).
+- **Threshold, set before any replay**, from the coverage in the PnP replays (`outputs/video_sfm/arm_pnp`) and D-076's
+  segment-by-segment ARKit check (`outputs/fixloop/followup/probe_truth.json`): take1's segments of 20+ keyframes
+  0.67–1.00; single_room 0.31–0.39; floor_only's first segments, where PnP is far worse than depth agreement against
+  ARKit, 0.37 (+13.8% against +3.3%) and 0.44 (d066: +200.6% against +18.1%); segments where PnP is closer 0.51
+  (with_ceiling: −12.7% against −27.9%) and 0.61 (d066: −5.9% against +29.6%). 0.5 is also the PnP self-check's limit.
+- **Replays** of the 16 caches of `docs/notes/video_better_rule.md` (`outputs/video_auto/`: `run_arm.sh`, `replay/`,
+  `summary.json`, `rule_check.txt`; code `20b8ece`, CPU, one at a time), against the baseline replays
+  (`video_better/baseline`, re-scored with this code's scorer: the same numbers). Segments: P = PnP, D = depth
+  agreement, with the coverage; ! = failed its self-check.
+
+  | Run | Segments | Rooms | Footprint, m² (error vs 30 m²) | Walls ≤3% / ≤10% / found, of 14 | Bedroom room, m² (tape 11.09) |
+  |---|---|---|---|---|---|
+  | 23:28 | P0.79 | 9 → 3 | 37.6 (25.2%) → 29.8 (0.6%) | 0/1/8 → 1/1/12 | 14.9 → 9.3 |
+  | before r1 | P0.69, P1.00, P0.88 | 4 → 2 | 24.1 (19.5%) → 29.2 (2.6%) | 2/5/12 → 1/4/9 | 12.2 → 8.7 |
+  | before r2 | P0.82 | 4 → 3 | 40.3 (34.5%) → 31.3 (4.5%) | 0/1/8 → 3/4/10 | 18.0 → 9.5 |
+  | after r1 | P0.79 | 2 → 2 | 37.8 (26.0%) → 27.4 (8.7%) | 1/1/6 → 0/0/6 | 27.8 → 6.9 |
+  | after r2 | P0.67, P1.00, P0.95, P0.82 | 2 → 2 | 18.7 (37.7%) → 30.8 (2.7%) | 1/1/8 → 2/2/10 | 11.9 → 9.5 |
+  | presentable default r1 | P0.90, P1.00, P0.96, P0.81 | 1 → 2 | 10.0 (66.8%) → 31.0 (3.3%) | 0/1/6 → 1/5/10 | 10.0 → 9.3 |
+  | presentable pnp r1 | P0.93 | 3 → 2 | 29.9 (0.4%) → 31.0 (3.2%) | 2/2/13 → 0/1/7 | 14.5 → 9.6 |
+  | presentable default r2 | P0.86, P0.88 | 1 → 2 | 19.2 (35.9%) → 29.5 (1.7%) | 0/0/3 → 2/3/10 | 19.2 → 9.9 |
+  | presentable pnp r2 | D0.00!, P1.00, P0.88 | 2 → 2 | 29.6 (1.3%) → 28.6 (4.7%) | 3/6/11 → 3/4/10 | 12.8 → 10.1 |
+
+  | Run | Segments | Rooms (LiDAR) | Footprint vs LiDAR | Plan rooms matched to a LiDAR room |
+  |---|---|---|---|---|
+  | single_room d069 r1, r2, r3 | D0.31 | 3 → 3 (3) | +1.2, −2.9, −5.1% → the same | 2 → 2 |
+  | single_room after run | D0.39 | 3 → 3 (3) | +19.9% → +19.9% | 2 → 2 |
+  | floor_only after run | D0.37, P0.67, D0.00!, P0.61, P0.55!, P0.65 | 0 → 10 (8) | −100% → +13.3% | 0 → 7 |
+  | floor_only d066 | D0.44, D0.00!, P0.61, D0.34! | 5 → 6 (8) | −49.2% → −49.0% | 3 → 4 |
+  | with_ceiling after re-run | P1.00!, P0.51, D0.41!, D0.00, D0.00! | 3 → 9 (8) | −13.2% → +11.1% | 1 → 3 |
+- **Rule** (`outputs/video_auto/rule_check.txt`).
+  - (a1) The footprint is better on 8 of 9 (needs 7): holds. 27.4–31.3 m² on all nine, median error 26.0% → 3.2%.
+  - (a2) More walls are found on 5 of 9 (needs 7): fails. after r1 6 → 6, before r1 12 → 9, pnp r1 13 → 7, pnp r2
+    11 → 10. On 8 of 9 caches hall, passage and kitchen are one room (18.5–21.7 m²) beside the bedroom, so the
+    kitchen's three tape walls are not found; the baseline found them where a broken scale cut off a passage+kitchen
+    piece (before r1, pnp r1).
+  - (a3) Walls within 10% total 18 → 24, but pnp r2 loses two (6 → 4): fails.
+  - (b) Holds. single_room takes depth agreement on every cache and its plans do not change. floor_only's after run
+    goes from 0 rooms to 10 (7 matched, +13.3%), d066 from 3 matched rooms to 4 (−49.0%), with_ceiling from 1 to 3
+    (+11.1%; its largest room, 38.3 m², still covers a 12.8 m² LiDAR room).
+  - (c) Holds: video only, and off.
+- **Decision.** Not the default: the take1 wall counts fail, as PnP's did in D-084. `scale_method` stays
+  "depth_agreement"; `--video-scale auto` turns it on. What it does when on: take1 gets PnP's scale on every segment
+  (the bedroom is a room of its own on all nine caches, 6.9–10.1 m²); single_room keeps depth agreement and its plans
+  exactly; floor_only and with_ceiling take PnP on their dense segments, are levelled and gain matched rooms.
+- **The camera path chosen the same way.** `path_source` "sfm" with its 80% gate (`189e151`) is already that: the SfM
+  path where one model holds ≥ 80% of the walk, else DPVO's. Its replays (`outputs/video_sfm/arm_gated`) under the same
+  rule: (a1) 9 of 9; (a2) 6 of 9, fails; (a3) pnp r2 6 → 4, fails; the samples fall back to DPVO and do not change
+  (with_ceiling was not replayed). So no separate "auto" path, and it is not the default either.
+- **Limits.** The threshold was set on these caches; there is no held-out set. Floor levelling assumes one floor
+  level. The walls take1 misses are the plan step's room split (hall, passage and kitchen in one room), which no
+  scale step changes.

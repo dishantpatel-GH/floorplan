@@ -168,6 +168,55 @@ scores before and after by position; `eval/summary.md`). Doors found / missed / 
   the own bedroom's second door in the photos (no pair photo, no gap, no door pixels) and in the video (the walk never
   goes through it). A prior needs a place.
 
+## Open doorways seen through (photo tier)
+
+Code: `floorplan/openings/seethrough.py`, run inside the openings step (`add_semantic_openings`, which `run_capture.py`
+and `replan_run.py` call) for the photo tier. Switch: `SemParams.see_through_doors`, on (off for video);
+`scripts/add_openings.py --see-through on|off`. Tests: `tests/test_see_through_doors.py` (ray-cast views: a 0.80 m
+doorway seen straight and 32 deg off comes back within 2 cm; a window with a 0.9 m sill, to the outside or to a room,
+and a 0.8 m deep alcove give nothing).
+
+Why: the bedroom's door to the kitchen side (D1, 0.787 m) stands open, its leaf against the wardrobe, and no plan had
+it. What the pipeline sees in the dim photo 224001 (camera 1.80 m in front of the plan's W1, 1.51 m up, looking 25 deg
+down and 30 deg along the wall): image columns 0.65-0.98 cross W1 1.11-1.89 m from its start and land 0.5-5.5 m beyond
+it, on the next room's floor and far wall (past 6 m the photo depth is empty). The segmenter calls those pixels floor
+and wall. There are no door pixels: the leaf (columns 0.49-0.63) is labelled wall and stands 0.1-0.6 m in front of
+the line at 1.12 m; the wardrobe's orange fronts are labelled door, 0.7 m in front of it. Jambs: wall points on the
+line at 1.05-1.12 m on the hinge side (the next room's side wall recedes from 0.98 m) and the latch-side frame (wall,
+railing) on the line from 1.85 m. The head is above the frame: the top row crosses W1 1.61 m up. 223938 sees the same
+gap from 1.44 m (cut by the left border) to the wall at 1.89 m. The evidence is in the depth, not in the classes.
+
+How: per photo and plan wall, each ray is crossed with the wall plane. A 2 cm bin is open when, of its rays crossing
+0.3-1.8 m up and not hidden by something in front, at least 60% land 0.5 m or more beyond (or have no depth) and at
+most 10% end on the wall. A span of open bins needs the floor seen beyond it, no wall under it (a sill), something
+farther than 1.0 m behind it (else an alcove or a step, D-082) and wall over it where the photo sees 2.2-2.5 m up.
+Jambs: the wall points beside each end; the jamb is their inner edge on the wall line, so an oblique photo's reveal
+does not narrow the opening. An end without a jamb counts as cut only at the image border or behind furniture.
+Across photos, width and centre come from the photos that saw both jambs. Without one, the widest part one photo saw
+is a lower bound (0.4-0.95 m) and rule d gives it the prior width. A door or passage with a width on that wall wins,
+and so does a window. A doorway-pair door without a width takes the measured one.
+
+Measured (`outputs/own_house/diag/door_gap/run_measure.py`: each saved plan without its segmenter and prior openings,
+then the openings step with the rule off and on, priors rule d; scored by position. Runs in
+`outputs/own_house/diag/door_gap/` and `outputs/sim/<flat>/door_gap/`). Doors found / missed / phantom (duplicates):
+
+| Photo plan | Before | After | What changed | Windows (same before and after) |
+|---|---|---|---|---|
+| own dim | 1 / 3 / 0 (0) of 4 | 2 / 2 / 0 (0) | D1 0.760 m for 0.787 (-2.7 cm), on W1 1.12-1.88 m from its start (tape 1.168-1.955); D2 0.80 m (+6.3) as before | 1 / 2 / 0, bedroom window +5.9 cm |
+| own lit | 1 / 3 / 0 (0) of 4 | 2 / 2 / 0 (0) | D1 0.886 m (+9.9 cm), a lower bound (no photo sees both jambs; dashed), at 0.85-1.74 m on a W1 the plan has 2.26 m long (tape 2.545); D2 as before | 1 / 2 / 0, +5.7 cm |
+| k65 | 5 / 0 / 1 (0) of 5 | 5 / 0 / 1 (0) | nothing: 2 doorways, both rejected (1.41 and 1.66 m seen past one jamb) | 3 / 1 / 2 (0) |
+| k22 | 5 / 1 / 0 (0) of 6 | 5 / 1 / 0 (0) | the bedroom-bathroom door (a doorway-pair door, no width) gets 0.826 m for 0.799 (+2.7 cm); 3 doorways lie on walls where the segmenter has a window (phantom windows in the score): the window wins | 1 / 4 / 6 (0) |
+| k38 | 3 / 2 / 7 (0) of 5 | 3 / 2 / 7 (0) | nothing: of 3 doorways, 2 land on openings that have widths and 1 on a window; those win | 4 / 0 / 4 (1) |
+
+- Default on: D1 is found on dim on W1 within 3 cm, and no plan gains a phantom or loses a found opening.
+- Letting the doorway win over the window adds a duplicate door on k22 (5 / 1 / 1 (1)), so the window wins.
+- Lit: 223840, the only photo that sees the hinge jamb, gives 0.886 m, 10 cm over the tape. Taken with the latch jamb
+  from 223846 the width was 1.09 m (+30 cm), which is why ends from two photos are not combined.
+- k22's black, glossy bathroom tiles reflect the room, and the depth sees "through" them. Those spans end with no
+  wall, image border or furniture beside them, and are dropped; one 0.98 m lower bound is over the 0.95 m limit.
+- D1 on dim lies 5-8 cm short of the tape positions along W1 (the plan's W1 is 3.2 cm longer than the tape's).
+- The thresholds were set on these five plans; there is no held-out set.
+
 ## Pose check found on the way
 
 The levelling in step 1 measures each keyframe's pose against the floor in its own depth. On take1 the two differ by
@@ -183,5 +232,7 @@ those poses. That is one reason video plans of take1 differ so much between runs
 - The thresholds were set on take1, the bedroom photos and k65. There is no held-out set.
 - A door ajar beyond its wall, seen at an angle, comes out too wide (single_room: +26 cm).
 - One opening can appear twice: a geometric one and a segmenter one on a perpendicular wall are not merged.
+- Open doorways seen through: a mirror or a glossy surface looks like an opening in the depth. The rule drops spans
+  whose see-through stops with nothing beside it, and a mirror framed by wall could still pass.
 - Door priors: a standard-door width is not a measurement. A doorway photo cannot tell a 0.8 m door from a 2.2 m
   opening, and a path crossing is only as good as the poses.

@@ -7,7 +7,11 @@ the input, or --work). The video tier's keyframes are segmented once and cached 
 --priors-only adds only the doors from priors (floorplan/openings/priors.py) to a plan that already has the
 segmenter's openings; --no-priors leaves them out.
 
+--see-through on|off overrides the photo tier's switch for open doorways seen through the walls
+(floorplan/openings/seethrough.py; default: SemParams.see_through_doors).
+
 Usage: python scripts/add_openings.py <run_dir> --out DIR [--work DIR] [--sem NPZ] [--priors-only | --no-priors]
+                                      [--see-through on|off]
 """
 import argparse
 import json
@@ -19,7 +23,7 @@ from floorplan.export.dxf import export_dxf  # noqa: E402
 from floorplan.export.json_export import load_plan_json, save_plan_json  # noqa: E402
 from floorplan.export.render import render_plan  # noqa: E402
 from floorplan.openings.priors import add_prior_doors  # noqa: E402
-from floorplan.openings.semantic import add_semantic_openings  # noqa: E402
+from floorplan.openings.semantic import add_semantic_openings, params_for  # noqa: E402
 from floorplan.pipeline.scene import load_scene  # noqa: E402
 from floorplan.uncertainty.tier_budget import _widen  # noqa: E402
 
@@ -27,6 +31,13 @@ from floorplan.uncertainty.tier_budget import _widen  # noqa: E402
 def photo_work_dir(inp: Path) -> Path:
     """Where build_scene_from_photos keeps its cache when run_capture gives it no work dir."""
     return inp.parent / f"photo_work__{inp.name}"
+
+
+def _params(tier: str, see_through: str | None):
+    p = params_for(tier)
+    if see_through:
+        p.see_through_doors = see_through == "on"
+    return p
 
 
 def main() -> int:
@@ -40,6 +51,8 @@ def main() -> int:
     g.add_argument("--no-priors", action="store_true", help="only the segmenter's openings")
     ap.add_argument("--rules", default="d", help="prior rules to apply (a gaps, b doorway photos, c video path, "
                                                   "d doors cut by the frame); default 'd' as in run_capture.py")
+    ap.add_argument("--see-through", choices=("on", "off"), help="photo tier: open doorways seen through the walls "
+                                                                 "(default: the openings params' switch)")
     a = ap.parse_args()
     plan = load_plan_json(a.run / "plan.json")
     scene, info = load_scene(a.run / "scene")
@@ -48,7 +61,7 @@ def main() -> int:
     work = a.work or (a.run / "work" if tier == "video" else photo_work_dir(Path(report.get("input", ""))))
     before = {o.id for o in plan.openings}
     rep = (dict(status="not run (--priors-only)") if a.priors_only
-           else add_semantic_openings(plan, scene, info, tier, work, sem_npz=a.sem))
+           else add_semantic_openings(plan, scene, info, tier, work, sem_npz=a.sem, p=_params(tier, a.see_through)))
     # the plan was widened by the tier scale term in its run; the new widths get the same term once
     rel = float((plan.meta.get("uncertainty") or {}).get("tier_scale_sigma_rel") or 0.0)
     for o in plan.openings:
@@ -78,6 +91,8 @@ def main() -> int:
     for o in rep.get("openings", []):
         print(f"  {o.get('opening_id')} {o['kind']:6s} {o['action']:26s} host {o['host_id']:8s} width "
               f"{o['width']:.3f} views {o['views']} ends {o['ends_seen']} bottom {o.get('bottom')} top {o.get('top')}")
+    for o in (rep.get("see_through") or {}).get("rejected", []):
+        print(f"  seen-through rejected host {o['host_id']:8s} width {o['width']:.3f} views {o['views']}: {o['reason']}")
     for o in rep.get("rejected_openings", []):
         print(f"  rejected {o['kind']:6s} host {o['host_id']:8s} width {o['width']:.3f} views {o['views']}: "
               f"{o['reason']}")

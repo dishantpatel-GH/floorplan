@@ -88,6 +88,8 @@ class SemParams:
     end_sigma_floor_m: float = 0.03     # segmentation edge (1-2 px of a 1/4-resolution mask) + depth noise
     geometry_overlap: float = 0.3       # a geometric opening overlapping this share is the same opening
     cut_end_extra_m: float = 0.45       # an end never seen: the opening may be this much wider than what was seen
+    see_through_doors: bool = False     # photo tier: open doorways from the depth seen through the walls
+                                        # (floorplan/openings/seethrough.py; the leaf of an open door is off the wall)
 
     def to_dict(self) -> dict:
         return {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(self).items()}
@@ -826,7 +828,7 @@ def params_for(tier: str) -> SemParams:
     often show an opening once: 2 views, or one large view with both ends, or a blob of 5% of the photo with one end
     seen (taken close to a door: the door is there, its width is a lower bound)."""
     if tier == "video":
-        return SemParams(min_views=3, single_view_min_frac=2.0)
+        return SemParams(min_views=3, single_view_min_frac=2.0, see_through_doors=False)
     return SemParams(partial_min_frac=0.05)
 
 
@@ -858,6 +860,15 @@ def add_semantic_openings(plan: Plan, scene: dict, info: dict, tier: str, work: 
         done = add_to_plan(plan, det["kept"], det["walls"], tier, p)
         done += confirm_doors(plan, det["rejected"], det["walls"], p)
         added = [d for d in done if d["action"] == "added"]
+        st, st_err = None, None
+        if p.see_through_doors and tier == "photo":
+            # open doorways: the camera sees through the wall there (an open leaf stands off the wall line)
+            try:
+                from floorplan.openings.seethrough import see_through_doors
+                st = see_through_doors(views, labels, plan, float(floor_y), det["walls"])
+            except Exception as e:                       # the segmenter's openings stay
+                st_err = f"failed: {type(e).__name__}: {e}"
+                log(f"[openings] WARNING: doorways seen through failed: {type(e).__name__}: {e}")
         rep = dict(status="ok", views=len(views), view_intervals=len(det["items"]),
                    blobs_left_out=len(det["dropped_blobs"]), added=len(added),
                    matched_geometry=len(done) - len(added), rejected=len(det["rejected"]),
@@ -865,9 +876,23 @@ def add_semantic_openings(plan: Plan, scene: dict, info: dict, tier: str, work: 
                    windows=sum(o.kind == "window" for o in plan.openings),
                    seconds=round(time.time() - t0, 1), params=p.to_dict(),
                    openings=[_brief(d) for d in done], rejected_openings=[_brief(d) for d in det["rejected"]])
+        if st_err:
+            rep["see_through"] = dict(status=st_err)
+        if st is not None:
+            got = [_brief(d) for d in st["done"]]
+            rep["openings"] += got                       # the door prior rule d reads ends_seen from here
+            rep["doors"] = sum(o.kind == "door" for o in plan.openings)
+            rep["see_through"] = dict(view_spans=len(st["view_spans"]), kept=len(st["kept"]),
+                                      added=sum(d["action"] == "added" for d in st["done"]), openings=got,
+                                      rejected=[_brief(d) for d in st["rejected"]],
+                                      spans=[{k: v for k, v in d.items() if k not in ("wall",)}
+                                             for d in st["view_spans"] + st["spans_left_out"]])
         plan.meta["semantic_openings"] = {k: v for k, v in rep.items() if k != "params"}
         log(f"[openings] segmenter: {len(views)} views, {len(det['items'])} wall intervals -> {len(added)} added, "
             f"{rep['matched_geometry']} on geometric openings, {rep['rejected']} rejected ({rep['seconds']} s)")
+        if st is not None:
+            log(f"[openings] seen through: {len(st['view_spans'])} view spans -> {len(st['kept'])} doorway(s), "
+                f"{rep['see_through']['added']} added, {len(st['rejected'])} rejected")
         return rep
     except Exception as e:                               # never lose the plan over an add-on
         log(f"[openings] WARNING: segmenter openings failed: {type(e).__name__}: {e}")

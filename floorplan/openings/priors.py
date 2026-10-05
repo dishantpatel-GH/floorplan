@@ -458,7 +458,8 @@ def cut_door_widths(plan: Plan, p: PriorParams) -> list[dict]:
     meta = {d.get("opening_id"): d for d in (plan.meta.get("semantic_openings") or {}).get("openings", [])}
     lines, out = _lines(plan), []
     for o in plan.openings:
-        if (o.source != "segmentation" or o.kind != "door" or o.width is None or o.width.value is None
+        if (o.source not in ("segmentation", "see_through") or o.kind != "door" or o.width is None
+                or o.width.value is None
                 or o.width.status != "inferred"):
             continue
         rec = meta.get(o.id) or {}
@@ -466,7 +467,8 @@ def cut_door_widths(plan: Plan, p: PriorParams) -> list[dict]:
         if ln is None:
             continue
         seen = float(o.width.value)
-        prior = prior_width(plan, o.room_ids, p, "the segmenter saw this door cut by the image frame")
+        prior = prior_width(plan, o.room_ids, p, "the segmenter saw this door cut by the image frame"
+                            if o.source == "segmentation" else "seen through, one jamb never seen")
         if seen >= prior.value:
             out.append(dict(opening_id=o.id, rule="cut", action="kept: the seen part is as wide as the prior",
                             width=round(seen, 3)))
