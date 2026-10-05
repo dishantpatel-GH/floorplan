@@ -180,7 +180,7 @@ class PhotoParams:
     door_height_sigma_rel: float = 0.035  # ... 1-sigma across homes; systematic within one home (all doors alike)
 
     # --- door-anchored stitching (door_stitch.py, D-081): rooms snap together at the doors they share ---
-    door_stitch: bool = False            # D-081: off by default: on k38 the plan got worse (IoU, walls; DECISIONS)
+    door_stitch: bool = False            # D-081: off: k65 and k22 gain 0.19-0.29 IoU, k38 does not (-0.003)
     door_bin_m: float = 0.05             # door intervals are built from 5 cm cells along each wall
     door_stride: int = 2                 # every 2nd depth pixel (518 px photos: ~33k points per photo)
     door_beyond_m: float = 0.25          # a point this far past a wall face was seen through an opening in it
@@ -191,7 +191,10 @@ class PhotoParams:
     door_min_out_frac: float = 0.6       # share of a cell's door-height points seen through the wall
     door_gap_bins: int = 2               # gaps up to 10 cm inside a door are closed (a jamb, a stray point)
     door_min_w_m: float = 0.45           # interior doors 0.6-1.0 m, open passages up to ~3 m
-    door_max_w_m: float = 3.2
+    door_max_w_m: float = 2.5            # wider 'openings' were the rest of an L-shaped room (sim k38), not doors
+    door_flank_m: float = 0.6            # a door is a gap in a wall: wall seen within this of one of its ends
+    stitch_max_move_m: float = 1.0       # a room the pose graph placed with the reference moves at most this much
+                                         #     (its errors were 0.15-0.55 m on the 3 flats; k22 bathroom: 1.26 m)
     door_sigma_c_m: float = 0.08         # 1-sigma of a seen door's centre along its wall
     threshold_sigma_c_m: float = 0.25    # a doorway photo's camera: somewhere on the threshold, not at its centre
     first_photo_max_angle_deg: float = 40.0  # the entered room's first turning photo faces its entry door
@@ -201,6 +204,10 @@ class PhotoParams:
     wall_thickness_m: float = 0.15       # prior when the jambs are not seen
     wall_thickness_sigma_m: float = 0.05
     pnp_min_inliers: int = 15            # PnP inliers (points also in the next room) for one photo pair to count
+    intra_pnp: bool = True               # a room's photo the pose graph left out is placed by PnP on one in its frame
+    intra_min_inliers: int = 12          # ... the pose graph's own edges need 12 3-D inliers (edge_min_inliers)
+    intra_box_margin_m: float = 0.5      # ... standing in the room or on its threshold
+    intra_max_view_deg: float = 75.0     # ... and looking into it
     pnp_px: float = 2.0                  # RANSAC reprojection threshold at the 518 px depth resolution
     pnp_max_depth_m: float = 10.0        # matched points farther than this (outdoors, through windows) are not used
     pnp_max_tilt_deg: float = 3.0        # both photos are levelled: true relative poses had tilt <= 1.9 deg (sim k65)
@@ -216,9 +223,14 @@ class PhotoParams:
     cluster_tol_m: float = 0.5           # photo pairs agreeing within this on the room placement are one cluster
     door_assoc_m: float = 0.8            # the looked-through door is within this of where the rays cross the wall
     snap_max_move_m: float = 0.8         # the door snap may move a PnP placement by this much at most
-    pnp_sigma_m: float = 0.15            # a PnP-only room link (no door pair found)
+    pnp_sigma_m: float = 0.15            # a PnP room link between photos placed by their room's own fit (or PnP)
+    pnp_sigma_pg_m: float = 0.15         # ... through a photo the pose graph placed in its room (0.30 tried, D-081)
+    pose_graph_sigma_m: float = 0.0      # the pose graph's placement of a room as a prior; 0 = none (0.35 tried:
+                                         #     k22 lost its gain, D-081)
     same_spot_sigma_m: float = 0.30      # doorway pair: both photos on one threshold
-    overlap_sigma_m: float = 0.03        # overlap penalty scale
+    overlap_tol_m: float = 0.0           # stitched rooms must not overlap: with 0.3 m allowed, plan_beta's push-apart
+                                         #     moved the k22 rooms afterwards (IoU +0.02 instead of +0.19, 3 runs)
+    overlap_sigma_m: float = 0.03        # ... overlaps are penalised at this scale
 
     def to_dict(self) -> dict:
         return asdict(self)

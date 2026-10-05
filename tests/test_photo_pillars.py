@@ -64,6 +64,19 @@ def test_pillar_in_the_middle_of_a_wall():
     assert abs(pil[0]["face_m"] - (WALL - 0.08)) < 0.015
 
 
+def test_placed_photo_is_scaled_about_its_camera():
+    # a photo taken 0.5 m toward the +x wall whose depth reads 25% long (about its camera): the same pillar
+    p = PhotoParams()
+    cam = np.array([0.5, 0.0, 0.0])
+    P, N, h, col, wl, vert = photo([(0.2, 0.75, 0.08, 0.0, 3.0)])
+    P = cam + 1.25 * (P - cam)
+    c = photo_candidates("ph", P, N, P[:, 1] + 1.4, col, wl, vert, cam, lay(), p)
+    pil, _ = merge(c, lay(), p)
+    assert len(pil) == 1 and pil[0]["kind"] == "pillar"
+    assert abs(pil[0]["depth_m"] - 0.08) < 0.005 and abs(pil[0]["face_m"] - (WALL - 0.08)) < 0.005
+    assert abs(pil[0]["t0"] - 0.2) < 0.03 and abs(pil[0]["t1"] - 0.75) < 0.03
+
+
 def test_step_runs_into_the_corner():
     # own Room W1/W3: the last 0.44 m of the wall is 0.126 m proud of it, up to the corner (+z side at 1.6 m)
     pil, _ = find((1.15, 1.6, 0.126, 0.0, 3.0))

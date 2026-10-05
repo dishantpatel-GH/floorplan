@@ -866,6 +866,12 @@ bedroom 6 vertices (area -28% -> -22%, wall median 29% -> 34%); (ii) k65's door 
 shot is only 0.33 m beyond the side); (iii) the polygon walls' intervals are as wide as the sides' (50% calibration
 term per line).
 
+Since D-082 (5 Oct): step 6 measures the alcove by its own walls (mouth, far wall anywhere in it: k38 alcove 1.01 ->
+1.48 m deep, true 1.35 m), and `_open_mouths` finds an alcove with no doorway photo from a gap in the wall line. (ii)
+is now in the outline (0.37 of 0.98 m deep, a lower bound), but the plan still draws a rectangle: the kitchen clips
+that room. Only the side wall's 0.3 m keeps doors out: the k38 balcony door's reveal read 0.293-0.301 m, and on one of
+three k38 runs it became a 1.9 x 0.30 m phantom step that the plan keeps; see D-082 Limits.
+
 # photo_tier pillars (5 Oct 2026): pillars and wall steps in the outline (D-083)
 
 > One new file (`floorplan/photo/pillars.py`), called at the end of `polygon.room_polygon`; `polygon.cut_pillars`

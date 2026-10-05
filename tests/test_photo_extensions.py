@@ -43,9 +43,15 @@ def _room(alcove_depth: float, head: bool):
     return dict(ok=True, sides=sides, manhattan_yaw=0.0, cam_height_m=1.35), data
 
 
+def _mouths_on():
+    p = PhotoParams()
+    p.poly_open_mouths = True          # the no-photo rule is off by default (D-082 limits); test it switched on
+    return p
+
+
 def test_open_alcove_becomes_a_step():
     lay, data = _room(1.0, head=False)
-    out = fit_polygon(lay, data, PhotoParams())
+    out = fit_polygon(lay, data, _mouths_on())
     al = [c for c in out["changes"] if c["kind"] == "alcove"]
     assert out["n_vertices"] == 8 and len(al) == 1
     assert al[0]["rule"] == "D-082 open mouth" and al[0]["side"] == "+x"
@@ -55,7 +61,7 @@ def test_open_alcove_becomes_a_step():
 
 def test_door_with_a_head_stays_a_rectangle():
     lay, data = _room(1.0, head=True)
-    out = fit_polygon(lay, data, PhotoParams())
+    out = fit_polygon(lay, data, _mouths_on())
     assert out["n_vertices"] == 4
     assert any(c["kind"] == "alcove_rejected" and c.get("rule") == "D-082 open mouth" for c in out["changes"])
 
@@ -64,6 +70,11 @@ def test_door_reveal_is_not_an_alcove_wall():
     lay, data = _room(0.2, head=False)            # 0.2 m "alcove" = the reveal of a door in a 0.2 m wall
     out = fit_polygon(lay, data, PhotoParams())
     assert out["n_vertices"] == 4
+
+
+def test_open_mouths_off_by_default():
+    lay, data = _room(1.0, head=False)
+    assert fit_polygon(lay, data, PhotoParams())["n_vertices"] == 4
 
 
 def test_switch_off_keeps_the_rectangle():

@@ -45,14 +45,37 @@ def test_adjust_places_room_and_avoids_overlap():
     place, dropped = DS.adjust(frames, cons, [], "A", p)
     assert not dropped
     assert np.allclose(place["B"][1], [3.2, 0.3], atol=0.02)
-    # a constraint that would make them overlap is pulled back to touching
+    # a weak constraint that would make them overlap by 0.5 m is pulled back to the overlap tolerance
     cons[0]["t"] = np.array([2.5, 0.0])
     cons[0]["sn"] = cons[0]["st"] = 1.0
     place, _ = DS.adjust(frames, cons, [], "A", p)
-    assert place["B"][1][0] > 2.9
+    assert place["B"][1][0] > 3.0 - p.overlap_tol_m - 0.05
 
 
 def test_photo_param_default_and_known():
     p = PhotoParams.from_dict({"door_stitch": True})
     assert p.door_stitch is True
     assert isinstance(PhotoParams().door_stitch, bool)
+
+
+def test_adjust_drops_a_turn_the_pose_graph_contradicts():
+    p = PhotoParams()
+    frames = {"A": _frame((2.0, 2.0, 1.5, 1.5)), "B": _frame((1.0, 1.0, 1.0, 1.0))}
+    wrong = dict(A="A", B="B", psi=np.pi / 2, t=np.array([3.2, 0.0]), n=None, sn=0.15, st=0.15, kind="pnp+door",
+                 weight=200)
+    right = dict(A="A", B="B", psi=0.0, t=np.array([3.3, 0.1]), n=None, sn=0.15, st=0.15, kind="pnp", weight=50)
+    place, dropped = DS.adjust(frames, [wrong, right], [], "A", p, fixed_rot={"A": 0.0, "B": 0.0})
+    assert abs(place["B"][0]) < 1e-9 and np.allclose(place["B"][1], [3.3, 0.1], atol=0.05)
+    assert dropped and dropped[0]["reason"] == "rotation contradicts the pose graph"
+
+
+def test_adjust_keeps_clear_of_fixed_rooms():
+    p = PhotoParams()
+    frames = {"A": _frame((2.0, 2.0, 1.5, 1.5)), "B": _frame((1.0, 1.0, 1.0, 1.0)), "C": _frame((1.0, 1.0, 1.0, 1.0))}
+    # B is pulled onto C's spot (weakly); C is not stitched but placed by the pose graph: an obstacle
+    cons = [dict(A="A", B="B", psi=0.0, t=np.array([3.2, 0.0]), n=None, sn=1.0, st=1.0, kind="pnp", weight=50)]
+    place, _ = DS.adjust(frames, cons, [], "A", p, obstacles={"C": (0.0, np.array([3.2, 0.5]))})
+    bB = DS._box_moved(frames["B"]["box"], 0.0, place["B"][1])
+    bC = DS._box_moved(frames["C"]["box"], 0.0, np.array([3.2, 0.5]))
+    pen = min(min(bB[1], bC[1]) - max(bB[0], bC[0]), min(bB[3], bC[3]) - max(bB[2], bC[2]))
+    assert pen < p.overlap_tol_m + 0.05

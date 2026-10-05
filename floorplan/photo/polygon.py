@@ -55,18 +55,24 @@ DEFAULTS = dict(
     poly_alcove_min_beyond_m=0.4,    # a doorway photo >= 0.4 m beyond a measured side (door shots are placed to
                                      # ~0.15 m typically, 0.65 m worst on the sim): the room reaches it there
     poly_alcove_max_blocked=0.4,     # an alcove the spin photos saw mostly behind a wall is not this room's
-    poly_ext_walls=True,             # D-082: alcoves measured by their own walls (_alcove_walls, _open_mouths)
+    poly_ext_walls=True,             # D-082: alcoves measured by their own walls (_alcove_walls)
+    poly_open_mouths=False,          # D-082: alcoves with no photo in them (_open_mouths). Off: a fresh k38 run
+                                     #     turned the balcony door (reveal 0.301 m) into a fake step
     poly_alcove_side_wall_m=0.3,     # ... a perpendicular wall seen this far beyond the side at the span's edge is
-                                     #     the alcove's own side wall (a door reveal is one wall: 0.10-0.25 m)
+                                     #     the alcove's own side wall (a door reveal is one wall: sim 0.24 m, seen
+                                     #     as 0.24-0.30 m; the k65 lobby's wall 0.37 m)
     poly_alcove_mouth_open=0.5,      # ... the side's own wall seen over more of the span than this: no mouth there
     poly_alcove_mouth_m=0.4,         # ... "in front of a wall" is judged on this strip just past the side line
     poly_alcove_min_free=0.2,        # ... and >= 20% of the alcove seen free by some photo (rays went into it)
-    poly_head_lo_m=2.25,             # D-082 open mouth: above a door's head (sim doors 2.02-2.14 m high) ...
-    poly_head_hi_m=2.5,              # ... and below the ceiling (2.55-2.80 m) a door has wall, an open alcove not
+    poly_head_lo_m=2.25,             # D-082 open mouth: above a door's head (sim doors 2.03-2.06 m high; k65's
+                                     # balcony door 2.36 m) ...
+    poly_head_hi_m=2.5,              # ... and below the ceiling (sim 2.4-2.8 m) a door has wall, an open alcove not
     poly_mouth_min_m=0.5,            # an open mouth in a side's wall line: 0.5-2.5 m wide, wall seen on both sides
     poly_mouth_max_m=2.5,
-    poly_mouth_open_above=0.3,       # ... rays above door-head height crossed >= 30% of it into the space beyond
-    poly_mouth_head_max=0.2,         # ... and a wall at the side line up there covers <= 20% of it (no door head)
+    poly_mouth_open_above=0.3,       # ... rays to points above door-head height crossed >= 30% of it, in plan view
+                                     # (a ray through a door to a wall far beyond counts too: k38 balcony door 0.84)
+    poly_mouth_head_max=0.2,         # ... and a wall at the side line up there covers <= 20% of it (no door head;
+                                     # the k38 balcony door and a k22 bedroom door read 0.0 although they have one)
     poly_mouth_max_depth_m=1.5,      # ... an alcove, not a room: its far boundary within 1.5 m of the side
     poly_notch_wall_cover=0.4,       # a notch's walls toward the room must be >= 40% seen
     poly_side_min_overlap_m=0.3,     # a measured side's seen wall must overlap the room's extent along it by 0.3 m
@@ -381,8 +387,8 @@ def fit_polygon(lay: dict, data: dict, p, door_photos: list[str] | None = None, 
         t1 = add_line(1 - j, t_hi, s, None, "alcove span")
         alcoves.append(dict(rec, j=j, a=(min(sg * rect[s], a_pos), max(sg * rect[s], a_pos)), t=(t0, t1)))
     # D-082: open mouths: a gap in a measured side's wall line, the alcove's own wall beyond it and no door head
-    # above it: the room continues there, without a doorway photo in it (_open_mouths)
-    if v2:
+    # above it: the room continues there, without a doorway photo in it (_open_mouths; off by default, see DEFAULTS)
+    if v2 and _par(p, "poly_open_mouths"):
         for s in SIDES:
             if status[s] != "measured" or any(al["side"] == s for al in alcoves):
                 continue
@@ -526,8 +532,8 @@ def _alcove_walls(s: str, ps: list, rect: dict, segs: dict, W: np.ndarray, N: np
              1.5 m (as v1), then cut to the MOUTH: the longest stretch of it where the side's own wall line was not
              seen (an alcove opens over its whole width; behind a seen wall there is none);
       walls: a perpendicular wall at the span's edge that runs >= poly_alcove_side_wall_m beyond the side is the
-             alcove's own side wall (a door reveal is one wall thickness, 0.10-0.25 m); a wall of this side seen
-             beyond the photo inside the mouth is its far wall;
+             alcove's own side wall (a door reveal is one wall thickness, seen as 0.24-0.30 m on the sim); a wall of
+             this side seen beyond the photo inside the mouth is its far wall;
       depth: the far wall (sim k38 living room: seen 0.4 m behind the doorway photos, which v1 looked for only
              beside the photos); else, with two doorway photos, the farthest the side walls reach or the photos (- half
              a wall), whichever is farther;
@@ -630,12 +636,15 @@ def _open_mouths(s: str, rect: dict, segs: dict, W: np.ndarray, N: np.ndarray, d
              it (sim k65 living room: the west wall seen on both sides of the 1.0 m lobby);
       walls: a perpendicular wall at an end of the gap, facing into it, seen >= poly_alcove_side_wall_m beyond the
              side (the alcove's own side wall);
-      no door head: a door has wall above its head (doors 2.0-2.1 m); rays of points above poly_head_lo_m crossed
-             >= poly_mouth_open_above of the gap into the space beyond, and a wall surface on the side line up there
-             covers <= poly_mouth_head_max of it;
+      no door head: a door has wall above its head (sim doors 2.03-2.06 m, k65's balcony door 2.36 m); rays of
+             points above poly_head_lo_m crossed >= poly_mouth_open_above of the gap (in plan view, so a ray through
+             a door to a far wall counts too), and a wall surface on the side line up there covers
+             <= poly_mouth_head_max of it (the k38 balcony door and a k22 bedroom door read 0.0: in practice the
+             side wall length is what keeps doors out);
       depth: a wall of this side seen in the mouth within poly_mouth_max_depth_m (far wall), else the farthest point
              of the side wall(s) (a lower bound; the edge is inferred);
-      kept when >= poly_alcove_min_free of it was seen free and <= poly_alcove_max_blocked behind a wall.
+      kept when >= poly_alcove_min_free of it was seen free and the strip just past the side line
+             (poly_alcove_mouth_m) is <= poly_alcove_max_blocked behind a wall.
     Returns a list of dict(ok, reach, t_lo, t_hi, far, record fields) or dict(note) for rejected mouths."""
     ax, sg = _side_axis(s)
     j = 0 if ax == 0 else 1

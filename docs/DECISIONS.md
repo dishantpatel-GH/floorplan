@@ -1682,6 +1682,91 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   - "Eat-in kitchen", dining and study are not types; ADE20K has no class that separates them.
   - The foyer rule needs a separate room of 4 m² or less at the entrance. No plan here has one.
 
+## D-079 Video rooms: split between camera stays, and a short step into a space is not a visit (measured, both off)
+
+- **Context.** This is about how the video plan splits rooms (`floorplan/plan/beta`). It is judged by the rule
+  committed before any change (`docs/notes/video_better_rule.md`, `f267c97`). On take1, no cache gives hall |
+  kitchen | passage | bedroom, and the kitchen never gets a room of its own. The segmentation (`segment.py`) starts a
+  room only at a peak of the free-space distance transform. On presentable pnp r2 the whole house has 3 peaks: hall,
+  passage and kitchen are one basin, because video sees too little wall for the free space to narrow between them.
+  By tape, the hall opens 1.38 m onto the passage (W4 ends at 2.388 m, W3 starts at 3.764 m). That is wider than
+  `door_max_m` (1.30 m). The kitchen is open to the passage on one side.
+- **What I built.** Two `BetaParams` switches, off for every tier:
+  1. `stay_split` (`segment.split_by_stays`). A camera stay is a stretch of at least 4 s in which the camera stays
+     within 1 m of one place. A walk-through films each room from a few places and passes doors in 1–2 s. When one
+     region holds two or more stays, a watershed on the distance transform grows from the stays' path discs
+     (0.3 m). Two basins stay apart only when the neck between them has wall evidence at both ends (jambs) and is at
+     most 2.0 m wide (`stay_open_max_m`). Every other pair is merged back. No cell is dropped; a basin under 1.2 m²
+     joins its widest neighbour.
+  2. `brief_entry_s` (`extract._build_rooms`, part 2 of D-070). A room the camera was inside for less than this many
+     seconds is partially observed. It is not a room and not in the footprint. It goes to `meta.dropped_regions` with
+     its outline and dwell time, unless 60% or more of its outline is measured wall (`brief_keep_enclosed`).
+- **How it was measured.** Only the plan step was replayed, on the scenes saved by the 16 baseline replays
+  (`outputs/video_better/d079/plan_replay.py`, CPU, about 3 min for all 16). The scenes come from the baseline
+  replays, so any difference comes from the plan step. With the switches off, `c829aa7` reproduces the baseline on all
+  16 caches (same rooms, footprints and wall scores), and so does `dde0c4b` with this change applied. `35a2062` came
+  in meanwhile; it only acts when the overlap undo raises, and none of these replays does.
+- **Stay split, own take1** (tape; "what each room holds" as in the rule note: H hall, K kitchen, P passage,
+  B bedroom; ~ = no camera inside):
+
+  | Cache | Rooms, baseline (m²) | Rooms, stay split (m²) | Footprint, error vs 30 m² | Walls ≤3% / ≤10% / found | Cut at (neck m, all with jambs) |
+  |---|---|---|---|---|---|
+  | 23:28 | H 14.9; P+K 6.5; H 3.7; B~ 3.0; B 2.4; B 2.2; P 1.8; H 1.6; H 1.5 | the 3.7 hall piece → 3.4 | 37.6 (25.2%) → 37.3 (24.4%) | 0/1/8 → 0/1/8 | 0.98 |
+  | before r1 | B 12.2; H 6.4; P+K 3.8; B 1.7 | same | 24.1 (19.5%) → same | 2/5/12 → same | – |
+  | before r2 | H 18.0; H 16.2; B+P+K 4.8; B~ 1.2 | H 18.0; H 17.5; B+P+K 4.9; H 1.6; B~ 1.2 | 40.3 (34.5%) → 43.2 (43.9%) | 0/1/8 → 0/0/11 | 1.60 |
+  | after r1 | B+P+H+K 27.8; H 10.0 | B+P+H+K 23.7; H 10.0; B 3.0 | 37.8 (26.0%) → 36.7 (22.4%) | 1/1/6 → 1/4/11 | 1.38 |
+  | after r2 | B 11.9; P 6.8 | same | 18.7 (37.7%) → same | 1/1/8 → same | – |
+  | presentable default r1 | B 10.0 | B 8.7; P 1.2 | 10.0 (66.8%) → 9.9 (66.9%) | 0/1/6 → 0/0/6 | 1.74 |
+  | presentable pnp r1 | B+H 14.5; P+H 12.5; K+P 2.8 | same | 29.9 (0.4%) → same | 2/2/13 → same | – |
+  | presentable default r2 | H+P 19.2 | H 11.8; P 6.8 | 19.2 (35.9%) → 18.5 (38.2%) | 0/0/3 → 1/3/7 | 1.66 |
+  | presentable pnp r2 | P+H+K 16.8; B 12.8 | B 12.8; H 10.4; P+K 3.8; H 1.6 | 29.6 (1.3%) → 28.6 (4.7%) | 3/6/11 → 1/4/13 | 1.67, 1.57 |
+  | **all nine** | | | median error 26.0% → 24.4% | sums 9/18/75 → 8/20/89 | |
+
+  The sample videos are unchanged on all 7 caches: single_room d069 r1–r3 and the after run, floor_only after run and
+  d066, with_ceiling. Rooms, footprints and LiDAR matches are the same. A first version also cut door-sized necks
+  without jambs. It split floor_only d066 and the after run at 1.21 m necks with no jambs, and d066 went from 3 to 2
+  matched rooms and from −49.2% to −53.8%, past (b)'s limit. Since then every cut needs jambs.
+- **Brief entry at 1.0 s** (`brief_keep_enclosed` on):
+  - 23:28: its two hall slivers go (0.7 and 0.6 s inside). The footprint error drops from 25.2% to 14.9%, but one
+    of them was the room the scorer paired with the kitchen, so walls within 10% go from 1 to 0.
+  - with_ceiling: its 4.67 m² room goes too (0.5 s inside). The footprint error goes from −13.2% to −20.6%, past
+    (b)'s 19.2%.
+  - Kept, because 60% or more of their outline is measured wall: before r1's 1.7 m² bedroom piece (0.1 s), before
+    r2's 1.2 m² (0.6 s) and after r2's 6.8 m² passage (0.4 s).
+  - single_room's closet strip has 2.2–2.3 s inside, so any threshold must stay under 2 s to keep d069 inside its
+    spread.
+- **Decision by the rule.** Both stay off.
+  - Stay split, (a1): the footprint is better on 1 of 9 caches (pnp r1, inside 29–31 m²). The rule needs 7. Fails.
+  - Stay split, (a2): more walls are found on 4 of 9 (after r1 6 → 11, before r2 8 → 11, default r2 3 → 7, pnp r2
+    11 → 13). The rule needs 7. Fails.
+  - Stay split, (a3): walls within 10% total 18 → 20, but pnp r2 loses two (6 → 4). Fails.
+  - Stay split, (b): passes. (c): holds, because the switch is off for every tier. I re-ran the plan step on the
+    saved LiDAR scenes of the three samples with and without `d739590`. It gives the same rooms, walls, openings and
+    footprints: 3 rooms and 17.61 m², 8 and 61.90 m², 8 and 62.50 m².
+  - Brief entry fails (a), and it fails (b) on with_ceiling.
+- **Why the split loses walls even where the cut is right.** On pnp r2 the hall is cut from the passage at the
+  1.38 m opening (1.67 m measured, with jambs). The hall's outline then closes along the cut, which causes two losses:
+  - The hall's bottom wall becomes one 4.43 m edge across the opening. The tape has two walls there, W4 (2.388 m)
+    and W3 (0.705 m), with the opening between them.
+  - The cut runs about 10 cm inside the hall, so W2 and W5 shrink from 2.59 to 2.49 m (tape 2.88 and 2.85 m).
+  On before r2 the split adds 2.8 m², because each part gets its own line arrangement (the same truncation as I-014).
+  The next step: put the cut on the wall plane through the jambs, and split the room's wall at the ends of the
+  opening.
+- **What this says about "video works better".** Where the camera path holds, the rooms come out closer to the
+  house:
+  - pnp r2: hall, a 1.6 m² piece at the hall's opening, passage+kitchen and bedroom;
+  - default r2: hall and passage apart;
+  - after r1: a bedroom piece comes out of the 27.8 m² room.
+  Five of the nine caches are set by the front end, and no plan-step change alone can pass (a1) there:
+  default r1 (10.0 m²), after r2 (18.7 m²), default r2 (19.2 m²), before r2 (the hall twice) and before r1 (a camera
+  path that runs over 100 m).
+- **Files.**
+  - Code (`d739590`): `floorplan/plan/beta/segment.py` (`camera_stays`, `stay_separates`, `split_by_stays`),
+    `floorplan/plan/beta/extract.py` (`dwell_s`, the brief-entry rule, `meta.stay_split`),
+    `floorplan/plan/beta/params.py`, `tests/test_plan_stays.py`.
+  - Replays and scores: `outputs/video_better/d079/` (`stay_split/`, `stay_split_nojamb/`, `brief_entry/`,
+    `confirm/`).
+
 ## D-080 Video frames as photos: tested, not adopted (why the photo tier works on my house and the video tier does not)
 
 - **Question** (5 Oct): "if image one works how come video does not work"
@@ -1782,60 +1867,88 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   says where. Then the two rooms snap together at that door.
 - **Decision** (`floorplan/photo/door_stitch.py`, one hook in `frontend.py` after the room layouts are fitted,
   `--photo-param door_stitch=true|false`; the layout now stores each fitted photo's local pose, `fit_poses`):
-  1. Doors per room, in the room's own layout frame: pixels whose depth runs > 0.25 m past a fitted wall at door
-     heights, cast along their rays onto that wall (no sill: open down to the floor; windows, sky, curtains and
-     mirrors from the ADE20K map are not openings), plus ADE20K door pixels on the wall. A doorway-pair photo placed in
-     the room stands in one of its doors (the threshold).
-  2. Door correspondences: each verified photo pair across two rooms, both ways, by PnP of the other photo's pixels on
+  1. Room frames: each room's own layout frame. Its fitted photos sit there exactly; its other photos come in through
+     the pose graph, or by PnP on a photo already in the frame when the pose graph left them out (level, at chest
+     height, standing in the room or on its threshold, looking in).
+  2. Doors per room, in that frame: pixels whose depth runs > 0.25 m past a MEASURED wall at door heights, cast along
+     their rays onto it, open down to the floor (no sill), with wall seen beside the gap, 0.45-2.5 m wide (windows,
+     sky, curtains and mirrors from the ADE20K map are not openings); plus ADE20K door pixels on the wall. A
+     doorway-pair photo placed in the room stands in one of its doors; it shows which wall only if it looks square
+     (<= 12 deg) into the room or stands inside a seen door's interval.
+  3. Door correspondences: each verified photo pair across two rooms, both ways, by PnP of the other photo's pixels on
      this photo's MoGe-2 depth (RANSAC + LM). Kept when the relative pose is level (tilt <= 3 deg), has a real
      baseline (>= 0.3 m), the matched points lie outside this room (seen through its door) and inside the other
      room, and the rooms do not overlap. A room pair needs >= 20 such inliers in one consistent placement, and no
      rival placement with half as many. Why these thresholds: on k65 with true poses, real cross-room pairs gave
      PnP errors of 3-42 cm and 0.0-2.3 deg with tilt <= 1.9 deg; matches on the outdoor scene through two windows
-     gave hundreds of "inliers" (643 bedroom-balcony) as a pure rotation (baseline 0), and every other false pair
-     had tilt 5-90 deg or under 15 inliers.
-  3. Relative placement: the PnP pose puts B's frame in A's (rotation snapped to the Manhattan axes); the door snap
-     then makes the facing door intervals coincide along the wall, faces parallel and a wall thickness apart. The
-     thickness is the jambs' depth when they are seen (0.23 m on k65, 0.25 m on k22; the simulator's walls are
-     0.24 m), else 0.15 +- 0.05 m. A snap that disagrees with the PnP placement by > 0.8 m is not used.
-     A doorway pair alone links two rooms only when both door walls are known: a seen door, a small room's door side,
-     or a threshold photo square (<= 12 deg) to the wall behind it.
-  4. Joint adjustment: rotations from a spanning tree of the strongest links, translations by robust least squares
-     over door snaps (normal 0.05 m, along the wall 0.1-0.35 m), PnP links (0.15 m), doorway-pair same-spot priors
-     (0.3 m) and an overlap penalty. Rooms only move (sizes unchanged). A room with no matched door keeps its
+     gave hundreds of "inliers" (643 bedroom-balcony) as a pure rotation (baseline 0), and every other false pair had
+     tilt 5-90 deg or under 15 inliers. A doorway pair names the two rooms of a door when both door walls are known.
+  4. Relative placement: the PnP pose puts B's frame in A's (rotation snapped to the Manhattan axes; 0.15 m); the
+     door snap makes the facing door intervals coincide along
+     the wall, faces parallel and a wall thickness apart (the jambs' depth when seen: 0.23-0.25 m on k65/k22, the
+     simulator's walls are 0.24 m, but 0.32-0.38 m on k38; else 0.15 +- 0.05 m). A snap that disagrees with the PnP
+     placement by > 0.8 m is not used.
+  5. Joint adjustment: rotations from a spanning tree of the strongest links; a link that turns a room the pose graph
+     placed with the reference room is dropped (a door association can be 90 deg wrong: k38, a threshold photo in a
+     corner between two doors). Translations by robust least squares over door snaps, PnP links, the pose graph's own
+     placement as a prior (off: see Evidence) and no overlap (rooms not moved are obstacles). Rooms only move: sizes
+     unchanged. A room the stitch would carry > 1 m from where the pose graph put it keeps that placement (the pose
+     graph's errors were 0.15-0.55 m; the k22 bathroom's link wanted 1.26 m). A room with no matched door keeps its
      placement and is flagged; each stitched room's cameras move with it in the scene.
-- **Tried and dropped.** "The only door left" for a pair photo not placed in its room put the k65 bathroom on a
-  phantom door (7 m off); the wall behind a diagonal threshold photo put the k65 bedroom door in the wrong wall.
-- **Evidence** (cached photos, depth and features, CPU; one run each with `door_stitch=false` / `true` on the same
-  working tree, `--no-damage --no-semantic-openings --no-room-names`; `outputs/door_stitch/replay.sh`, scored by
-  `scripts/eval_own_capture.py` and `scripts/eval_door_stitch.py`). "Placement vs living room" is where each
-  anchored room's frame sits relative to the living room's, plan vs the simulator's true camera poses (it does not
-  depend on room sizes or on the whole-plan alignment).
+- **How it was measured.** Two runs of the same photos differ (COLMAP's match verification is random; k38 rooms moved
+  0.1-0.4 m between runs), so each front-end run is scored twice: the plan with the stitch and the plan with the
+  stitch undone (`scripts/ab_door_stitch.py`, paired A/B), 3 runs per flat, cached photos, depth and features, CPU
+  (`outputs/door_stitch/replay_ab.sh`; scored by `scripts/eval_own_capture.py` and `scripts/eval_door_stitch.py`).
+  "Placement vs living room" is where each room's frame sits relative to the living room's, plan vs the simulator's
+  true camera poses: it does not depend on room sizes or on the whole-plan alignment.
+- **Evidence** (shipped settings, 3 paired runs per flat; one k38 run is left out because its plan WITHOUT the stitch
+  crashed in plan_beta, a shapely topology error):
 
-  | House | IoU off -> on | Footprint off -> on | Walls median off -> on | Within 8% off -> on | Rooms stitched |
+  | Flat | IoU off -> on, per run | Footprint off -> on | Walls median off -> on | Within 8% off -> on | Rooms moved by the stitch |
   |---|---|---|---|---|---|
-  | k65 | 0.376 -> 0.439 | -5.0% -> -3.8% | 6.6% -> 6.6% | 38% -> 42% | kitchen, balcony (bedroom, bathroom kept) |
-  | k22 | 0.334 -> 0.618 | -44.5% -> -31.6% | 26.0% -> 21.7% | 30% -> 30% | bedroom2, bathroom, kitchen (bedroom kept) |
-  | k38 | 0.815 -> 0.797 | +8.6% -> +11.0% | 5.7% -> 9.8% | 50% -> 35% | kitchen, bathroom (bedroom, balcony kept) |
+  | k65 | 0.376 -> 0.664, 0.376 -> 0.664, 0.376 -> 0.664 | -5.0% -> -3.2% | 6.6% -> 6.6% | 38% -> 46% | kitchen, balcony (bedroom, bathroom kept) |
+  | k22 | 0.338 -> 0.605, 0.335 -> 0.330, 0.295 -> 0.600 | -45.9% -> -36.7% | 25.0% -> 23.1% | 28% -> 30% | bedroom2, kitchen (bathroom kept by the 1 m bound) |
+  | k38 | 0.809 -> 0.806, 0.809 -> 0.807 | +9.4% -> +9.4% | 7.8% -> 7.8% | 42% -> 40% | kitchen, bathroom (bedroom, balcony kept) |
 
-  | Placement vs living room (m), off -> on | k65 | k22 | k38 |
+  | Placement vs living room (m), off -> on, mean of runs | k65 | k22 | k38 |
   |---|---|---|---|
-  | kitchen | 0.34 -> 0.10 | 0.30 -> 0.16 | 0.31 -> 0.24 |
-  | balcony | 0.55 -> 0.31 | - | 0.53 -> 0.56 |
-  | bathroom | 9.27 -> 9.27 (not stitched) | 0.17 -> 0.22 | 0.45 -> 0.27 |
-  | bedroom / bedroom2 | not anchored | 0.15 -> 0.16 / 0.23 -> 0.23 | 0.41 -> 0.12 |
+  | kitchen | 0.34 -> 0.05 | 0.31 -> 0.18 | 0.31 -> 0.16 |
+  | balcony | 0.55 -> 0.31 | - | 0.53 (kept) |
+  | bathroom | 9.27 (kept, beside the block) | 0.17 (kept) | 0.41 -> 0.54 |
+  | bedroom / bedroom2 | not anchored (kept) | 0.17 (kept) / 0.22 -> 0.22 | 0.41 (kept) |
 
-  Doors in each room's own frame (k65, k22; frame put on the GT by true poses, fit residual 0.4-2.3 deg): k65 6 found
-  (along the wall median 0.17 m; widths of 3 seen doors off by 0.04-0.77 m: a door's leaf hides part of it), 3
-  phantoms (one is the bedroom's window), 3 missed (the closed front door, the bathroom door no living-room photo
-  sees, the bedroom door at the end of a 0.7 m passage); k22 13 found (along 0.11 m median), 3 phantoms, 1 missed.
-- **Default: off.** The rule was "on only if IoU improves on all three flats and nothing else gets worse": k38 got
-  worse (IoU -0.02, walls median 5.7% -> 9.8%). Part of that is run-to-run noise (the pose graph differs between two
-  runs of the same photos: k38 kitchen and balcony sides moved 0.17-0.20 m, and the unstitched bedroom's placement
-  error changed 0.41 -> 0.12 m), but one run each cannot show the stitch is not to blame. What holds: on all three
-  flats the stitched rooms sit closer to the living room's true relative position in 6 of 7 cases, and the k65 and
-  k22 plans improve a lot. Before it goes on: repeat runs per flat, and make the photo front end's pose graph
-  deterministic. Pictures: `MyHouse_Dataset/k65_photo_plan_vs_gt.png` (before) and `..._after.png`.
+  | Doors in each room's own frame (true poses put the frame on the GT) | Found (seen / threshold) | Phantoms | Missed | Along the wall, median (max) | Width error, median (n) |
+  |---|---|---|---|---|---|
+  | k65 | 6 (3 / 3) | 3 | 3 (closed front door, bathroom door no living-room photo sees, bedroom door at the end of a 0.7 m passage) | 0.19 m (0.41) | 0.57 m (3) |
+  | k22 | 11 (5 / 6) | 2 | 1 | 0.09 m (1.27) | 0.35 m (5) |
+  | k38 | 9 (4 / 5) | 2 | 1 | 0.18 m (0.35) | 0.65 m (4) |
+
+  Widths come out short (an open leaf hides part of the opening), so the snap aligns door centres, not ends. Other
+  settings tried, the same paired way: the pose graph's placement as a 0.35 m prior, PnP through a pose-graph photo at
+  0.30 m, overlaps up to 0.3 m allowed, a 0.6 m bound: k65 the same, k22 +0.02 (3 runs) instead of +0.19, k38 -0.002.
+  A check run of the shipped settings: k65 0.374 -> 0.408 (the kitchen and balcony moved as in the table, but the
+  unstitched bedroom landed elsewhere, so the whole-plan fit took another offset), k22 0.295 -> 0.604, and on k38
+  plan_beta's step hit its 300 s limit on the stitched scene (run_capture fell back to the alpha extractor).
+  The first, unpaired replay (one run each with the first version, commit faf461f) gave k65 0.376 -> 0.439, k22
+  0.334 -> 0.618, k38 0.815 -> 0.797; those numbers mixed run-to-run noise into the comparison.
+
+- **Tried and dropped.** "The only door left" for a pair photo not placed in its room put the k65 bathroom on a
+  phantom door (7 m off). The wall behind a diagonal threshold photo put the k65 bedroom door in the wrong wall. A
+  doorway pair as a same-spot link when the pose graph knows both rotations: k38 bedroom 0.41 -> 0.07 m but k22
+  bedroom 0.16 -> 0.80 m (the threshold photos' positions in their rooms come from the pose graph). Letting stitched
+  rooms overlap by 0.3 m (box sides are only that good): plan_beta then pushed the k22 rooms apart again, and the
+  k22 bathroom was stitched 0.18 -> 0.74 m off.
+- **Not solved.** k65 bedroom and bathroom: no photo pair across their doors verifies (bedroom door photo 0 matches;
+  the bathroom threshold photo 10 PnP inliers at 5 deg tilt), and the bedroom's door is at the end of a 0.7 m passage
+  its box does not reach; they keep their placement (the bathroom "beside the block").
+
+- **Default: off.** The rule was "on only if the IoU improves on all three flats and nothing else gets worse". k38
+  does not improve (-0.002 and -0.003 IoU, the bathroom 0.13 m further off, one wall fewer within 8% in one run), and
+  one k38 run hit plan_beta's time limit with the stitch on. What holds: in every run the stitched rooms that have
+  a verified door link sit closer to their true place next to the living room (kitchens 0.31-0.34 -> 0.05-0.18 m,
+  k65 balcony 0.55 -> 0.31 m), and the k65 and k22 plans gain 0.19-0.29 IoU. Before it goes on: the k38 bathroom
+  (a PnP through photos the pose graph placed), plan_beta's push-apart and time limit on stitched scenes, and the own
+  house. Pictures: `MyHouse_Dataset/k65_photo_plan_vs_gt.png` (before) and `..._after.png` (after, run 1 above).
 
 ## D-082 Photo tier: alcoves and L-shapes measured by their own walls
 
@@ -1844,7 +1957,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   for a doorway photo of the room standing >= 0.4 m beyond a side, with a second doorway photo or a wall seen just
   behind it. Rooms on the three simulated flats whose true outline is not a rectangle: k65 living room (8 vertices:
   a 0.98 x 1.03 m lobby off the west wall, holding the bathroom and bedroom doors; 28.76 m2), k65 bedroom (6: a
-  0.73 x 0.74 m corridor to its door), k38 living room (10: a 1.35 x 1.97 m alcove holding two doors, and a 0.49 m
+  0.73 x 0.74 m corridor to its door), k38 living room (10: a 1.35 x 1.94 m alcove holding two doors, and a 0.47 m
   step in the north wall). k22 has rectangles only.
 - **What the photos saw** (wall points of each room in its own frame, the photos and the GT outline registered on
   the points; `outputs/fixes/poly_shapes/diag_*`):
@@ -1868,22 +1981,23 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
      in a trial with that rule.
   2. `_open_mouths`, an alcove with no doorway photo in it. A 0.5-2.5 m gap in a measured side's wall line, the wall
      seen on both sides. A wall at an end of the gap, facing into it, seen >= 0.3 m beyond the side: longer than a
-     wall's thickness (sim walls 0.24 m; reveals measured 0.24-0.29 m). No door head: rays above 2.25 m crossed >= 30%
-     of the gap, and a wall on the side line up there covers <= 20% of it. Depth: a far wall seen within 1.5 m, else
-     the farthest point of the side wall (a lower bound; the edge is inferred). The strip past the side line is not
-     behind a surface; >= 20% of the alcove seen free.
+     wall's thickness (sim walls 0.24 m; reveals measured 0.24-0.29 m on these runs, 0.30 m on a re-run). No door
+     head: rays to points above 2.25 m crossed >= 30% of the gap (in plan view), and a wall on the side line up there
+     covers <= 20% of it. Depth: a far wall seen within 1.5 m, else the farthest point of the side wall (a lower bound;
+     the edge is inferred). The strip past the side line is not behind a surface; >= 20% of the alcove seen free.
   Thin evidence keeps the rectangle: the bedroom corridor and the k38 north step are not drawn.
 - **Evidence.** One front-end run per flat with the current code (cached views, CPU, 09:03). Its room-layout inputs
   were saved, so before (`poly_ext_walls=false`) and after differ only in this step. Then plan_beta and the scorer.
   IoU is the scorer's per-room registration on the GT outline (`wall_match.align_room`). Phantom steps: steps beyond
-  the true outline's count.
+  the true outline's count, on the plan's rooms (the outlines were compared too: on these runs D-082 changed only the
+  k65 living room and the k38 alcove).
 
   | Flat | Room (true outline) | Before: vertices, IoU, area | After |
   |---|---|---|---|
   | k65 | living room (8 v, 28.76 m2) | 4, 0.817, -18.3% | 4, 0.817, -18.3%: the outline has the lobby (8 v, 0.37 x 1.00 m), the plan drops it (Limits) |
   | k65 | bedroom (6 v, 14.70 m2) | 4, 0.912, -6.9% | unchanged |
   | k38 | living room (10 v, 32.73 m2) | 8, 0.901, -5.9% (alcove 1.01 m deep) | 8, 0.917, -2.9% (alcove 1.48 m, true 1.35 m) |
-  | all | 12 rectangular rooms; bedrooms of 6 repeat takes | 4 v each; | unchanged, no step |
+  | all | 12 rectangular rooms; bedrooms of 6 repeat takes | 4 v each, except the k22t1 outline (6 v: a 0.06 m D-083 step) and the k22t1 / k38t1 plans (14 / 12 v, the plan step's own shapes; k38t2's plan scores no room) | unchanged, no alcove |
   | own Room | lit and dim takes (real photos; pillars and a door-wall step, D-083) | 14 v each | unchanged, no alcove |
 
   | Flat | Walls median, within 8%, footprint: before | After | Phantom steps |
@@ -1893,21 +2007,35 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   | k38 | 14.0%, 7 of 26, +10.7% | 10.0%, 7 of 26, +12.2% (alcove walls 24.6% -> 9.8%, its far wall missed -> 10.0%) | 0 -> 0 |
 
   These front-end runs differ from earlier ones of the same photos (k65 at 01:47: 5.6%, 15 of 26, -9.0%); the pose
-  graph is not deterministic (D-081). Pictures: `outputs/fixes/poly_shapes/overlay_rooms.png` (per room, before,
-  after, what-if), `overlay_plan_k38.png`, `diag_after/k65_01_living_room.png`.
+  graph is not deterministic (D-081). Front end re-run at 10:29-10:33 (the working tree of that time): k65 came out
+  as at 09:03, twice; k38 did not (before: 5.8% and 6.3%, 12 of 26, +7.6%). On those two k38 runs the living room
+  goes 0.901 -> 0.919 and 0.902 -> 0.918 (area -5.9% -> -2.8% / -2.9%, alcove 1.48 m), and on the second the
+  balcony gets a phantom step (Limits). Pictures: `outputs/fixes/poly_shapes/overlay_rooms.png`
+  (per room, before, after, what-if), `overlay_plan_k38.png`, `diag_after/k65_01_living_room.png`,
+  `verify/k38_fresh_run_balcony_phantom.png` (scripts and logs in `verify/`).
 - **Limits.**
   - The k65 lobby is in `polygon_local` but not in the plan: `tiers.layout_plan` drops the polygon of any room a
     neighbour clips, and the kitchen cuts the living room's north side by 0.21 m. With the polygon kept and the clipped
     side synced (`sync_sides`, measurement only): 8 vertices, IoU 0.826, area -17.0%, walls 11 of 26 within 8%,
     footprint -4.3%. That is a plan_beta change, not made here.
-  - Margins are thin: the lobby's side wall 0.37 m against reveals of 0.24-0.29 m. The door-head test did not catch
-    the k38 balcony door (open above 0.84, head 0.0); its 0.24/0.29 m reveals did. A door with reveals over 0.3 m and
-    no head in view would become a phantom alcove.
+  - The open-mouth rule does make phantoms (found on re-runs after the commit). The only gate that holds is the side
+    wall's 0.3 m (the 0.3 m depth floor is the same number), and the k38 balcony door's reveal read 0.293, 0.296 and
+    0.301 m on three front-end runs of the same photos. On the third the balcony got 8 vertices, a 1.9 x 0.30 m step
+    through its door, and the plan kept it: balcony IoU 0.926 -> 0.818, footprint +7.6% -> +10.0%, phantom steps
+    0 -> 2. On the other two, a gate 1 cm lower gives the same step. The lobby the rule was made for reads 0.37 m.
+  - The door-head test is weak. "Open above" is taken in plan view, so a ray through a door to a far wall counts
+    (balcony door 0.79-0.84); the head read 0.0 on the k38 balcony door and on a k22 bedroom door, both 2.05 m high
+    with wall above. It did reject the k38 kitchen opening (1.6 m; the kitchen's wall seen 1.32 m through it, head
+    0.40-0.47 on the re-runs), which the default runs never test: that side already has the doorway alcove. With the
+    doorway photos under 0.4 m and the head test off, that opening becomes a 1.5 x 1.32 m step (the kitchen).
+  - So far the open-mouth rule's one true find (the k65 lobby) never reaches the plan, and its false one does.
   - Without a far wall in view the depth is a lower bound: the k65 lobby is 0.37 m deep in the outline, 0.98 m true.
   - Not tried: wall-ceiling lines from the ceiling photos; floor points continuing into the extension (the free-space
     test covers part of that).
   - k38's footprint error grows (+10.7% -> +12.2%) because the living room grows toward its true area while other
     rooms there are already too large (bathroom +190%).
+
+- **Default after the re-check (5 Oct, 10:45).** The no-photo half (`_open_mouths`) is now its own switch, `poly_open_mouths`, off by default: on a fresh k38 run it turned the balcony door (reveal 0.301 m against the 0.30 m limit) into a fake step and the plan kept it, while its one correct find (the k65 lobby) never reaches the plan. The doorway-photo half (`_alcove_walls`, `poly_ext_walls`) stays on.
 
 ## D-083 Photo tier: pillars and wall steps cut into the room outline
 

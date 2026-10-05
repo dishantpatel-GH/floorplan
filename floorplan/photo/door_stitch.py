@@ -101,6 +101,42 @@ def room_frames(views: dict, lays: dict, poses: dict, extra_comps: list[dict], k
     return out
 
 
+def place_in_rooms(frames: dict, views: dict, matches: dict, k: float, p) -> dict:
+    """A room's photos that the pose graph left out of its frame, placed by PnP of their pixels on the metric depth
+    of a photo in the frame (the best-supported one). A threshold photo placed this way names its door. Sim k65: the
+    living room's photo on the bathroom's threshold shared 18 verified matches with the living room's photo on the
+    bedroom's threshold; the pose graph had dropped that 12-inlier edge as a weak bridge, so the bathroom stayed
+    'beside the block'. Kept only if level (tilt <= pnp_max_tilt_deg), at chest height, on or inside the room's box
+    (+ intra_box_margin_m) and looking into the room. Returns {photo: (room, from photo, inliers)}."""
+    out = {}
+    for room, fr in frames.items():
+        best = {}
+        for (a, b), (xa, xb) in matches.items():
+            if views[a].room != room or views[b].room != room:
+                continue
+            for o, q, xo, xq in ((a, b, xa, xb), (b, a, xb, xa)):
+                if o not in fr["photos"] or q in fr["photos"]:
+                    continue
+                r = _pnp(views[o], views[q], np.asarray(xo, float), np.asarray(xq, float), p, p.intra_min_inliers)
+                if r is None or r["tilt"] > p.pnp_max_tilt_deg or abs(r["c"][1]) * k > p.pnp_max_dy_m:
+                    continue
+                yo, co, _ = fr["photos"][o]
+                c3 = k * _ry(yo) @ r["c"] + np.array([co[0], 0.0, co[1]])
+                c2, yaw = c3[[0, 2]], float(_wrap(yo + r["yaw"]))
+                if not _inside(c2[None], fr["box"], p.intra_box_margin_m)[0]:
+                    continue
+                ctr = np.array([(fr["box"][0] + fr["box"][1]) / 2, (fr["box"][2] + fr["box"][3]) / 2])
+                h, v = np.array([np.sin(yaw), np.cos(yaw)]), ctr - c2
+                if np.linalg.norm(v) > 0.5 and v @ h < np.cos(np.radians(p.intra_max_view_deg)) * np.linalg.norm(v):
+                    continue                                   # not looking into the room
+                if q not in best or r["n"] > best[q][2]:
+                    best[q] = (yaw, c2, r["n"], o)
+        for q, (yaw, c2, n, o) in best.items():
+            fr["photos"][q] = (yaw, c2, f"PnP on {o}")
+            out[q] = (room, o, n)
+    return out
+
+
 def _cam_h(view, fr, k) -> float:
     return float(-view.floor_h * k) if view.floor_h is not None else fr["cam_h"]
 
@@ -179,11 +215,20 @@ def detect_doors(room: str, fr: dict, views: dict, pairs: list[dict], k: float, 
         mo, mw, lo_, lw, dp = A["mid_out"], A["mid_wall"], A["low_out"], A["low_wall"], A["door"]
         opening = (mo >= p.door_min_pts) & (mo >= p.door_min_out_frac * (mo + mw)) & ~(lw > 0.5 * (lw + lo_) + 2)
         doorpx = dp >= p.door_min_pts
+        if fr["status"].get(s) != "measured":
+            # an inferred side is not where the wall is: what lies beyond it is the rest of the room (sim k38 living
+            # room: 3 phantom 'doors' 1.9-3.2 m wide on its short sides); its doors come from threshold photos only
+            A["jamb"] = np.zeros(0)
+            continue
+        wallc = (mw >= p.door_min_pts) & (mw > mo)
+        flank = int(round(p.door_flank_m / b))
         for kind, mask in (("depth", opening), ("door pixels", doorpx & ~opening)):
             for i0, i1 in _runs(mask, p.door_gap_bins):
                 w = (i1 - i0 + 1) * b
                 if not (p.door_min_w_m <= w <= p.door_max_w_m):
                     continue
+                if not (wallc[max(i0 - flank, 0):i0].any() or wallc[i1 + 1:i1 + 1 + flank].any()):
+                    continue                              # a door is a gap IN a wall: wall seen beside it
                 lo = A["lo"] + i0 * b
                 phs = sorted(set().union(*A["photos"][i0:i1 + 1])) if kind == "depth" else []
                 doors.append(dict(room=room, side=s, c=float(lo + w / 2), w=float(w), lo=float(lo), hi=float(lo + w),
@@ -215,6 +260,17 @@ def detect_doors(room: str, fr: dict, views: dict, pairs: list[dict], k: float, 
             near = [d for d in doors if d["side"] == s and d["src"] == "depth" and abs(d["face"] - face) <= 0.6
                     and abs(d["c"] - ct) <= max(d["w"] / 2 + 0.3, 0.6)]
             square = abs(np.degrees(np.arccos(np.clip(-float(fwd @ _DIR[s]), -1, 1)))) <= p.threshold_square_deg
+            if not square:
+                # not square to the wall behind it: a seen door counts only if the camera stands in its interval
+                # (a corner between two doors: sim k38's bedroom photo merged into the bathroom door's wall)
+                near = []
+                for q in SIDES:
+                    aq, sq = _ax(q)
+                    fq = float(c2[aq] - sq * p.door_threshold_inset_m)
+                    near += [d for d in doors if d["side"] == q and d["src"] == "depth" and abs(d["face"] - fq) <= 0.4
+                             and d["lo"] - 0.1 <= c2[1 - aq] <= d["hi"] + 0.1]
+                if len(near) > 1:
+                    near = []
             if near:
                 d = min(near, key=lambda d: abs(d["c"] - ct))
                 d["pairs"].append(n)
@@ -251,7 +307,7 @@ def door_point(d: dict, fr: dict) -> np.ndarray:
 
 
 # ------------------------------------------------------------------------------------------- 2. PnP links
-def _pnp(vo, vq, xo, xq, p) -> dict | None:
+def _pnp(vo, vq, xo, xq, p, min_inliers: int | None = None) -> dict | None:
     """Pose of photo q relative to photo o from q's pixels on o's metric depth. Returns yaw/centre of q in o's
     levelled frame (x_o = R_y(yaw) x_q + c), the tilt of the relative rotation and o's inlier points (levelled)."""
     import cv2
@@ -268,7 +324,8 @@ def _pnp(vo, vq, xo, xq, p) -> dict | None:
         sem = getattr(view, "sem", None)
         if sem is not None:
             ok &= ~np.isin(sem[vv, uu], _label_ids(view, SEE_THROUGH))
-    if ok.sum() < p.pnp_min_inliers:
+    min_inliers = p.pnp_min_inliers if min_inliers is None else min_inliers
+    if ok.sum() < min_inliers:
         return None
     P = np.stack([(uv_o[:, 0] - vo.K[0, 2]) / vo.K[0, 0] * d, (uv_o[:, 1] - vo.K[1, 2]) / vo.K[1, 1] * d, d], 1)[ok]
     x2 = uv_q[ok].astype(np.float64)
@@ -278,7 +335,7 @@ def _pnp(vo, vq, xo, xq, p) -> dict | None:
                                                 confidence=0.999, flags=cv2.SOLVEPNP_EPNP)
     except cv2.error:
         return None
-    if not r or inl is None or len(inl) < p.pnp_min_inliers:
+    if not r or inl is None or len(inl) < min_inliers:
         return None
     inl = inl.ravel()
     rvec, tvec = cv2.solvePnPRefineLM(P[inl], x2[inl], vq.K.astype(np.float64), None, rvec, tvec)
@@ -374,7 +431,8 @@ def pnp_links(frames: dict, views: dict, matches: dict, k: float, p, log=print) 
                 continue
             # where the out-looking rays cross A's walls: the door they look through
             cross = _crossings(co, X[good], frames[A])
-            hyps.append(dict(A=A, B=B, o=o, q=q, n=int(good.sum()), psi=psi_s, t=t, psi_raw=psi,
+            exact = frames[A]["photos"][o][2] != "pose graph" and frames[B]["photos"][q][2] != "pose graph"
+            hyps.append(dict(A=A, B=B, o=o, q=q, n=int(good.sum()), psi=psi_s, t=t, psi_raw=psi, exact=exact,
                              tilt=r["tilt"], overlap=round(ov, 3), cross=cross))
     log(f"[photo/door] PnP links: {len(hyps)} hypotheses kept; rejected " +
         ", ".join(f"{k_}: {v}" for k_, v in sorted(rejected.items())))
@@ -458,7 +516,8 @@ def correspondences(frames, doors, hyps, pairs, views, p, log=print) -> list[dic
         cl = _cluster(hs, p.cluster_tol_m)
         n0 = sum(h["n"] for h in cl[0])
         n1 = sum(h["n"] for h in cl[1]) if len(cl) > 1 else 0
-        entry = dict(A=A, B=B, kind="pnp", inliers=n0, rival=n1, photos=sorted({f"{h['o']}->{h['q']}" for h in cl[0]}))
+        entry = dict(A=A, B=B, kind="pnp", inliers=n0, rival=n1, photos=sorted({f"{h['o']}->{h['q']}" for h in cl[0]}),
+                     exact=any(h["exact"] for h in cl[0]))
         if n0 < p.link_min_inliers:
             entry["rejected"] = f"weak: {n0} inliers < {p.link_min_inliers}"
         elif n1 > p.link_max_rival * n0:
@@ -527,7 +586,7 @@ def correspondences(frames, doors, hyps, pairs, views, p, log=print) -> list[dic
 def _door_without_photo(room, ds, fr, entered: bool, claimed: set, p):
     """The door of a doorway pair whose photo in this room is not placed in the room's frame. The room the pair
     leads INTO started its turning photos facing that door (protocol: 'start facing the door you came in through'):
-    the open door nearest the first photo's heading. Else the room's only open door no other evidence claims."""
+    the open door nearest the first photo's heading. Otherwise none."""
     cand = [d for d in ds if d["src"] == "depth" and d["id"] not in claimed]
     if entered and not fr["small"] and fr.get("first") in fr["photos"]:
         yaw, c2, _ = fr["photos"][fr["first"]]
@@ -543,18 +602,23 @@ def _door_without_photo(room, ds, fr, entered: bool, claimed: set, p):
 
 
 # ------------------------------------------------------------------------------------------- 4. joint adjustment
-def _constraints(links, frames, p) -> list[dict]:
+def _constraints(links, frames, p, fixed_rot: dict | None = None) -> list[dict]:
     """Relative transforms x_A = R(psi) x_B + t with sigmas along the door's normal and tangent (A's frame): the PnP
     placement of a room pair (isotropic sigma) and the door snap (faces a wall thickness apart, door centres on one
     line). A snap must agree with the pair's PnP placement (same rotation, within snap_max_move_m) when there is one."""
     pnp = {(L["A"], L["B"]): L for L in links if L["kind"] == "pnp" and not L.get("rejected")}
+    fixed_rot = fixed_rot or {}
     cons = []
     for L in links:
+        # (tried: a doorway pair whose door walls are unknown, as a same-spot link when the pose graph knows both
+        # rooms' rotations. k38 bedroom 0.41 -> 0.07 m, but k22 bedroom 0.16 -> 0.80 m: the threshold photos'
+        # positions inside their rooms come from the pose graph and were off. Not used.)
         if L.get("rejected"):
             continue
         A, B = L["A"], L["B"]
         if L["kind"] == "pnp":
-            cons.append(dict(A=A, B=B, psi=L["psi"], t=L["t"], n=None, sn=p.pnp_sigma_m, st=p.pnp_sigma_m,
+            sg = p.pnp_sigma_m if L.get("exact") else p.pnp_sigma_pg_m
+            cons.append(dict(A=A, B=B, psi=L["psi"], t=L["t"], n=None, sn=sg, st=sg,
                              kind="pnp", weight=L.get("inliers", 0)))
         if not L.get("door_pair"):
             continue
@@ -578,19 +642,46 @@ def _constraints(links, frames, p) -> list[dict]:
     return cons
 
 
-def adjust(frames: dict, cons: list[dict], links: list[dict], ref: str, p) -> tuple[dict, list]:
+def _pen(ox: float, oz: float, p) -> float:
+    """Overlap penalty beyond overlap_tol_m (0 by default: rooms the stitch leaves overlapping are pushed apart again
+    by plan_beta, one pair at a time, which undid the stitch on k22)."""
+    if ox <= 0 or oz <= 0:
+        return 0.0
+    return max(min(ox, oz) - p.overlap_tol_m, 0.0) / p.overlap_sigma_m
+
+
+def adjust(frames: dict, cons: list[dict], links: list[dict], ref: str, p,
+           fixed_rot: dict | None = None, obstacles: dict | None = None, prior: dict | None = None) -> tuple[dict, list]:
     """Rooms' rigid placements (psi, T) in the reference room's frame: rotations by a spanning tree over the
-    constraints (strongest first), translations by robust least squares with a no-overlap penalty."""
+    constraints (strongest first), translations by robust least squares with a no-overlap penalty.
+
+    fixed_rot: rooms whose rotation relative to the reference the pose graph already measured (placed in one
+    component with it): a constraint that turns such a room another way is dropped. A door association can be wrong
+    by 90 deg (sim k38: a threshold photo in a corner between two doors put the bedroom on the bathroom's wall); the
+    pose graph's rotations come from feature matches and the Manhattan snap and were right on all three flats."""
     from scipy.optimize import least_squares
     psi = {ref: 0.0}
     T0 = {ref: np.zeros(2)}
     used, dropped = [], []
-    todo = sorted(cons, key=lambda c: -c["weight"])
+    fixed_rot = dict(fixed_rot or {})
+    todo = []
+    for c in sorted(cons, key=lambda c: -c["weight"]):
+        A, B = c["A"], c["B"]
+        if A in fixed_rot and B in fixed_rot and abs(_wrap(fixed_rot[B] - fixed_rot[A] - c["psi"])) > 1e-6:
+            dropped.append(dict(A=A, B=B, kind=c["kind"], reason="rotation contradicts the pose graph"))
+            continue
+        todo.append(c)
     changed = True
     while changed:
         changed = False
         for c in list(todo):
             A, B = c["A"], c["B"]
+            new = (B, _wrap(psi[A] + c["psi"])) if A in psi and B not in psi else \
+                (A, _wrap(psi[B] - c["psi"])) if B in psi and A not in psi else None
+            if new and new[0] in fixed_rot and abs(_wrap(new[1] - fixed_rot[new[0]])) > 1e-6:
+                dropped.append(dict(A=A, B=B, kind=c["kind"], reason="rotation contradicts the pose graph"))
+                todo.remove(c)
+                continue
             if A in psi and B not in psi:
                 psi[B] = _wrap(psi[A] + c["psi"])
                 T0[B] = _rot2(psi[A]) @ c["t"] + T0[A]
@@ -616,10 +707,15 @@ def adjust(frames: dict, cons: list[dict], links: list[dict], ref: str, p) -> tu
         return np.zeros(2) if r == ref else x[2 * idx[r]:2 * idx[r] + 2]
 
     boxes = {r: frames[r]["box"] for r in psi}
-    same = [L for L in links if L.get("same_spot") and not L.get("rejected") and L["A"] in psi and L["B"] in psi]
+    same = [L for L in links if L.get("same_spot") and not L.get("rejected") and L["A"] in psi and L["B"] in psi
+            and not L.get("used_as")]
+    fixed_boxes = [_box_moved(frames[r]["box"], ps, T) for r, (ps, T) in (obstacles or {}).items() if r not in psi]
 
     def resid(x):
         out = []
+        for r, (_, Tpg) in (prior or {}).items():         # the pose graph's own placement of the room
+            if r in idx and p.pose_graph_sigma_m > 0:
+                out += list((x[2 * idx[r]:2 * idx[r] + 2] - Tpg) / p.pose_graph_sigma_m)
         for c in used:
             A, B = c["A"], c["B"]
             e = _rot2(psi[A]).T @ (T(x, B) - T(x, A)) - c["t"]
@@ -641,7 +737,11 @@ def adjust(frames: dict, cons: list[dict], links: list[dict], ref: str, p) -> tu
                 bb = _box_moved(boxes[b], psi[b], T(x, b))
                 ox = min(ba[1], bb[1]) - max(ba[0], bb[0])
                 oz = min(ba[3], bb[3]) - max(ba[2], bb[2])
-                out.append(min(ox, oz) / p.overlap_sigma_m if ox > 0 and oz > 0 else 0.0)
+                out.append(_pen(ox, oz, p))
+            for bb in fixed_boxes:                         # rooms the stitch does not move are obstacles
+                ox = min(ba[1], bb[1]) - max(ba[0], bb[0])
+                oz = min(ba[3], bb[3]) - max(ba[2], bb[2])
+                out.append(_pen(ox, oz, p) if a != ref else 0.0)
         return np.array(out)
 
     x0 = np.concatenate([T0[r] for r in rooms])
@@ -669,6 +769,10 @@ def stitch_rooms(views: dict, matches: dict, lays: dict, pairs: list[dict], name
             {c[0]: (0.0, np.zeros(3), 0.0)}
         comps.append({n: (th, k * np.asarray(t, float), ls) for n, (th, t, ls) in cp.items()})
     frames = room_frames(views, lays, {}, comps, k)
+    placed_by_pnp = place_in_rooms(frames, views, matches, k, p) if p.intra_pnp else {}
+    if placed_by_pnp:
+        log("[photo/door] placed in their rooms by PnP: " + ", ".join(
+            f"{q} (on {o}, {n} inliers)" for q, (_, o, n) in sorted(placed_by_pnp.items())))
     doors = {r: detect_doors(r, fr, views, pairs, k, p) for r, fr in frames.items()}
     for r, ds in doors.items():
         log(f"[photo/door] {r}: {len(fr_ := frames[r]['photos'])} photo(s) in its frame; doors: " + (", ".join(
@@ -676,12 +780,13 @@ def stitch_rooms(views: dict, matches: dict, lays: dict, pairs: list[dict], name
             for d in ds) or "none"))
     hyps = pnp_links(frames, views, matches, k, p, log)
     links = correspondences(frames, doors, hyps, pairs, views, p, log)
-    cons = _constraints(links, frames, p)
     anchored = [r for r in frames if (lays[r].get("anchor") or {}).get("side_to_plan")]
+    cons = _constraints(links, frames, p)
     deg = {r: sum(1 for c in cons if r in (c["A"], c["B"])) for r in frames}
     report = dict(rooms={}, links=[_link_report(Lk) for Lk in links], doors={r: [_door_report(d) for d in ds]
                                                                              for r, ds in doors.items()},
-                  hypotheses=len(hyps),
+                  hypotheses=len(hyps), placed_by_pnp={q: dict(room=r, on=o, inliers=n)
+                                                       for q, (r, o, n) in placed_by_pnp.items()},
                   frames={r: dict(photos={n: [round(float(y), 4), round(float(c[0]), 3), round(float(c[1]), 3), how]
                                           for n, (y, c, how) in fr["photos"].items()},
                                   box=[round(float(x), 3) for x in fr["box"]]) for r, fr in frames.items()})
@@ -690,16 +795,50 @@ def stitch_rooms(views: dict, matches: dict, lays: dict, pairs: list[dict], name
         log(f"[photo/door] {report['result']}")
         return report
     ref = max(anchored, key=lambda r: (deg[r], _area(frames[r]["box"])))
-    place, dropped = adjust(frames, cons, links, ref, p)
+    # rotations the pose graph measured: rooms anchored by photos in the reference room's component
+    comp_of = {n: i for i, c in enumerate(comps) for n in c}
+    ref_comp = {comp_of[n] for n in (lays[ref].get("fit_poses") or {}) if n in comp_of}
+    M0 = _M_from_anchor(lays[ref]["anchor"])
+    fixed_rot = {}
+    for r in frames:
+        a = lays[r].get("anchor") or {}
+        fit = [n for n in (lays[r].get("fit_poses") or {}) if n in comp_of]
+        if a.get("side_to_plan") and fit and {comp_of[n] for n in fit} & ref_comp:
+            Mr = M0.T @ _M_from_anchor(a)
+            fixed_rot[r] = float(np.arctan2(Mr[0, 1], Mr[0, 0]))
+    report["rotation_from_pose_graph"] = sorted(fixed_rot)
+    cons = _constraints(links, frames, p, fixed_rot)
+    report["links"] = [_link_report(Lk) for Lk in links]
+    # the pose graph's own placement of those rooms (reference frame): obstacles if not stitched, and a sanity bound
+    pg = {r: (fixed_rot[r], M0.T @ (np.asarray(lays[r]["anchor"]["centre_uv"], float) -
+                                    np.asarray(lays[ref]["anchor"]["centre_uv"], float))) for r in fixed_rot}
+    capped = {}
+    while True:
+        use = [c for c in cons if c["A"] not in capped and c["B"] not in capped]
+        place, dropped = adjust(frames, use, links, ref, p, fixed_rot, obstacles=pg, prior=pg)
+        far = {r: float(np.linalg.norm(place[r][1] - pg[r][1])) for r in place if r in pg and r != ref}
+        far = {r: d for r, d in far.items() if d > p.stitch_max_move_m}
+        if not far:
+            break
+        r = max(far, key=far.get)          # the stitch would carry a room far from where the pose graph put it:
+        capped[r] = round(far[r], 2)       # a wrong door association is likelier than a 1 m pose-graph error
+    report["kept_by_move_cap"] = capped
     report["reference_room"] = ref
     report["dropped_constraints"] = dropped
     a_ref = lays[ref]["anchor"]
     M_ref, c_ref = _M_from_anchor(a_ref), np.asarray(a_ref["centre_uv"], float)
     cam_names = [str(x) for x in np.asarray(scene.get("cam_names", []))]
     moved_cams = {}
+    # what the stitch changes, so one front-end run can be scored with and without it (scripts/ab_door_stitch.py)
+    report["undo"] = dict(layouts={r: dict(anchor=lays[r].get("anchor"), sides_plan=lays[r].get("sides_plan"))
+                                   for r in frames if r in place},
+                          T_wc={n: np.asarray(scene["T_wc"])[cam_names.index(n)].tolist() for n in cam_names}
+                          if "T_wc" in scene else {})
     for r in frames:
-        if r not in place:
-            report["rooms"][r] = dict(stitched=False, reason="no matched door: placement kept")
+        if r not in place or r in capped:
+            report["rooms"][r] = dict(stitched=False, reason="no matched door: placement kept" if r not in capped else
+                                      f"the stitch would move it {capped[r]} m from the pose graph's placement "
+                                      f"(> {p.stitch_max_move_m} m): placement kept")
             continue
         psi_r, T_r = place[r]
         M_new = M_ref @ _rot2(psi_r)

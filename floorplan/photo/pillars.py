@@ -165,6 +165,9 @@ def photo_candidates(name, P, N, h, col, wl, vert, tc, lay, p) -> list[dict]:
         ax, sg = _side_axis(s)
         tn = 2 if ax == 0 else 0
         Ds = float(S[s]["offset"])
+        c_ax = sg * float(tc[ax])                        # the camera's offset toward the side (0 for a spin photo)
+        if Ds - c_ax < p.layout_min_dist_m:              # a placed photo at (or past) this side: no scale for it
+            continue
         dd = P[keep, ax] * sg
         face = N[keep, ax] * sg < -p.layout_normal_min
         dirv = np.stack([P[keep, 0] - tc[0], P[keep, 2] - tc[2]], 1)
@@ -194,7 +197,7 @@ def photo_candidates(name, P, N, h, col, wl, vert, tc, lay, p) -> list[dict]:
                 continue
             ref = max(refs, key=lambda q: q["len"])
             depth = float(np.mean([q["level"] - r["level"] for q in refs]))
-            rho = Ds / ref["level"]                      # this photo's scale -> the box's
+            rho = (Ds - c_ax) / (ref["level"] - c_ax)    # this photo's scale -> the box's, about its camera
             tcam = tc[tn]
 
             def to_box(x):
