@@ -1,10 +1,10 @@
 # Fix loop (Part 4): declaration, shipped fix, before/after
 
-Status, 5 Oct 04:50 IST. **Declared: the video wall gate. Shipped: scale votes from PnP (`dced951`, tag `after-fix`).
+Status, 5 Oct 04:50 IST. **Declared: the video wall gate. Shipped: scale votes from PnP (`fbad1b3`, tag `after-fix`).
 The gate still fails, and the prediction was wrong.** Part 1 was filled in from the scored before runs and committed
 **before** any fix code (tag `before-fix`). The after runs, the replays and the verdict are appended under it; the
 declaration itself is unchanged. Part 2 lists the candidates as they stood on 4 Oct. Part 3 is the procedure; its
-ranking rule (step 3) is word for word the one committed in `e042ca5`. Every number here is quoted from the file named
+ranking rule (step 3) is word for word the one committed in `6a04490`. Every number here is quoted from the file named
 next to it.
 
 Final state, 5 Oct (afternoon). The shipped fix lives on in the default. D-076 made the PnP scale opt-in again after
@@ -14,10 +14,10 @@ D-076's "revisit if" named. The declaration, the after runs and the verdict belo
 gives on the declared gate is in `docs/BENCHMARK_REPORT.md`.
 
 Correction, 5 Oct (review). Part 1, item 1 says the rule was "committed before the own capture was scored". That is
-wrong. `e042ca5` went into git at 00:03 on 5 Oct, with the replayed history (`README.md`, History). The own capture was
+wrong. `6a04490` went into git at 00:03 on 5 Oct, with the replayed history (`README.md`, History). The own capture was
 first scored before that: the photos at 23:30 and photos plus video at 23:38 on 4 Oct (`outputs/own_house/eval_photo/`,
 `outputs/own_house/eval_all/`). The rule's text is older than the capture: the scratch copy of this file was last saved
-at 21:17 on 4 Oct, its step 3 is the same as in `e042ca5`, and the photos were taken at 22:38–22:40 (their file names).
+at 21:17 on 4 Oct, its step 3 is the same as in `6a04490`, and the photos were taken at 22:38–22:40 (their file names).
 That evidence is a file time on my laptop. Git does not show it.
 
 ---
@@ -30,8 +30,8 @@ Filled in on 5 Oct at 02:31 IST, before any fix code. The ranking behind it is i
 > Gate: walls within ±3% at tier video, on my own capture (`take1.mp4`, 117 s, 14 tape walls in the bedroom, hall
 > and kitchen). Measured: **0 of 14 walls within 3%** in both before runs, against 14 of 14 needed. The better run,
 > r1, finds 9 of 14 walls with a median error of 20.1%. r2 finds 9 with 28.6%
-> (`outputs/fixloop/before/eval/own_eval.md`, scored at 02:24 on 5 Oct, code `7b1a40f`). It is the worst gate under
-> the ranking rule of Part 3, step 3, which was committed before the own capture was scored (commit `e042ca5`). Its
+> (`outputs/fixloop/before/eval/own_eval.md`, scored at 02:24 on 5 Oct, code `4f9d0e0`). It is the worst gate under
+> the ranking rule of Part 3, step 3, which was committed before the own capture was scored (commit `6a04490`). Its
 > shortfall is 1.00, and its median error / tolerance (6.7) is the largest of the eight rows at 1.00. Caveat: the
 > committed snippet computes that tie-break for wall gates only. Applied to every row, as the text reads, it would put
 > the photo repeat room (40.4) and the video ceilings (20.7) first. I follow the snippet; `fixloop_ranking.md` says
@@ -74,7 +74,7 @@ Filled in on 5 Oct at 02:31 IST, before any fix code. The ranking behind it is i
 > Predicted after the fix: **0 of 14 walls within 3%, range 0–2. The gate still fails.**
 > How: I replayed the 23:28 run from its cached DPVO, MoGe-2, GeoCalib and SfM arrays, with only the scale step
 > swapped for the 177 PnP votes the fix computes. Four more replays resample the votes. All five were scored with the
-> scorer at `7b1a40f` (`outputs/fixloop/before/predict/summary.json`). The step 4 counterfactual above agrees:
+> scorer at `4f9d0e0` (`outputs/fixloop/before/predict/summary.json`). The step 4 counterfactual above agrees:
 > 1–2 of 14.
 > What else should change. These are replay numbers, the 23:28 run as scored now → the fix, with the range over 5:
 > - Walls within 10%: 2 → 6 of 14 (3–6). Found: 8 → 13 of 14 (all 5). Median error of the found walls:
@@ -110,12 +110,12 @@ After the fix, appended under the declaration and never edited into it.
 ### After the fix: runs, replays and verdict (5 Oct, 02:59–04:47 IST)
 
 **What ran.**
-- Code `dced951` ("video: scale votes from pnp on moge depth"), tag `after-fix`, clean tree
+- Code `fbad1b3` ("video: scale votes from pnp on moge depth"), tag `after-fix`, clean tree
   (`outputs/fixloop/after/CODE_COMMIT.txt`).
 - Item 4 with `S=after` (`outputs/fixloop/after/run_after.sh`): take1 r1 at 02:59–03:09 and r2 at 03:10–03:21, one
   after the other on the GPU, then the scoring.
 - Same scorer and tape GT as the before runs. `scripts/eval_own_capture.py` and `floorplan/benchmark/` have no change
-  since `7b1a40f`, and the two photo plans score exactly as before.
+  since `4f9d0e0`, and the two photo plans score exactly as before.
 - `outputs/fixloop/after/summarize.py` reads the four video runs (`summary.json`). All four have the same 228
   keyframes, so kf1 / kf42 is the same pair of frames in each.
 
@@ -284,7 +284,7 @@ the full table is in `DECISIONS.md` D-076). Old → new:
   after run +20 → +8%; floor_only's after run 0 → 3 rooms (−63%), d066 −49 → −88% (5 → 1 room); with_ceiling's
   after re-run −13 → −66% (3 → 2 rooms).
 - Rule: (B) holds, take1's median footprint error 26.0% → 2.7% and room-count error 7 → 3. (A) fails: not worse on
-  6 of 12 runs. **"depth_agreement" is the default again; "pnp" is opt-in** (`--video-scale pnp`, commit `5fe6ae6`).
+  6 of 12 runs. **"depth_agreement" is the default again; "pnp" is opt-in** (`--video-scale pnp`, commit `b0b4a34`).
   d066 is not named in the rule above but `NOTES.md` counts it when its cache replays; without it, 6 of 11 would pass.
 - On the sample videos SIFT finds few features on white walls (single_room: 22 votes over 164 keyframes), so the PnP
   scale is interpolated there. On my own take1 it is the better scale.
@@ -420,7 +420,7 @@ say that the prediction was the judge's.
 
 ## Part 3. Morning procedure (own capture → worst gate → declare → fix → before/after)
 
-**0. Before scoring anything.** Commit this file unchanged. Done in commit `e042ca5` ("fix loop: write the ranking
+**0. Before scoring anything.** Commit this file unchanged. Done in commit `6a04490` ("fix loop: write the ranking
 rule before the own capture is scored"). That commit came with the replayed history at 00:03 on 5 Oct, after the first
 scoring at 23:38 on 4 Oct, so git alone does not prove the rule came first (see the correction at the top).
 

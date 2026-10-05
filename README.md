@@ -152,4 +152,6 @@ env -u PYTHONPATH python -m pytest -q tests      # CPU, well under a minute
 The work started in a scratch folder on 3 Oct. It was moved into this repo on the night of 4 to 5 Oct, in the order
 it was done, by a script, so those commits are a second or two apart. The scratch folder kept only the last version of
 each file, so every file went in at that version and an early commit may not import or run; only the latest commit is
-tested. Later work is committed as it happens.
+tested. Later work was committed as it happened. On the evening of 5 Oct the history was condensed so that each
+commit is one solved step: every commit keeps the exact files and the original time of the last step it holds, and the
+fix-loop tags `before-fix` and `after-fix` point at the same files as before (`docs/FIX_LOOP.md`).

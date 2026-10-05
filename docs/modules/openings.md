@@ -66,7 +66,7 @@ rejection with its reason.
 
 Own house, take1 and the bedroom photos (`outputs/presentable/openings/`, `run_measure.sh`). Each detection is named
 by the keyframes that saw it. Tape widths from `ground_truth.csv`. Error in cm. The video runs are the saved fix-loop
-runs and the 5fe6ae6 reruns in `outputs/presentable/`.
+runs and the b0b4a34 reruns in `outputs/presentable/`.
 
 | Opening (tape, m) | Photo lit | Photo dim | after r1 | before r1 | before r2 | pnp r1 | default r1 | default r2 |
 |---|---|---|---|---|---|---|---|---|
@@ -114,7 +114,7 @@ LiDAR plan of the same capture (`compare_lidar.json`; a reference, not ground tr
   (0.649 m) is the same door, so the plan shows it twice. The leaf stands ajar beyond the wall; seen at an angle,
   its pixels cross the wall line past the jamb, so the width comes out 26 cm wide. The geometric openings of that
   plan: O1 0.955 m for LiDAR 0.921, O3 0.649 m for 0.709.
-- The 5fe6ae6 rerun of single_room (`outputs/presentable/sample_single_room`) gives the same door: 0.972 m.
+- The b0b4a34 rerun of single_room (`outputs/presentable/sample_single_room`) gives the same door: 0.972 m.
 - floor_only: that run's plan has no rooms, so there is nothing to put openings on.
 - with_ceiling: 26 keyframes in trusted segments, one room; no blob lands on a wall.
 
@@ -205,7 +205,7 @@ A doorway no photo saw whole is a lower bound with nothing at the other end: no 
 report. A door or passage with a width on that wall wins, and so does a window. A doorway-pair door without a width
 takes the measured one.
 
-Measured: the 20 photo plans of bb21d46's check (each saved plan without its segmenter and prior openings, then the
+Measured: the 20 photo plans of 76201fe's check (each saved plan without its segmenter and prior openings, then the
 openings step with the rule off and on, priors rule d; gt_eval, scored by position; own: by wall names). Runs in
 `outputs/own_house/diag/door_gap_verify/<plan>/` and `outputs/sim/<flat>/door_gap_verify/<plan>/` (`off_gate`,
 `on_gate`, `default_gate`). Doors found / missed / phantom (duplicates). Windows are the same off and on on all 20.
@@ -229,7 +229,7 @@ openings step with the rule off and on, priors rule d; gt_eval, scored by positi
 
 - Default on, by the rule set before the run: dim finds D1 on W1 within 5 cm of the tape; no plan gains a phantom or
   a duplicate or loses a found opening; the 12 widths given to width-less doors are within -4.4 to +3.8 cm.
-- 15:07 off again (6c51d69): on a held-out k22 plan (door_stitch/ab_v2 r1) a seen-through door lands 0.66 m from the
+- 15:07 off again (a commit since folded into 0c97b0e): on a held-out k22 plan (door_stitch/ab_v2 r1) a seen-through door lands 0.66 m from the
   width-less doorway-pair door of the same doorway (the rooms 0.6 m apart), past the 0.5 m merge, so it is a second
   door. 15:25 on again, my call: k65 is the one simulated flat this submission ships and is judged on, and on all
   five k65 plans the rule changes nothing; on my own bedroom it finds D1. Known limit: that k22 duplicate (a fix is to

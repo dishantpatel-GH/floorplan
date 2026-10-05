@@ -1,6 +1,6 @@
 # Benchmark results
 
-Fresh runs of every benchmark capture with the code at **`525a70a`** (HEAD on 5 Oct 2026, "photo: door stitching on,
+Fresh runs of every benchmark capture with the code at **`0c97b0e`** (HEAD on 5 Oct 2026, "photo: door stitching on,
 judged on k65"), made on 5 Oct 2026 between 16:00 and 16:38 IST, scored by `scripts/bench_results.py` at 16:44.
 
 | File | What |
@@ -47,7 +47,7 @@ All rows and their 95% intervals are in `tables.md` and `summary.json`.
 
 Why the video numbers come from replays: a live video run is 9–12 min on the 8 GB GPU per take (k65: about 1 h),
 and the brief accepts deterministic caches when the live path also runs. The video front end has not changed since
-the 'auto' replays of 5 Oct (`outputs/video_auto/replay/`, D-087; `git diff 20b8ece 525a70a -- floorplan/video` is
+the 'auto' replays of 5 Oct (`outputs/video_auto/replay/`, D-087; `git diff 10ca60f 0c97b0e -- floorplan/video` is
 the default flip only), so each number here is the HEAD plan step, openings, room names and drawings on the scene
 that the HEAD front end makes from that cache. The 9 take1 caches come from 9 live runs of the same video, so their
 spread is the tracker's run-to-run spread.

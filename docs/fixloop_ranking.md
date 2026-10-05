@@ -1,22 +1,22 @@
 # Fix loop: the ranking that picks the declared gate
 
 This is the ranking rule of `FIX_LOOP.md` (Part 3, step 3) applied to my own capture, at the code tagged `before-fix`.
-The rule was committed in `e042ca5`, before the own capture was scored. I scored the runs on 5 Oct at 02:24 IST.
+The rule was committed in `6a04490`, before the own capture was scored. I scored the runs on 5 Oct at 02:24 IST.
 
-Correction, 5 Oct (review): `e042ca5` came into git with the replayed history at 00:03 on 5 Oct. The own capture was
+Correction, 5 Oct (review): `6a04490` came into git with the replayed history at 00:03 on 5 Oct. The own capture was
 first scored before that: the photos at 23:30 and photos plus video at 23:38 on 4 Oct (`outputs/own_house/eval_photo/`,
 `eval_all/`). The four pre-fixes below came after that scoring. The rule's text is older than the capture;
 `FIX_LOOP.md` (top) gives the evidence, which is a file time, not git.
 
 ## What was scored
 
-- **Code:** `7b1a40f`, with a clean tree. It has the four pre-fixes: D-074 (the photo ceiling cut-off), the MoGe CPU
+- **Code:** `4f9d0e0`, with a clean tree. It has the four pre-fixes: D-074 (the photo ceiling cut-off), the MoGe CPU
   device, the geometric pairing of repeated room labels (D-072), and `--gt-json` in `process_own_capture.py`. The
   declaration commit adds docs only.
 - **Photo, bedroom ("room"):** the lit take and the dim take (take 2). The plans are `outputs/fixes/photo_lit/plan.json`
   and `outputs/fixes/photo_dim/plan.json`. They ran on 5 Oct at 01:46 with the D-074 code, on the cached depth and
   features. The later commits do not change the photo tier on the GPU.
-- **Video, `take1.mp4` (117 s):** run twice at `7b1a40f`, one run after the other on the GPU. r1 ran 02:01–02:13 and
+- **Video, `take1.mp4` (117 s):** run twice at `4f9d0e0`, one run after the other on the GPU. r1 ran 02:01–02:13 and
   r2 ran 02:14–02:24 (`outputs/fixloop/before/video_take1_r1`, `_r2`).
 - **Scorer:** `scripts/eval_own_capture.py --gt-json`, so walls are paired on the tape outlines (D-072). The report is
   `outputs/fixloop/before/eval/own_eval.md`.
@@ -24,7 +24,7 @@ first scored before that: the photos at 23:30 and photos plus video at 23:38 on 
 
 ## How the rule was applied
 
-1. The step 3 snippet ran unchanged on `own_eval.json`. I cut it from `git show e042ca5:docs/FIX_LOOP.md`. Its output
+1. The step 3 snippet ran unchanged on `own_eval.json`. I cut it from `git show 6a04490:docs/FIX_LOOP.md`. Its output
    is in `outputs/fixloop/before/rank_raw.txt`.
 2. I did two steps by hand, as the rule says.
    - **Video:** the before is two runs (I-007). Each video gate counts the better run: more items passing, then the
@@ -122,5 +122,5 @@ All under `outputs/fixloop/before/`:
 - `rank_rule_e042ca5.py`: the committed snippet. `rank_raw.txt`: its output. `rank.py`, `rank.json`,
   `rank_tables.md`: the steps by hand and the tables above.
 - `eval/step4_scale_check.json`: Part 3, step 4 on the video runs.
-- `predict/summary.json`: the replays of the fix, scored with the scorer at `7b1a40f`.
+- `predict/summary.json`: the replays of the fix, scored with the scorer at `4f9d0e0`.
 - `run_video_before.sh` and its log, `video_take1_r1.log`, `video_take1_r2.log`, `CODE_COMMIT.txt`.

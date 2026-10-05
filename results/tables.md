@@ -1,4 +1,4 @@
-# Benchmark tables (HEAD 525a70a7002edba0dbeeb80ec80213f0b1255104 (2026-10-05 15:24:21 +0530 photo: door stitching on, judged on k65); code = git archive of HEAD in code/, exported 2026-10-05T16:00:31+05:30)
+# Benchmark tables (HEAD 0c97b0e1f334e8047e9ee7361fff284be6fbbc93 (2026-10-05 15:24:21 +0530 photo: door stitching on, judged on k65); code = git archive of HEAD in code/, exported 2026-10-05T16:00:31+05:30)
 
 Numbers from `results/summary.json` (scripts/bench_results.py). Wall gate: photo ±8%, video ±3% of the tape / simulator length; MISSED walls count as failures. Footprint against the tape outline (own house) or the simulator's rooms (k65). Openings: GT openings in the rooms the plan has, found = placed on the right wall; width error over the found ones that carry a width. Time = pipeline runtime of the run (s).
 

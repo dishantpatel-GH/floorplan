@@ -1450,7 +1450,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 - **Options.** Each was replayed on the 23:28 run and rejected (`FIX_LOOP.md` Part 1, item 2): another depth model
   (MoGe-2 is within 6% inside one frame), the plan step (3 rooms on the PnP-scaled scene), the D-066 gate back at 0.005,
   no clamp, and PnP votes plus a cut at the jump.
-- **Decision** (`floorplan/video/scale.py`, `dced951`, tag `after-fix`). For keyframe pairs 2, 4 and 6 apart: SIFT
+- **Decision** (`floorplan/video/scale.py`, `fbad1b3`, tag `after-fix`). For keyframe pairs 2, 4 and 6 apart: SIFT
   matches, the MoGe-2 depth of the first frame, `solvePnPRansac` and an LM refine. A pair votes when its metric step is
   at least 8 cm and it agrees with DPVO within 35° in direction and 4° in rotation. The vote is metric step / DPVO step.
   The local scale is the running median of the votes within ±8 keyframes (at least 3 votes, log-interpolated in
@@ -1474,7 +1474,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     change. On single_room the new step's plan is still 1.6 m² larger (+29.3% against +19.9%).
   - Next, not done: a self-check that fits the PnP scale (for example the votes' scatter around the running median, not
     the spread of the scale itself), then the after runs again.
-- **Status.** In the code since `dced951`. Keeping it, or going back to the clamp until the self-check is redone, is not
+- **Status.** In the code since `fbad1b3`. Keeping it, or going back to the clamp until the self-check is redone, is not
   decided here.
 
 ## D-076 Video scale: depth agreement is the default again; PnP votes are opt-in (fix-loop follow-up)
@@ -1491,7 +1491,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     16.5° in rotation: a DPVO glitch where PnP finds no matches.
   - The floor seen after kf 137 sits about 1.7 m below the floor seen before. The pose graph anchors only floors within
     0.15 m of the lowest ones (3 fragments). The plan takes the lowest floor and loses the hall and bedroom.
-- **What "pnp" now does** (`5fe6ae6`; "depth_agreement" is the code before D-075: window, clamp, spread test).
+- **What "pnp" now does** (`b0b4a34`; "depth_agreement" is the code before D-075: window, clamp, spread test).
   1. Self-check: no spread test. A segment needs ≥ 3 votes within ±8 keyframes on at least half of its keyframes
      (vote coverage ≥ 0.5), plus the depth residual ≤ 0.058 and ≥ 20 keyframes as before. Set from the scale step
      alone, before any replay (probes, `probe_stats.json`, `probe_truth.json`): the sample segments that ARKit puts
@@ -1505,7 +1505,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
      from 1 to 3 rooms.
   3. `VideoParams.scale_method` = "depth_agreement" | "pnp"; `run_capture.py --video-scale pnp`. `floor_level` is on
      with "pnp" and off with "depth_agreement" unless set.
-- **Rule**, committed before any replay (`3d8b4f1`). Per run, room-count error (take1: distance from 3–4 rooms; samples:
+- **Rule**, committed before any replay (`0bb855a`). Per run, room-count error (take1: distance from 3–4 rooms; samples:
   from the LiDAR plan's rooms) and footprint error (take1 against 30 m²; samples against the LiDAR plan). New is worse
   if its room-count error is larger or its footprint error more than 5 points larger. "pnp" becomes the default only if
   (A) it is not worse on more than half of the runs and (B) on take1 it has a lower median footprint error and a lower
@@ -1579,7 +1579,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   an opening and stays); and, once the 4 sides are fitted, it overlaps the room's extent along it by >= 0.3 m (else it
   is the next room through that door). Main side fits only; the D-060 geometry-only fits keep the old rule.
 - **Evidence** (same cached photos and depth, CPU; rule off = `--photo-param layout_far_wall=false`, the same as
-  the code before `5dfd531`; tape GT with `gt_polygons.json`, sim with `sim_gt.json`; `outputs/own_house/diag/far_wall/`):
+  the code before `4b3ccf6`; tape GT with `gt_polygons.json`, sim with `sim_gt.json`; `outputs/own_house/diag/far_wall/`):
 
   | Set | Rule off | Rule on | Sides moved |
   |---|---|---|---|
@@ -1693,7 +1693,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 ## D-079 Video rooms: split between camera stays, and a short step into a space is not a visit (measured, both off)
 
 - **Context.** This is about how the video plan splits rooms (`floorplan/plan/beta`). It is judged by the rule
-  committed before any change (`docs/archive/notes/video_better_rule.md`, `f267c97`). On take1, no cache gives hall |
+  committed before any change (`docs/archive/notes/video_better_rule.md`, `c97c0f9`). On take1, no cache gives hall |
   kitchen | passage | bedroom, and the kitchen never gets a room of its own. The segmentation (`segment.py`) starts a
   room only at a peak of the free-space distance transform. On presentable pnp r2 the whole house has 3 peaks: hall,
   passage and kitchen are one basin, because video sees too little wall for the free space to narrow between them.
@@ -1711,8 +1711,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
      its outline and dwell time, unless 60% or more of its outline is measured wall (`brief_keep_enclosed`).
 - **How it was measured.** Only the plan step was replayed, on the scenes saved by the 16 baseline replays
   (`outputs/video_better/d079/plan_replay.py`, CPU, about 3 min for all 16). The scenes come from the baseline
-  replays, so any difference comes from the plan step. With the switches off, `c829aa7` reproduces the baseline on all
-  16 caches (same rooms, footprints and wall scores), and so does `dde0c4b` with this change applied. `35a2062` came
+  replays, so any difference comes from the plan step. With the switches off, `c97c0f9` reproduces the baseline on all
+  16 caches (same rooms, footprints and wall scores), and so does `6290b63` with this change applied. `007368d` came
   in meanwhile; it only acts when the overlap undo raises, and none of these replays does.
 - **Stay split, own take1** (tape; "what each room holds" as in the rule note: H hall, K kitchen, P passage,
   B bedroom; ~ = no camera inside):
@@ -1749,7 +1749,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     11 → 13). The rule needs 7. Fails.
   - Stay split, (a3): walls within 10% total 18 → 20, but pnp r2 loses two (6 → 4). Fails.
   - Stay split, (b): passes. (c): holds, because the switch is off for every tier. I re-ran the plan step on the
-    saved LiDAR scenes of the three samples with and without `d739590`. It gives the same rooms, walls, openings and
+    saved LiDAR scenes of the three samples with and without `007368d`. It gives the same rooms, walls, openings and
     footprints: 3 rooms and 17.61 m², 8 and 61.90 m², 8 and 62.50 m².
   - Brief entry fails (a), and it fails (b) on with_ceiling.
 - **Why the split loses walls even where the cut is right.** On pnp r2 the hall is cut from the passage at the
@@ -1769,7 +1769,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   default r1 (10.0 m²), after r2 (18.7 m²), default r2 (19.2 m²), before r2 (the hall twice) and before r1 (a camera
   path that runs over 100 m).
 - **Files.**
-  - Code (`d739590`): `floorplan/plan/beta/segment.py` (`camera_stays`, `stay_separates`, `split_by_stays`),
+  - Code (`007368d`): `floorplan/plan/beta/segment.py` (`camera_stays`, `stay_separates`, `split_by_stays`),
     `floorplan/plan/beta/extract.py` (`dwell_s`, the brief-entry rule, `meta.stay_split`),
     `floorplan/plan/beta/params.py`, `tests/test_plan_stays.py`.
   - Replays and scores: `outputs/video_better/d079/` (`stay_split/`, `stay_split_nojamb/`, `brief_entry/`,
@@ -1800,7 +1800,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     (`outputs/video_as_photos/rotation_check.json`), and its hall, kitchen and passage are one room. The photo tier's
     bedroom (D-077) is 10.66 m² (-4%), with 1 of 6 walls within 3%. The photo tier was also tested on one room only
     (the bedroom stills); the video has to place four.
-- **Test: the video's frames as photos, an oracle** (`floorplan/video/rooms_as_photos.py`, `5d8e142`, `b73e3d9`;
+- **Test: the video's frames as photos, an oracle** (`floorplan/video/rooms_as_photos.py`, `1de73d1`, `1de73d1`;
   `outputs/video_as_photos/`). The rooms were cut by hand at the known times (`oracle_rooms.json`: hall 0-33 s,
   kitchen 44-55.2 s, passage 64-77 s, bedroom 86-108 s, its ceiling 108-117 s), and each room's yaw step and frame
   count were set by hand. Per room 3-7 sharp turning frames about 50° apart (28° in the kitchen) from one spot, tilt
@@ -1820,7 +1820,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   | Run | Rooms | Footprint m² | Walls ≤3% / ≤10% | Bedroom m² (tape 11.09) | Hall m² (12.71) | Kitchen m² (4.21) |
   |---|---|---|---|---|---|---|
   | Video, fix loop after (PnP scale), r1 | 2 | 28.8 | 3 / 4 | **11.02 (-1%)** | 17.82, with kitchen and passage (tape 16.92 without the passage) | in the hall |
-  | Video, today (`5fe6ae6`), default, r1 | 1 | 10.0 | 0 / 2 | 9.99 (-10%) | missing | missing |
+  | Video, today (`b0b4a34`), default, r1 | 1 | 10.0 | 0 / 2 | 9.99 (-10%) | missing | missing |
   | Video, today, default, r2 | 1 | 19.4 | 1 / 1 | missing | 19.40, with the passage | missing |
   | Video, today, pnp, r1 | 2 | 31.1 | 0 / 2 | 9.02 (-19%) | 22.10, with kitchen and passage | in the hall |
   | Video, today, pnp, r2 | 2 | 29.0 | 4 / 5 | 10.03 (-10%) | 18.97, with kitchen and passage | in the hall |
@@ -1944,7 +1944,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   A check run of the shipped settings: k65 0.374 -> 0.408 (the kitchen and balcony moved as in the table, but the
   unstitched bedroom landed elsewhere, so the whole-plan fit took another offset), k22 0.295 -> 0.604, and on k38
   plan_beta's step hit its 300 s limit on the stitched scene (run_capture fell back to the alpha extractor).
-  The first, unpaired replay (one run each with the first version, commit faf461f) gave k65 0.376 -> 0.439, k22
+  The first, unpaired replay (one run each with the first version, commit 1de73d1) gave k65 0.376 -> 0.439, k22
   0.334 -> 0.618, k38 0.815 -> 0.797; those numbers mixed run-to-run noise into the comparison.
 
   Re-check of the final plans, room by room (same paired runs, no new runs; door links checked against
@@ -1990,8 +1990,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   (after, run 1 above). In the after run the bathroom measures 7.67 m2 with and without the stitch: that change came
   from the front end between the two runs, not from the stitch; the paired before is
   `outputs/door_stitch/ab_v3/k65_r1/ab_off.png`.
-- **Commits.** faf461f is the first version (its unpaired numbers are quoted above). The paired-run version (doors
-  on measured walls, in-room PnP, no turn against the pose graph, scripts/ab_door_stitch.py) went in with 618bc92,
+- **Commits.** 1de73d1 is the first version (its unpaired numbers are quoted above). The paired-run version (doors
+  on measured walls, in-room PnP, no turn against the pose graph, scripts/ab_door_stitch.py) went in with f6be5cf,
   whose subject is about alcoves: both were staged in the same index at once.
 
 ## D-082 Photo tier: alcoves and L-shapes measured by their own walls
@@ -2114,7 +2114,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   | Wardrobe at the W1/W6 corner (lit 223840, dim 224001) | furniture | no notch (was 0.69 × 0.70 m) | no notch (was 1.01 × 0.63 m) |
 
   Phantoms: none. Along their walls the pillars sit 0.1-0.4 m from where CubiCasa has them (lit's box is 9% long).
-- **Evidence** (cached views, CPU, `run_capture.py` + `eval_own_capture.py` from a clean export of `f267c97` plus this
+- **Evidence** (cached views, CPU, `run_capture.py` + `eval_own_capture.py` from a clean export of `c97c0f9` plus this
   change; tape GT with `gt_polygons.json`, sim with `sim_gt.json`; `outputs/own_house/diag/pillars/runs_final/`,
   `eval_final/`; "off" = both switches off, the code before this change):
 
@@ -2148,7 +2148,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 ## D-084 Video: steep keyframes (ceiling looks) out of the scale and the fusion; both scale steps replayed with it (defaults unchanged)
 
 - **Context.** The request "make sure video works better than it did". The rule and the baseline were committed
-  before any of this (`f267c97`, `docs/archive/notes/video_better_rule.md`): a video change becomes the default only if it
+  before any of this (`c97c0f9`, `docs/archive/notes/video_better_rule.md`): a video change becomes the default only if it
   passes (a) my take1 on nine cached DPVO runs, (b) the sample videos and (c) other tiers unchanged; otherwise it ships
   behind a switch that is off. The own-video diagnosis (`outputs/own_house/diag/video/workflow_result.json`) found
   that filming the bedroom ceiling at the end of take1 (t 107–117 s) broke tracking. This entry leaves such keyframes
@@ -2164,8 +2164,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     gets 17 "steep" keyframes in two false looks down (to −72°) and misses the ceiling look, presentable default r1
     misses it too (+28°), floor_only d066 gets 7 false ones. Against the local up (the GeoCalib frames within ±15
     keyframes, carried by DPVO's rotation) none of these remain, and all nine take1 runs find the same look.
-- **Change** (`6543f23`, `6bbdef6`, `5283d7d`: `floorplan/video/steep.py`, `VideoParams.steep_frames`;
-  `run_capture.py --video-steep`, `8af7667`).
+- **Change** (`574fafc`, `4c7fc49`, `4c7fc49`: `floorplan/video/steep.py`, `VideoParams.steep_frames`;
+  `run_capture.py --video-steep`, `bc8e4b1`).
   - A keyframe more than 30° above the horizon (`steep_up_deg`) or more than 50° below it (`steep_down_deg`, beyond
     GeoCalib's range) is steep. No pair that contains it votes on scale, in either scale step. Its depth enters
     neither the fusion nor the raw points, and it is left out of the self-check's depth residual.
@@ -2182,7 +2182,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   costs ceilings (reported, not judged): with the depth-agreement scale the bedroom ceiling is gone on after r2 (was
   2.84 m) and presentable default r1 (was 2.61 m, 2 cm from the tape), and pnp r2's goes from 2.93 to 1.92 m; with
   PnP the bedroom gets a ceiling on 3 of the 9 runs.
-- **Two plan-step crashes found by the replays** (`35a2062`, `7c8fea4`).
+- **Two plan-step crashes found by the replays** (`007368d`, `2df0996`).
   - Before r2 without the look: the overlap undo (`_undo_overlapping_refinements`) raised a GEOS TopologyException
     after it had moved one room's lines. The exception is caught (I-012, crash 2), but that room now crossed itself and
     `_canonical_outlines` raised again, uncaught. Now every room goes back to its refined lines when the undo fails.
@@ -2193,14 +2193,14 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     62.50 m²), so (c) holds, nor on any of the 16 baseline video scenes (same rooms and footprints as the baseline).
     The first is probably also the k38 photo crash noted in D-077 and D-083; not checked.
 - **Replays.** Every cached DPVO run of the baseline replayed on CPU, one at a time (`outputs/video_better/run_arm.sh`,
-  `steep_da/`, `steep_pnp/`), from git-archive exports, against the baseline replays of the same caches (`2b52052`):
-  - steep + depth agreement (`VIDEO_PARAMS={"steep_frames": true}`): `6543f23`; before r2 again on `5283d7d` (it
-    stopped in the plan step) and with_ceiling again on `7c8fea4` (its middle looks: the cut rule changed in
-    `5283d7d`).
+  `steep_da/`, `steep_pnp/`), from git-archive exports, against the baseline replays of the same caches (`e70039d`):
+  - steep + depth agreement (`VIDEO_PARAMS={"steep_frames": true}`): `574fafc`; before r2 again on `4c7fc49` (it
+    stopped in the plan step) and with_ceiling again on `2df0996` (its middle looks: the cut rule changed in
+    `4c7fc49`).
     single_room d069 r1–r3 and floor_only's after run have no steep keyframe (the PnP arm's logs), so this arm takes
     their baseline replays: the same code path.
-  - steep + PnP (`{"steep_frames": true, "scale_method": "pnp"}`, floor levelling on as in D-076): `5283d7d`; 23:28
-    again on `7c8fea4` (it stopped in the plan step).
+  - steep + PnP (`{"steep_frames": true, "scale_method": "pnp"}`, floor levelling on as in D-076): `4c7fc49`; 23:28
+    again on `2df0996` (it stopped in the plan step).
   - Between those exports, other commits changed only the photo tier, scripts, docs, and plan-step switches that are
     off (D-079).
 
@@ -2268,7 +2268,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 - **Context.** The user (5 Oct): "where we cannot identify the door itself we might need to use door priors, and
   based on the gap assume that there must be a door." The segmenter (D-078) finds a door only when its leaf is in
   frame. A doorway photo or a walk-through stands in the doorway and sees no leaf.
-- **The scorer first** (`aa07b31`, `floorplan/benchmark/gt_eval.py`). It paired a room's predicted openings with
+- **The scorer first** (`bc8e4b1`, `floorplan/benchmark/gt_eval.py`). It paired a room's predicted openings with
   its true ones by width alone. On the k65 photo plan that paired the entrance door the segmenter measured (0.825 m
   for 0.830) with the bedroom door (+18.0 cm), and a phantom 1.062 m door with the bathroom door (+35.2 cm). Now:
   - sim GT (`sim_gt.json` has every opening's centre): each prediction goes into the GT frame with its room's
@@ -2340,7 +2340,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   the move needs (without them lit's step became a pillar 0.22 m short of the moved corner, and W3 was missed): a step
   reaches the box corner or the corner its own photo sees, and it keeps its measured width from the corner instead of
   being stretched to it.
-- **Evidence** (cached views, CPU; before = clean export of `20b8ece`, after = the working tree with this change; own
+- **Evidence** (cached views, CPU; before = clean export of `10ca60f`, after = the working tree with this change; own
   lit and dim also from that export plus this change alone: the same numbers; tape GT with `gt_polygons.json`, sim
   with `sim_gt.json`; walls median / within 8% / area or footprint). "Same input": one process
   runs the room layouts twice on the same photos and poses, without and with the change
@@ -2369,7 +2369,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 - **Context.** The PnP scale (D-075) fixes take1 and loses on the sample videos (D-076, D-084). There SIFT finds few
   matches on blurred white walls: single_room has 22 votes over 164 keyframes, take1 147–193 over 228, and between
   votes the PnP scale is interpolated. D-076's "revisit if" named the depth-agreement scale where votes are sparse.
-- **Change** (`20b8ece`; `VideoParams.scale_method = "auto"`, `run_capture.py --video-scale auto`). Both local scales
+- **Change** (`10ca60f`; `VideoParams.scale_method = "auto"`, `run_capture.py --video-scale auto`). Both local scales
   are computed on the same segments. A segment keeps PnP's scale if its vote coverage (share of its keyframes with
   ≥ 3 votes within ±8 keyframes, D-076) is at least `scale_auto_min_coverage` = 0.5, else it takes depth agreement's.
   Each segment is self-checked by its own method (coverage or spread) and records `scale_method` and `vote_coverage`
@@ -2381,7 +2381,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   ARKit, 0.37 (+13.8% against +3.3%) and 0.44 (d066: +200.6% against +18.1%); segments where PnP is closer 0.51
   (with_ceiling: −12.7% against −27.9%) and 0.61 (d066: −5.9% against +29.6%). 0.5 is also the PnP self-check's limit.
 - **Replays** of the 16 caches of `docs/archive/notes/video_better_rule.md` (`outputs/video_auto/`: `run_arm.sh`, `replay/`,
-  `summary.json`, `rule_check.txt`; code `20b8ece`, CPU, one at a time), against the baseline replays
+  `summary.json`, `rule_check.txt`; code `10ca60f`, CPU, one at a time), against the baseline replays
   (`video_better/baseline`, re-scored with this code's scorer: the same numbers). Segments: P = PnP, D = depth
   agreement, with the coverage; ! = failed its self-check.
 
@@ -2419,7 +2419,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   "depth_agreement"; `--video-scale auto` turns it on. What it does when on: take1 gets PnP's scale on every segment
   (the bedroom is a room of its own on all nine caches, 6.9–10.1 m²); single_room keeps depth agreement and its plans
   exactly; floor_only and with_ceiling take PnP on their dense segments, are levelled and gain matched rooms.
-- **The camera path chosen the same way.** `path_source` "sfm" with its 80% gate (`189e151`) is already that: the SfM
+- **The camera path chosen the same way.** `path_source` "sfm" with its 80% gate (`3528278`) is already that: the SfM
   path where one model holds ≥ 80% of the walk, else DPVO's. Its replays (`outputs/video_sfm/arm_gated`) under the same
   rule: (a1) 9 of 9; (a2) 6 of 9, fails; (a3) pnp r2 6 → 4, fails; the samples fall back to DPVO and do not change
   (with_ceiling was not replayed). So no separate "auto" path, and it is not the default either.
@@ -2452,10 +2452,10 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   paired change) in IoU, footprint, walls median and within 8%, (c) no stitched run hits the plan time limit, or the
   fallback handles it and that run's plan is its unstitched plan, (d) the tests pass.
 - **Decision.** `door_stitch` is on by default (`--photo-param door_stitch=false` turns it off). The fallback is
-  ca09597: a plan step that times out on a scene the stitch moved runs plan_beta once more on the scene before the
+  6a384c7: a plan step that times out on a scene the stitch moved runs plan_beta once more on the scene before the
   stitch, then the alpha extractor; `plan_timeout` in run_report.json says which.
 - **Evidence** (paired A/B as in D-081: each front-end run scored with the stitch and with it undone; 3 runs per flat,
-  code 20b8ece, cached photos, depth and features, CPU; `outputs/door_stitch/final`, `summary.md` there):
+  code 10ca60f, cached photos, depth and features, CPU; `outputs/door_stitch/final`, `summary.md` there):
 
   | Flat | IoU off -> on, per run | Footprint off -> on | Walls median off -> on | Within 8% off -> on | Plan step, stitch on |
   |---|---|---|---|---|---|
@@ -2471,8 +2471,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   and within 8% the same: met. Only r2 gave a stitched plan, and its -0.0022 alone is just past that spread; a run the
   fallback handled counts with its plan, the unstitched one (settled after r1 and r2 were read). (c) In r1 and r3
   plan_beta runs past 300 s on the stitched scene (in run_capture and again in the A/B script, so the scene, not the
-  load); with ca09597 and a forced 30 s limit on both cached scenes the plan equals the unstitched one, room for room
-  and wall for wall: met. (d) 168 tests pass with the flip: met. k65 at ca09597 (D-086's front end) gives the same
+  load); with 6a384c7 and a forced 30 s limit on both cached scenes the plan equals the unstitched one, room for room
+  and wall for wall: met. (d) 168 tests pass with the flip: met. k65 at 6a384c7 (D-086's front end) gives the same
   IoU, walls and footprint; the own bedroom (lit, dim) is one room, nothing to stitch, its plans identical on and off.
 - **Limits.** k38 meets (b) because two of its three stitched scenes end as the unstitched plan, 300 s later. On both,
   plan_beta spins in `remove_jogs` (`floorplan/plan/beta/walls.py`): its `while changed` loop has no bound, and on a
@@ -2484,8 +2484,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 - **Follow-up (5 Oct, 14:55): the k38 plans finish; off again.** The cycle: on the slit along z = -1.29 the outline
   has a doubled corner, a zero-length step between two same-direction walls; its snap moves nothing and simplify
   keeps the corner. `remove_jogs` now stops when a snap gives back the same corners (any start or order), with a cap
-  of 10 x corners + 100 steps (23324d9, `tests/test_remove_jogs.py`). The step depends on the outline only, so a run
-  that finished never had such a snap: plan step replayed before/after (3849892) on 18 cached scenes (own bedroom lit
+  of 10 x corners + 100 steps (0f277c4, `tests/test_remove_jogs.py`). The step depends on the outline only, so a run
+  that finished never had such a snap: plan step replayed before/after (8fa2124) on 18 cached scenes (own bedroom lit
   and dim; k65 r1, k22 r1-r3, k38 r1-r3, each stitched and unstitched; single-room LiDAR; video take 1), plan.json
   identical, timings aside, on all 16 that finished before; k38 r1 and r3 stitched now take 2.7-2.9 s. Paired A/B
   re-scored on the same k38 front-end runs (every stitched plan a real one: no limit, no fallback; all rooms valid,
@@ -2499,11 +2499,11 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 
   IoU mean paired change -0.00219 against the off-run spread 0.00184: worse beyond the spread, so (b) fails with real
   stitched plans (the other three metrics unchanged). k65 r1 (0.3760 -> 0.4112) and k22 r1 (0.3368 -> 0.6018)
-  re-scored: unchanged. **Decision: `door_stitch` off by default** (bf68ec1); `--photo-param door_stitch=true` turns
+  re-scored: unchanged. **Decision: `door_stitch` off by default** (a commit since folded into 0c97b0e; on again below); `--photo-param door_stitch=true` turns
   it on. When the time-limit fallback undoes the stitch, run_capture now saves scene/ again, so scene/ matches
-  plan.json (b06f9d6; forced 10 s limit on k38 r1: scene/ is the unstitched scene, the plan the unstitched plan).
+  plan.json (0c97b0e; forced 10 s limit on k38 r1: scene/ is the unstitched scene, the plan the unstitched plan).
 - **Default again (5 Oct, 15:25): on, my call.** k65 is the one simulated flat this submission ships and is judged
   on; it has the better data (doorway pairs, door photos, the exact GT). There the stitch helps: IoU 0.376 -> 0.411,
   kitchen 0.34 -> 0.05 m and balcony 0.55 -> 0.31 m from their true place next to the living room. k22 (+0.10 mean)
   and k38 (-0.0022) are kept above as notes, not gates. My own bedroom is one room, so nothing changes there. Since
-  23324d9 the stitched k38 scenes finish, and the time-limit fallback stays for any scene that does not.
+  0f277c4 the stitched k38 scenes finish, and the time-limit fallback stays for any scene that does not.

@@ -1,6 +1,6 @@
 # Own house video at HEAD: default vs PnP scale, and the sample videos
 
-5 Oct, 08:15–10:26 IST. Code: `5fe6ae6` for every run (a git-archive snapshot, so commits made during the runs could
+5 Oct, 08:15–10:26 IST. Code: `b0b4a34` for every run (a git-archive snapshot, so commits made during the runs could
 not mix in). Runs, logs and scripts: `outputs/presentable/` (git-ignored): `run.sh`, `run_pnp_samples.sh`,
 `summarize.py`, `label_by_walk.py`, `samples_table.py`. One GPU job at a time, under `outputs/.gpu.lock`.
 
@@ -80,7 +80,7 @@ replays of the same one. I changed no default.
 ## 3. The recruiters' sample videos against their LiDAR plans
 
 Reference-based: the LiDAR plan of the same capture (`outputs/benchmark/final/lidar/<capture>/drift_on/plan.json`),
-scored with `scripts/bench_tier_ref.py` (unchanged since `dced951`), not ground truth. Video and LiDAR tiers only.
+scored with `scripts/bench_tier_ref.py` (unchanged since `fbad1b3`), not ground truth. Video and LiDAR tiers only.
 "Matched room areas" pairs rooms by overlap after a rigid fit of the two footprints. "HEAD default" and "HEAD pnp" are
 the runs made for this note (09:34–09:56 and 10:03–10:26).
 
@@ -90,15 +90,15 @@ the runs made for this note (09:34–09:56 and 10:03–10:26).
 |  | d069 r1 | 4 Oct 22:07, depth agreement | 3 | 17.32 m² (−2%) | 2 of 3 | 9.33 vs 8.31 (+12%); 6.38 vs 7.56 (−16%) |
 |  | d069 r2 | 4 Oct 22:11, depth agreement | 3 | 16.82 m² (−4%) | 2 of 3 | 8.94 vs 8.31 (+8%); 6.45 vs 7.56 (−15%) |
 |  | d069 r3 | 4 Oct 22:16, depth agreement | 3 | 17.14 m² (−3%) | 2 of 3 | 9.02 vs 8.31 (+9%); 6.88 vs 7.56 (−9%) |
-|  | fix loop after | dced951, PnP (D-075) | 3 | 22.07 m² (+25%) | 3 of 3 | 8.51 vs 8.31 (+2%); 7.71 vs 7.56 (+2%); 5.85 vs 1.93 (+202%) |
-|  | HEAD default | 5fe6ae6, depth agreement | 3 | 24.15 m² (+37%) | 3 of 3 | 9.09 vs 8.31 (+9%); 7.79 vs 1.93 (+303%); 7.27 vs 7.56 (−4%) |
-|  | HEAD pnp | 5fe6ae6, `--video-scale pnp` | 3 | 17.23 m² (−2%) | 2 of 3 | 8.47 vs 8.31 (+2%); 7.46 vs 7.56 (−1%) |
+|  | fix loop after | fbad1b3, PnP (D-075) | 3 | 22.07 m² (+25%) | 3 of 3 | 8.51 vs 8.31 (+2%); 7.71 vs 7.56 (+2%); 5.85 vs 1.93 (+202%) |
+|  | HEAD default | b0b4a34, depth agreement | 3 | 24.15 m² (+37%) | 3 of 3 | 9.09 vs 8.31 (+9%); 7.79 vs 1.93 (+303%); 7.27 vs 7.56 (−4%) |
+|  | HEAD pnp | b0b4a34, `--video-scale pnp` | 3 | 17.23 m² (−2%) | 2 of 3 | 8.47 vs 8.31 (+2%); 7.46 vs 7.56 (−1%) |
 | floor_only (8 rooms, 61.90 m²) | d066 | 4 Oct 21:16, depth agreement | 5 | 30.11 m² (−51%) | 4 of 8 | 8.03 vs 9.26 (−13%); 6.26 vs 2.84 (+121%); 5.47 vs 7.68 (−29%); 1.62 vs 1.68 (−4%) |
-|  | fix loop after | dced951, PnP (D-075) | 0 | 0.00 m² (−100%) | 0 of 8 | none |
-|  | HEAD default | 5fe6ae6, depth agreement | 7 | 68.64 m² (+11%) | 4 of 8 | 27.14 vs 13.99 (+94%); 16.35 vs 9.26 (+77%); 5.78 vs 12.12 (−52%); 5.14 vs 7.68 (−33%) |
-|  | HEAD pnp | 5fe6ae6, `--video-scale pnp` | 4 | 22.31 m² (−64%) | 1 of 8 | 3.33 vs 13.99 (−76%) |
+|  | fix loop after | fbad1b3, PnP (D-075) | 0 | 0.00 m² (−100%) | 0 of 8 | none |
+|  | HEAD default | b0b4a34, depth agreement | 7 | 68.64 m² (+11%) | 4 of 8 | 27.14 vs 13.99 (+94%); 16.35 vs 9.26 (+77%); 5.78 vs 12.12 (−52%); 5.14 vs 7.68 (−33%) |
+|  | HEAD pnp | b0b4a34, `--video-scale pnp` | 4 | 22.31 m² (−64%) | 1 of 8 | 3.33 vs 13.99 (−76%) |
 | with_ceiling (8 rooms, 62.50 m²) | final | 4 Oct 05:55, depth agreement (older code) | 5 | 19.40 m² (−69%) | 3 of 8 | 9.73 vs 12.81 (−24%); 3.35 vs 3.39 (−1%); 2.71 vs 11.17 (−76%) |
-|  | fix loop after | dced951, PnP (D-075) | 1 | 5.20 m² (−92%) | 1 of 8 | 5.20 vs 9.33 (−44%) |
+|  | fix loop after | fbad1b3, PnP (D-075) | 1 | 5.20 m² (−92%) | 1 of 8 | 5.20 vs 9.33 (−44%) |
 
 Run folders: d066, d069 and final in `outputs/benchmark/final/video/<capture>/`; fix loop after in
 `outputs/fixloop/after/sample_<capture>`; HEAD default and pnp in `outputs/presentable/sample_<capture>` and

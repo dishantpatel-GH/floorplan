@@ -2,7 +2,7 @@
 
 Every requirement of the brief (`TakeHome/Applied_AI_Case_Study.pdf`, Parts 1–5, deliverables 1–8, constraints, the
 walk-in test) → where it lives → what the artifact is → status. Statuses that depend on numbers are filled from
-the fresh runs of the final code (`525a70a`, 5 Oct 16:00–16:38 IST, `results/summary.json`); `docs/BENCHMARK_REPORT.md`
+the fresh runs of the final code (`0c97b0e`, 5 Oct 16:00–16:38 IST, `results/summary.json`); `docs/BENCHMARK_REPORT.md`
 has the full gate rows. Restructured on 5 Oct with the final defaults (photo `pillar_face_side` on, D-086; video scale step
 `"auto"`, D-087; photo door stitching on, D-088; see-through doorways on; `remove_jogs` stops when a snap changes
 nothing).

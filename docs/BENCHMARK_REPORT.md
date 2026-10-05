@@ -1,6 +1,6 @@
 # Benchmark report (Deliverable 5)
 
-Fresh runs of every benchmark capture with the final code, **`525a70a`** (5 Oct 2026), made between 16:00 and 16:38
+Fresh runs of every benchmark capture with the final code, **`0c97b0e`** (5 Oct 2026), made between 16:00 and 16:38
 IST and scored at 16:44 by `scripts/bench_results.py`. **Every number below comes from `results/summary.json`**; the
 same numbers are tabulated in `results/tables.md`, and `results/README.md` lists the command that regenerates each
 one. The run folder (logs, timing, the exact code as a git archive) is `outputs/benchmark/fresh_1600/`.

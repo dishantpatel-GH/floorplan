@@ -1,6 +1,6 @@
 # Technical report: phone captures to dimensioned, stitched floor plans
 
-Final code `525a70a`, 5 Oct 2026. The task: turn what a phone captures (a few photos per room, a walkthrough video, or
+Final code `0c97b0e`, 5 Oct 2026. The task: turn what a phone captures (a few photos per room, a walkthrough video, or
 a LiDAR scan) into one stitched floor plan of the property, with every wall, opening and ceiling height measured to
 the centimetre and an honest 95% interval on each number. This report explains each method we use, why it helps that
 task, and what it measurably changes. Fresh numbers come from `results/summary.json` (the benchmark,
@@ -37,7 +37,7 @@ The tiers differ in where metric scale comes from, and so in how wide their inte
 |---|---|---|---|
 | **Plan extractor v2** (`plan_beta`) | Space-first: free floor space becomes rooms (watershed), split along fitted wall lines; walls, openings, ceilings and adjacency are then measured per room | It never invents space: a room exists only where the camera saw floor | Chosen over a wall-first extractor that added 5–9 m² of rooms nobody entered (D-010, D-018); wall lines as cuts took matched rooms from 6 to 8/8 (`modules/plan_beta.md` v2.4) |
 | **Raw-point wall fitting** | Each wall is a line fitted to the raw depth points behind it, weighted by 1/σ² of the sensor noise, not to a mesh or raster | Centimetre walls need the measurements themselves; a raster quantises them | Plane-fit error 0.04–0.08 mm: the fit is never the limit (`modules/arkitscenes_validation.md` §6) |
-| **`remove_jogs` loop fix** | The step that snaps small jogs out of an outline stops when a snap returns the same corners (capped) | A plan must always finish; a stuck step gave no plan | Stitched k38 plan steps: over the 300 s limit → 2.7–2.9 s; the 16 plans that finished before are identical (D-088 follow-up, 23324d9) |
+| **`remove_jogs` loop fix** | The step that snaps small jogs out of an outline stops when a snap returns the same corners (capped) | A plan must always finish; a stuck step gave no plan | Stitched k38 plan steps: over the 300 s limit → 2.7–2.9 s; the 16 plans that finished before are identical (D-088 follow-up, 0f277c4) |
 | **95% intervals** | Every number carries fit ⊕ sensor ⊕ drift ⊕ tier scale term; video joins without verified geometry get a 20% σ floor and `reliability = low` (D-016, D-034) | The brief wants honest intervals; a camera tier must say it is less sure | Photo intervals hold the truth 1.00 / 1.00 / 0.97 of the time (own dim, own lit, k65); LiDAR 0.70 and video 0.32–0.76 do not (§5) |
 
 ### 3.2 LiDAR tier

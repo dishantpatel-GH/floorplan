@@ -1,15 +1,15 @@
 # Video: what "better" means, and the baseline it is measured against
 
 5 Oct, 09:40 IST, for the request "make sure video works better than it did". Written and committed before any
-change to the video default; the only video commits before it (`5d8e142`, `b73e3d9`) add an experimental switch that
+change to the video default; the only video commits before it (`1de73d1`, `1de73d1`) add an experimental switch that
 is off. It records what the video tier does today and when a change may replace today's default. I do not edit the
 rule after a candidate has been replayed.
 
-Today = the default video settings (scale step "depth_agreement", D-076) of the code at `2b52052`, whose `floorplan/`
-and `scripts/` are those of `5fe6ae6`. Commits after it, up to this note, add room names, segmenter doors and windows
+Today = the default video settings (scale step "depth_agreement", D-076) of the code at `e70039d`, whose `floorplan/`
+and `scripts/` are those of `b0b4a34`. Commits after it, up to this note, add room names, segmenter doors and windows
 and an experimental `--video-rooms` switch (off). They change nothing else in `floorplan/video/` and nothing in
 `floorplan/plan/beta/` or `floorplan/recon/`. Names and segmenter openings only add names and openings, and the
-replays turn them off; after r1's cache replayed at `b73e3d9` gives the same plan as at `2b52052`, wall for wall.
+replays turn them off; after r1's cache replayed at `1de73d1` gives the same plan as at `e70039d`, wall for wall.
 
 ## Why every comparison is a replay of the same DPVO runs
 
@@ -57,7 +57,7 @@ and without it.
 ## Why these thresholds (from the baseline's own spread)
 
 - **6 points of footprint.** The 12 fix-loop caches were each replayed twice with today's code: this baseline and the
-  D-076 follow-up's "depth_agreement" arm (`outputs/fixloop/followup/replay/*_old`). Those were made before `5fe6ae6`
+  D-076 follow-up's "depth_agreement" arm (`outputs/fixloop/followup/replay/*_old`). Those were made before `b0b4a34`
   was committed, so I replayed instead of reusing them. Before r1's cache was replayed a third time
   (`followup/ablation/own_b1_repeat_old`). 11 of 12 caches gave the same footprint each time. Before r1's gave 24.15,
   24.11 and 22.39 m² (errors 19.5, 19.6 and 25.4%; Open3D's fusion is multi-threaded): 5.9 points apart. A smaller
@@ -76,7 +76,7 @@ and without it.
 
 ## Baseline: today's defaults, each cache replayed on CPU
 
-Code: a git-archive export of `2b52052`, default `VideoParams`, `run_capture.py --tier video --no-damage`. Replays
+Code: a git-archive export of `e70039d`, default `VideoParams`, `run_capture.py --tier video --no-damage`. Replays
 08:39–09:32 IST, one at a time (`outputs/video_better/baseline/`: `run_baseline.log`, `replay/`, `summary.json`).
 "What each room holds": the spaces the keyframe cameras inside the room were filmed from (all take1 runs share the
 same 228 keyframes; the keyframe ranges per space are in `summarize.py`, read off
