@@ -386,6 +386,16 @@ def _build_rooms(labels, scene, floor_y, grid, maps, index, p: BetaParams):
                                 area_m2=round(float(Polygon(geom.vertices()).area), 2)))
             continue
         rooms.append(RoomBuild(lab, geom, bumps[lab], visited, enclosure, floor_level=floor_y))
+    for r in list(rooms):
+        # D-084: a refined outline that crosses itself goes back to its free-space lines, as an overlap does below;
+        # GEOS stops the plan step on it (take1 23:28 with the PnP scale and no ceiling look). A free-space outline
+        # that crosses itself too drops the room.
+        if r.polygon.is_valid:
+            continue
+        r.geom.lines = [replace(l, inferred=True, sigma=p.inferred_sigma_m) for l in raster_lines[r.label]]
+        if not r.polygon.is_valid:
+            rooms.remove(r)
+            dropped.append(dict(region=int(r.label), reason="outline crosses itself after refinement"))
     refined = {r.label: deepcopy(r.geom) for r in rooms}
     try:
         _undo_overlapping_refinements(rooms, raster_lines, p)

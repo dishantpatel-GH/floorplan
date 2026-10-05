@@ -1949,6 +1949,9 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   k65 balcony 0.55 -> 0.31 m), and the k65 and k22 plans gain 0.19-0.29 IoU. Before it goes on: the k38 bathroom
   (a PnP through photos the pose graph placed), plan_beta's push-apart and time limit on stitched scenes, and the own
   house. Pictures: `MyHouse_Dataset/k65_photo_plan_vs_gt.png` (before) and `..._after.png` (after, run 1 above).
+- **Commits.** faf461f is the first version (its unpaired numbers are quoted above). The paired-run version (doors
+  on measured walls, in-room PnP, no turn against the pose graph, scripts/ab_door_stitch.py) went in with 618bc92,
+  whose subject is about alcoves: both were staged in the same index at once.
 
 ## D-082 Photo tier: alcoves and L-shapes measured by their own walls
 
