@@ -242,11 +242,28 @@ def main():
         plan = _with_time_limit(lambda: _extract(a.extractor), a.plan_timeout)
     except StageTimeout:
         report["plan_timeout"] = dict(extractor=a.extractor, limit_s=a.plan_timeout)
-        log(f"PLAN STEP TIMED OUT after {a.plan_timeout} s ({a.extractor}); retrying with the alpha extractor")
         if a.extractor == "alpha":
             raise SystemExit(f"plan extraction exceeded {a.plan_timeout} s")
-        plan = _with_time_limit(lambda: _extract("alpha"), a.plan_timeout)
-        report["plan_timeout"]["fallback"] = "alpha"
+        plan = None
+        from floorplan.photo.door_stitch import moved_rooms, undo_stitch
+        moved = moved_rooms(info)
+        if moved:
+            # D-081 follow-up: a k38 run timed out on the door-stitched scene; plan_beta once more on the scene as
+            # it was before the stitch (the stitch-off plan) before the alpha extractor. scene/ keeps the stitched
+            # scene and its undo record.
+            log(f"PLAN STEP TIMED OUT after {a.plan_timeout} s ({a.extractor}) on the door-stitched scene; "
+                f"retrying without the stitch ({', '.join(moved)} back where the pose graph put them)")
+            scene, info = undo_stitch(scene, info)
+            report["plan_timeout"]["stitch_undone"] = moved
+            try:
+                plan = _with_time_limit(lambda: _extract(a.extractor), a.plan_timeout)
+                report["plan_timeout"]["fallback"] = f"{a.extractor} without the door stitch"
+            except StageTimeout:
+                pass
+        if plan is None:
+            log(f"PLAN STEP TIMED OUT after {a.plan_timeout} s ({a.extractor}); retrying with the alpha extractor")
+            plan = _with_time_limit(lambda: _extract("alpha"), a.plan_timeout)
+            report["plan_timeout"]["fallback"] = "alpha"
     plan.tier = a.tier
     dropped = drop_implausible_openings(plan)
     if dropped:

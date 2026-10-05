@@ -79,3 +79,26 @@ def test_adjust_keeps_clear_of_fixed_rooms():
     bC = DS._box_moved(frames["C"]["box"], 0.0, np.array([3.2, 0.5]))
     pen = min(min(bB[1], bC[1]) - max(bB[0], bC[0]), min(bB[3], bC[3]) - max(bB[2], bC[2]))
     assert pen < p.overlap_tol_m + 0.05
+
+
+def test_undo_stitch_puts_rooms_and_cameras_back():
+    T0, T1 = np.eye(4), np.eye(4)
+    T1[:3, 3] = [0.4, 0.0, -0.2]                            # cam b moved with its room by the stitch
+    old_b = np.eye(4).tolist()
+    scene = dict(cam_names=np.array(["a", "b"]), T_wc=np.stack([T0, T1]), traj=np.zeros((2, 3), np.float32))
+    info = dict(room_layouts={"A": dict(anchor=dict(centre_uv=[0.0, 0.0])),
+                              "B": dict(anchor=dict(centre_uv=[3.2, 0.3]), sides_plan={"+x": 1.0})},
+                door_stitch=dict(reference_room="A",
+                                 rooms={"A": dict(stitched=True), "B": dict(stitched=True), "C": dict(stitched=False)},
+                                 undo=dict(layouts={"A": dict(anchor=dict(centre_uv=[0.0, 0.0]), sides_plan=None),
+                                                    "B": dict(anchor=dict(centre_uv=[2.9, 0.0]), sides_plan=None)},
+                                           T_wc={"a": np.eye(4).tolist(), "b": old_b})))
+    assert DS.moved_rooms(info) == ["B"]
+    assert DS.moved_rooms({}) == []
+    sc, inf = DS.undo_stitch(scene, info)
+    assert inf["room_layouts"]["B"]["anchor"]["centre_uv"] == [2.9, 0.0]
+    assert "sides_plan" not in inf["room_layouts"]["B"]
+    assert np.allclose(sc["T_wc"][1], np.eye(4)) and np.allclose(sc["traj"][1], 0.0)
+    # the stitched scene itself is left as it was (run_capture keeps it on disk with its undo record)
+    assert info["room_layouts"]["B"]["anchor"]["centre_uv"] == [3.2, 0.3]
+    assert np.allclose(scene["T_wc"][1][:3, 3], [0.4, 0.0, -0.2])

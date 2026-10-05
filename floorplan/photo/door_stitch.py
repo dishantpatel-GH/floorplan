@@ -26,6 +26,8 @@ they share. Each room keeps its own size: rooms only move (rigidly).
 """
 from __future__ import annotations
 
+import copy
+
 import numpy as np
 
 SIDES = ("+x", "-x", "+z", "-z")
@@ -891,6 +893,35 @@ def stitch_rooms(views: dict, matches: dict, lays: dict, pairs: list[dict], name
                    v.get("moved_m") is not None else ("placed by its door" if v.get("stitched") else "kept"))
         for r, v in sorted(report["rooms"].items())))
     return report
+
+
+def moved_rooms(info: dict) -> list[str]:
+    """Rooms the stitch moved or placed (not its reference room); [] when it did not run or moved nothing."""
+    ds = info.get("door_stitch") or {}
+    return sorted(r for r, v in (ds.get("rooms") or {}).items() if v.get("stitched") and r != ds.get("reference_room"))
+
+
+def undo_stitch(scene: dict, info: dict) -> tuple[dict, dict]:
+    """The scene and info as they were before the stitch moved the rooms (anchors, sides, cameras), from the
+    stitch's undo record; the inputs are not changed. Paired A/B (scripts/ab_door_stitch.py) and run_capture's
+    retry when plan_beta times out on a stitched scene."""
+    scene, info = dict(scene), copy.deepcopy(info)
+    u = (info.get("door_stitch") or {}).get("undo") or {}
+    for r, v in (u.get("layouts") or {}).items():
+        lay = info["room_layouts"][r]
+        for k in ("anchor", "sides_plan"):
+            if v.get(k) is None:
+                lay.pop(k, None)
+            else:
+                lay[k] = v[k]
+    if u.get("T_wc"):
+        names = [str(x) for x in scene["cam_names"]]
+        T = np.array(scene["T_wc"], float)
+        for n, t in u["T_wc"].items():
+            T[names.index(n)] = np.asarray(t, float)
+        scene["T_wc"] = T
+        scene["traj"] = T[:, :3, 3].astype(np.float32)
+    return scene, info
 
 
 def _door_report(d: dict) -> dict:

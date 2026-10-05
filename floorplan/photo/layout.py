@@ -637,6 +637,14 @@ def room_layouts(views: dict, spin_info: dict, poses: dict, scale: float, Ra: np
                                                    else " (own depth scale, not linked: wide interval)")
                                                 + f", fused with the residential prior {mu0:.2f} +- {s0:.2f} m",
                                          ceiling_scale={c: ceiling_scale[c] for c in linked})
+        if not si.get("small_room"):                  # D-086: a side on a pillar face moves out to the wall beside it
+            try:
+                from floorplan.photo.pillars import pillar_face_sides
+                for mv in pillar_face_sides(lay, views, scale, p):
+                    log(f"[photo/pillars] {room}: side {mv['side']} {mv['from_m']:.3f} -> {mv['to_m']:.3f} m (it sat "
+                        f"on a {mv['kind']} face in {len(mv['photos'])} of {len(mv['support'])} photos; wall beside it)")
+            except Exception as e:                  # the box stands
+                lay["pillar_face_error"] = f"{type(e).__name__}: {e}"
         # ---- v3-poly (photo/polygon.py): rectangle + evidence-backed steps (alcoves, notches, the doorway photo on an
         # inferred side). Stored beside the rectangle; no existing key changes. plan_beta uses it when present.
         if getattr(p, "layout_polygon", True) and not si.get("small_room"):

@@ -134,3 +134,72 @@ def test_cut_into_the_outline_keeps_the_sides():
     assert abs(abs(_shoelace(np.array(pl["vertices"]))) - pl["area_m2"]) < 1e-3
     xs = [v[0] for v in pl["vertices"]]
     assert abs(max(xs) - SIDES["+x"]) < 1e-9 and abs(min(xs) + SIDES["-x"]) < 1e-9     # box sides unchanged
+
+
+# ---------------------------------------------------------------- D-086: a box side on a pillar face moves to the wall
+def flat(x, z0, z1, col0=5000):
+    """Another photo's view of the +x side: a plain surface at x (its own depth scale), z0..z1."""
+    P, col = [], []
+    for c, z in enumerate(np.arange(z0, z1, 0.01)):
+        for hh in np.arange(0.05, 1.8, 0.05):
+            P.append((x, hh - 1.4, z))
+            col.append(col0 + c)
+    P = np.array(P)
+    return P, np.tile([-1.0, 0.0, 0.0], (len(P), 1)), P[:, 1] + 1.4, np.array(col), np.ones(len(P), bool), \
+        np.ones(len(P), bool)
+
+
+def side_lay(off):
+    L = lay()
+    L["sides"]["+x"]["offset"] = off
+    return L
+
+
+def test_side_on_a_pillar_face_moves_out_to_the_wall():
+    from floorplan.photo.pillars import face_side_moves
+    p = PhotoParams()
+    face = WALL - 0.15
+    a = ("a", *photo([(0.2, 0.7, 0.15, 0.0, 3.0)]), np.zeros(3))
+    L = side_lay(face)                         # the fit took the pillar face (0.5 m) as the side
+    mv = face_side_moves(L, [a], p)
+    assert len(mv) == 1 and mv[0]["side"] == "+x" and abs(mv[0]["to_m"] - WALL) < 0.01
+    # own lit: the other half of the side's support is another photo's surface at the face's depth -> still moves
+    b = ("b", *flat(face - 0.03, -1.5, -0.9), np.zeros(3))
+    mv = face_side_moves(L, [a, b], p)
+    assert len(mv) == 1 and abs(mv[0]["to_m"] - WALL) < 0.01 and mv[0]["photos"] == ["a"]
+
+
+def test_side_on_the_wall_or_outvoted_stays():
+    from floorplan.photo.pillars import face_side_moves
+    p = PhotoParams()
+    a = ("a", *photo([(0.2, 0.7, 0.15, 0.0, 3.0)]), np.zeros(3))
+    assert face_side_moves(side_lay(WALL), [a], p) == []            # the side is the wall beside the pillar
+    face = WALL - 0.15
+    b = ("b", *flat(face, -1.5, -0.9), np.zeros(3))
+    c = ("c", *flat(face, 0.9, 1.5, col0=9000), np.zeros(3))
+    assert face_side_moves(side_lay(face), [a, b, c], p) == []      # 1 of 3 photos: the others see a wall there
+    from floorplan.photo.pillars import pillar_face_sides
+    assert pillar_face_sides(side_lay(face), {}, 1.0, PhotoParams.from_dict(dict(pillar_face_side=False))) == []
+
+
+def test_step_reaches_the_corner_this_photo_sees_and_keeps_its_width():
+    # the box's +z side is 0.25 m beyond where this photo sees the +z wall (another photo's scale): the run still
+    # reaches the corner in its own photo, so it is a step, 0.45 m wide from the box corner (not stretched to 0.70)
+    p = PhotoParams()
+    P, N, h, col, wl, vert = photo([(1.15, 1.6, 0.126, 0.0, 3.0)])
+    Q, cq = [], []
+    for c, x in enumerate(np.arange(0.8, WALL - 0.13, 0.01)):     # the +z wall at z = 1.6, facing back (-z)
+        for hh in np.arange(0.05, 1.8, 0.05):
+            Q.append((x, hh - 1.4, 1.6))
+            cq.append(7000 + c)
+    Q = np.array(Q)
+    P2 = np.vstack([P, Q])
+    N2 = np.vstack([N, np.tile([0.0, 0.0, -1.0], (len(Q), 1))])
+    col2 = np.r_[col, cq]
+    L = lay()
+    L["sides"]["+z"]["offset"] = 1.85
+    c = photo_candidates("ph", P2, N2, P2[:, 1] + 1.4, col2, np.ones(len(P2), bool), np.ones(len(P2), bool),
+                         np.zeros(3), L, p)
+    pil, _ = merge(c, L, p)
+    assert len(pil) == 1 and pil[0]["kind"] == "step"
+    assert abs(pil[0]["t1"] - 1.85) < 1e-6 and abs(pil[0]["width_m"] - 0.45) < 0.06

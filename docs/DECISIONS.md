@@ -2317,3 +2317,41 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   from a wide opening. The thresholds were set on these plans; there is no held-out set. On k65 photo the two extra
   living-room "windows" are the glass of the wide openings next to the pair doors; using that (a floor-length window
   at a doorway is a glazed door, with its width) is not tried.
+
+## D-086 Photo tier: a room side sits on the wall, not on a pillar face
+
+- **Context.** Own lit take: box 4.07 × 2.74 m against the tape's 3.73 × 2.985 m, 0 of 6 walls within 8% (D-083).
+  Its W4 side (1.078 m) rests on two photos: 223824's pillar face (61 points at 1.105 m; in the same photo the wall
+  beside the pillar is at 1.245 m) and 223846's closed door (63 points at 1.012 m). So the side sat on the pillar
+  face, and the pillar's notch was drawn 0.12 m in front of it.
+- **Decision** (`pillars.face_side_moves`, on the fitted box before the polygon step; `--photo-param
+  pillar_face_side=false`). A measured side moves out when, in at least half of the photos that support it (>= 10
+  points within 0.12 m), that photo's support lies mostly on the face of a pillar or step the detector keeps, and the
+  side is nearer the face than the wall seen beside it in the same photo (wall-labelled, >= 0.25 m long, 0.06-0.6 m
+  farther out). It moves by the pillar's depth in the box's scale; the pillar is then a notch (D-083). Two step fixes
+  the move needs (without them lit's step became a pillar 0.22 m short of the moved corner, and W3 was missed): a step
+  reaches the box corner or the corner its own photo sees, and it keeps its measured width from the corner instead of
+  being stretched to it.
+- **Evidence** (cached views, CPU; before = clean export of `20b8ece`, after = the working tree with this change; own
+  lit and dim also from that export plus this change alone: the same numbers; tape GT with `gt_polygons.json`, sim
+  with `sim_gt.json`; walls median / within 8% / area or footprint). "Same input": one process
+  runs the room layouts twice on the same photos and poses, without and with the change
+  (`outputs/own_house/diag/pillar_face/`: `pf_paired.py`, `run_code.sh`, `runs/`, `eval/`).
+
+  | Set | Before | After | Same input |
+  |---|---|---|---|
+  | Own lit (outline 11.09 m²) | 9.0%, 0 of 6, 10.99 m² (−0.9%) | 8.9%, 2 of 6, 11.54 m² (+4.0%) | W4 side 1.078 -> 1.215 m |
+  | Own lit box (tape 3.73 × 2.985); W1, W3, W5 | 4.07 × 2.74; 11.2, 9.0, 8.6% | 4.07 × 2.88; 2.7, 9.3, 4.0% | |
+  | Own dim | 3.6%, 4 of 6, 11.14 m² | 3.6%, 5 of 6, 11.15 m² (W3 30.0 -> 1.8%, W1 1.3 -> 6.1%) | no side moved; step 0.57 -> 0.45 m |
+  | k65 | 5.6%, 15 of 26, −9.0% | 5.6%, 15 of 26, −9.0% | 5 rooms identical |
+  | k22 | 26.0%, 6 of 20, −43.9% | 23.0%, 5 of 20, −49.5%; a third run 22.2%, 5 of 20, −49.1% | 5 rooms identical |
+  | k38 | 5.8%, 12 of 26, +9.2% | 5.7%, 12 of 26, +9.2%; a third run 5.7%, 12 of 26, +9.1% | 5 rooms identical |
+
+  The k22 runs differ before the layout step (157-160 matched pairs; D-077 had −43.8 to −49.5% over 3 runs). k65v23,
+  k65v2_dim and k38_s1: no side moved either. Move alone, without the step fixes: lit 6.7% over 4 of 6, 2 of 6.
+- **Limits.** Lit's area error grows (−0.9% -> +4.0%): the width is now near the tape, but the length is still +9%
+  (D-077 limit), and the narrow width used to hide it. One real case (lit W4). The dim W4 side stays: the pillar face
+  is 64 of 223944's 165 support points, and 1 of the side's 3 photos (with no gates it would move 0.16 m out, into a
+  box already 0.16 m too wide). The simulator has no pillars, so it only shows that nothing moves there.
+  Dim W1 1.3% -> 6.1%: dim's box is 0.16 m too wide, and the step no longer takes up the excess. A step whose photo
+  run stops short of the corner (something in front of it) would come out short; not seen on these takes.

@@ -23,7 +23,8 @@ measured together. Per photo and measured side, in the layout frame:
 
 Into the box: the photo's wall run is the side, so depth and tangent positions scale by side offset / wall level (about
 the camera). Detections of one side that overlap (or lie within 0.4 m) are one pillar; the photo whose scale agrees
-best with the box (ratio closest to 1) gives the numbers. The box sides do not move.
+best with the box (ratio closest to 1) gives the numbers. The box sides do not move here; before the polygon step,
+D-086 (face_side_moves) moves a side that the box fit put on a pillar's face out to the wall beside it.
 
 Output: a list of dicts in the layout frame (side, kind, tangent range, depth, face offset, photos); polygon.py cuts
 them into the outline as rectilinear notches.
@@ -52,6 +53,12 @@ DEFAULTS = dict(
     pillar_top_slack_m=0.15,         # ... and up to the band top, or to what the photo sees there, minus this
     pillar_merge_m=0.4,              # detections of one side closer than this are one pillar
     pillar_far_wall_m=0.1,           # a run within this of the far-wall rule's set-aside surface is furniture
+    pillar_face_side=True,           # D-086: a box side that sits on a pillar's face moves out to the wall beside it
+    pillar_face_share=0.5,           # ... when the face holds >= half of a photo's support of the side, and such
+                                     #     photos are >= half of the side's photos
+    pillar_face_tol_m=0.05,          # a support point is on the face when within this of the face level
+    pillar_step_photo_corner=True,   # D-086: a step reaches the box corner or the corner the same photo sees
+    pillar_step_keep_width=True,     # D-086: a step keeps its measured width from the corner (not stretched to it)
 )
 
 
@@ -152,6 +159,17 @@ def _face_heights(P, N, h, vert, ax, sg, tn, r, p, bin_h: float = 0.15):
     return float(edges[lo]), float(edges[hi + 1]), how
 
 
+def _photo_corner(P, N, keep, dd, tn, hi_end, level, wall, p):
+    """Where one photo sees the room's corner at one end of a side: the median tangent position of its farthest wall
+    points facing back from the perpendicular wall there, between half-way to the side and just past its wall line.
+    None when the photo does not see that wall."""
+    sgp = 1.0 if hi_end else -1.0
+    m = (N[keep, tn] * sgp < -p.layout_normal_min) & (dd > 0.5 * level) & (dd < wall + 0.1)
+    if m.sum() < _par(p, "pillar_min_pts"):
+        return None
+    return float(np.median(P[keep[m], tn]))
+
+
 def photo_candidates(name, P, N, h, col, wl, vert, tc, lay, p) -> list[dict]:
     """Pillar / step candidates of one photo, in the photo's own depth scale, then mapped into the box."""
     S = lay["sides"]
@@ -221,7 +239,12 @@ def photo_candidates(name, P, N, h, col, wl, vert, tc, lay, p) -> list[dict]:
                 other_end, other_q = (r["t1"], right) if ref_left else (r["t0"], left)
                 corner = hi_c if ref_left else lo_c
                 b_end = b1 if ref_left else b0
-                if corner is not None and abs(b_end - corner) <= _par(p, "pillar_corner_m"):
+                # D-086: or the corner as this photo sees it (the perpendicular wall in its own points): a box side
+                # moved off a pillar face (or fitted from another photo's scale) need not match this photo's corner
+                pc = _photo_corner(P, N, keep, dd, tn, ref_left, r["level"], ref["level"], p) \
+                    if _par(p, "pillar_step_photo_corner") else None
+                if (corner is not None and abs(b_end - corner) <= _par(p, "pillar_corner_m")) or \
+                        (pc is not None and abs(other_end - pc) <= _par(p, "pillar_corner_m")):
                     kind = "step"
                     ends = dict(lo="wall", hi="corner") if ref_left else dict(lo="corner", hi="wall")
                 else:
@@ -241,6 +264,7 @@ def photo_candidates(name, P, N, h, col, wl, vert, tc, lay, p) -> list[dict]:
             depth_box = depth * rho
             out.append(dict(side=s, kind=kind, photo=name, t0=min(b0, b1), t1=max(b0, b1), depth_m=depth_box,
                             face_m=Ds - depth_box, ends=ends, ratio=rho, n=int(r["n"]),
+                            photo_t=[round(r["t0"], 3), round(r["t1"], 3)],
                             photo_level_m=round(r["level"], 3), photo_wall_m=round(ref["level"], 3),
                             photo_width_m=round(w, 3), photo_depth_m=round(depth, 3),
                             height_m=[round(h_lo, 2), round(h_hi, 2)], face_low=low_how))
@@ -284,10 +308,12 @@ def merge(cands: list[dict], lay: dict, p) -> tuple[list[dict], list[dict]]:
             kind = "step" if b["kind"] == "step" else "pillar"
             t0, t1 = max(b["t0"], lo), min(b["t1"], hi)
             if kind == "step":                          # a step runs into the corner
+                w = b["t1"] - b["t0"]                   # D-086: with its own width, measured inside one photo
+                keepw = _par(p, "pillar_step_keep_width")
                 if b["ends"].get("hi") == "corner":
-                    t1 = hi
+                    t0, t1 = (max(lo, hi - w) if keepw else t0), hi
                 else:
-                    t0 = lo
+                    t0, t1 = lo, (min(hi, lo + w) if keepw else t1)
             if t1 - t0 < _par(p, "pillar_min_w_m") * 0.75:
                 rej.append(dict(b, reason="too narrow inside the room"))
                 continue
@@ -319,3 +345,90 @@ def find_pillars(lay: dict, views: dict, yaws: dict, offs: dict, scale: float, p
         cands += photo_candidates(n, P, N, h, col, wl, vert, Rm @ t, lay, p)
     pillars, rej = merge(cands, lay, p)
     return dict(ok=True, pillars=pillars, rejected=rej, candidates=len(cands))
+
+
+def face_side_moves(lay: dict, photos: list[tuple], p) -> list[dict]:
+    """D-086: box sides that sit on a pillar's (or step's) face, and how far out the wall beside it is.
+
+    The side fit takes the longest wall-labelled surface, and the segmenter calls pillars "wall" (D-083). Own lit
+    take: the W4 side's support is one photo's pillar face (223824: 61 points at 1.105 m, the wall beside it at
+    1.245 m) and another photo's closed door (223846: 63 points at 1.012 m); the side came out at 1.078 m, on the
+    face, and the room 0.25 m narrow. A side moves when, in at least half of the photos that support it (>=
+    layout_min_side_pts / 4 points within layout_inlier_m, as the side fit counts them), the photo's own support:
+      - lies mostly (>= pillar_face_share) on the face of a pillar or step the detector keeps (merge: inside the
+        room, not the far-wall rule's furniture surface), within pillar_face_tol_m of the face;
+      - the side is nearer that face than the wall seen beside it in the same photo (wall-labelled, >= 0.25 m,
+        0.06-0.6 m farther out: the detector's own reference run).
+    The side moves out by the pillar's depth taken in the box's scale about that photo's camera (face anchored at
+    the side), the median over those photos; the pillar is then cut as a notch (polygon.cut_pillars).
+    photos: (name, P, N, h, col, wl, vert, tc) per photo of the box fit, layout frame. Returns one dict per move."""
+    S = lay["sides"]
+    cands = []
+    for ph in photos:
+        cands += photo_candidates(*ph, lay, p)
+    pillars, _ = merge(cands, lay, p)
+    if not pillars:
+        return []
+    share, tol = _par(p, "pillar_face_share"), _par(p, "pillar_face_tol_m")
+    moves = []
+    for s in SIDES:
+        prs = [pr for pr in pillars if pr["side"] == s]
+        if not prs or S[s].get("status") != "measured" or not S[s].get("offset"):
+            continue
+        ax, sg = _side_axis(s)
+        tn = 2 if ax == 0 else 0
+        Ds = float(S[s]["offset"])
+        ev = [dict(c, kind=pr["kind"]) for pr in prs for c in pr["evidence"]]
+        support, hits = {}, []
+        for n, P, N, h, col, wl, vert, tc in photos:
+            band = (h > p.layout_band_lo_m) & (h < p.layout_band_hi_m)
+            keep = _farthest(P, col, tc, band & vert & wl)
+            dd, tt = P[keep, ax] * sg, P[keep, tn]
+            inl = (N[keep, ax] * sg < -p.layout_normal_min) & (dd > p.layout_min_dist_m) \
+                & (np.abs(dd - Ds) < p.layout_inlier_m)
+            if inl.sum() < p.layout_min_side_pts // 4:
+                continue
+            support[n] = int(inl.sum())
+            c_ax = sg * float(tc[ax])
+            best = None
+            for c in (c for c in ev if c["photo"] == n):
+                face, wall = float(c["photo_level_m"]), float(c["photo_wall_m"])
+                t0, t1 = c["photo_t"]
+                on = int((inl & (tt >= t0) & (tt <= t1) & (np.abs(dd - face) <= tol)).sum())
+                if on < share * inl.sum() or not Ds < 0.5 * (face + wall) or face - c_ax <= 0:
+                    continue
+                if best is None or on > best["on"]:
+                    best = dict(photo=n, kind=c["kind"], on=on, face=face, wall=wall,
+                                out=(wall - face) * (Ds - c_ax) / (face - c_ax))
+            if best is not None:
+                hits.append(best)
+        if not hits or len(hits) < share * len(support):
+            continue
+        out = float(np.median([q["out"] for q in hits]))
+        moves.append(dict(side=s, kind=hits[0]["kind"], from_m=round(Ds, 3), to_m=round(Ds + out, 3),
+                          out_m=round(out, 3), photos=sorted(q["photo"] for q in hits), support=support,
+                          on_face={q["photo"]: q["on"] for q in hits},
+                          face_wall_m={q["photo"]: [q["face"], q["wall"]] for q in hits}))
+    return moves
+
+
+def pillar_face_sides(lay: dict, views: dict, scale: float, p) -> list[dict]:
+    """D-086 on a fitted box (in place): each side that sat on a pillar face is moved out to the wall beside it, with
+    the box fit's own photos and poses (lay["fit_poses"]). Returns the moves (also in lay["sides"][s]["pillar_face"])."""
+    if not (_par(p, "pillars") and _par(p, "pillar_face_side")) or not lay.get("ok") or lay.get("small_room"):
+        return []
+    Rm = _ry(lay["manhattan_yaw"])
+    cam_h = lay["cam_height_m"]
+    photos = []
+    for n, pose in (lay.get("fit_poses") or {}).items():
+        v = views.get(n)
+        if v is None or v.normal_cam is None:
+            continue
+        t = np.asarray(pose[1:4], float)
+        photos.append((n, *_photo_points(v, float(pose[0]), t, scale, Rm, cam_h, p), Rm @ t))
+    moves = face_side_moves(lay, photos, p)
+    for mv in moves:
+        s = lay["sides"][mv["side"]]
+        s["pillar_face"] = dict(mv, how="the side sat on a pillar face; moved out to the wall beside it (D-086)")
+        s["offset"] = float(mv["to_m"])
+    return moves

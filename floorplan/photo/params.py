@@ -166,6 +166,7 @@ class PhotoParams:
     layout_polygon: bool = True          # v3-poly (polygon.py): rectangle + evidence-backed steps; plan_beta uses it
     pillars: bool = True                 # D-083 (pillars.py): pillars and wall steps found per photo are cut into
                                          #     the polygon outline as notches; the box sides do not move
+    pillar_face_side: bool = True        # D-086: ... except a side that sat on a pillar face: it moves out to the wall
     poly_skip_far_wall_lines: bool = True  # D-083: a surface the far-wall rule set aside as furniture (D-077) bounds
                                          #     no polygon notch (own Room: the false wardrobe-corner notch)
 
