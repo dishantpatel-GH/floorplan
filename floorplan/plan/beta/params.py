@@ -94,6 +94,14 @@ class BetaParams:
     jamb_search_m: float = 0.12        # a door must have wall evidence this close to both ends of its cut
     min_room_m2: float = 1.2           # smaller regions are merged into a neighbour (a WC is ~1.2 m2)
     unvisited_min_enclosure: float = 0.6   # a room never entered is kept only if >= 60% of its outline is measured wall
+    brief_entry_s: float = 0.0         # D-079 (video): a region the camera was inside for less than this many seconds
+    #                                    is partially observed (a step through a door, a track jump): not a room, not
+    #                                    in the footprint, listed in meta.dropped_regions with its outline. 0 = off
+    brief_keep_enclosed: bool = True   # D-079: ... unless >= unvisited_min_enclosure of its outline is measured wall
+    stay_split: bool = False           # D-079 (video): split a region between camera stays (segment.split_by_stays)
+    stay_radius_m: float = 1.0         # D-079: a stay = the camera within 1 m of one place ...
+    stay_min_s: float = 4.0            # ... for >= 4 s (a door is passed in 1-2 s)
+    stay_open_max_m: float = 2.0       # D-079: between stays, an opening up to 2 m with jambs separates (own hall 1.38 m)
 
     # --- wall fitting (step 3) ---
     line_min_support_m: float = 0.30   # a candidate wall line needs >= 30 cm of wall evidence along it

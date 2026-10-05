@@ -1684,7 +1684,7 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 
 ## D-080 Video frames as photos: tested, not adopted (why the photo tier works on my house and the video tier does not)
 
-- **Question** (5 Oct): "if the image one works, how come the video does not work?"
+- **Question** (5 Oct): "if image one works how come video does not work"
 - **Answer.** Both tiers measure with the same depth model (MoGe-2) on single images, and a single video frame
   measures well: the bedroom window is 1.487 m in one frame (kf134) and 1.426 m in the test plan below, tape 1.473 m.
   The difference is how the images are put together.
@@ -1700,21 +1700,29 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     9 rooms and 10.0 to 40.3 m² at today's defaults (`docs/notes/video_better_rule.md`). Today's four fresh runs: one
     room each with the default scale step (the bedroom, or the hall and passage), two with `--video-scale pnp` (the
     bedroom, and the hall, kitchen and passage as one room).
-  - Where the path holds, the video measures as well as the stills: the fix loop's after r1 has the bedroom at
-    11.02 m² (tape 11.09) with 3 of 6 walls within 3%, and today's pnp r2 has the hall's W1 and W2 at +1.5% and -0.5%.
-    The photo tier's bedroom (D-077) is 10.66 m² (-4%), with 1 of 6 walls within 3%. The photo tier was also tested on
-    one room only (the bedroom stills); the video has to place four.
-- **Test: the video's frames as photos** (`floorplan/video/rooms_as_photos.py`, `5d8e142`, `b73e3d9`;
-  `outputs/video_as_photos/`). Rooms cut at the known times; per room 3-7 sharp turning frames 30-50° apart from one
-  spot, tilt -40° to +8°, plus one bedroom ceiling frame. Each frame carries the video's focal length (945.5 px; a
-  6 px centre crop lets the integer FocalLengthIn35mmFilm 28 give 945.7 px) and its time in the video. No doorway
-  pairs: the photo tier reads a pair as "same spot, turned round", while frames at a room change look the same way
-  1-2 m apart. Rooms were joined by feature matches (all four in one block). v2 is v1 without the frames that look out
-  of their room (picked by eye).
+  - Where a room comes out whole, the video measures it as well as the stills: the fix loop's after r1 has the bedroom
+    at 11.02 m² (tape 11.09) with 3 of 6 walls within 3%, and today's pnp r2 has the hall's W1 and W2 at +1.5% and
+    -0.5%. That is one room of a broken path, not a path that held: after r1's scale check trusted none of its
+    keyframes, its heading jumps about 90° away from the other seven runs' at t 78-80 s, as the bedroom is entered
+    (`outputs/video_as_photos/rotation_check.json`), and its hall, kitchen and passage are one room. The photo tier's
+    bedroom (D-077) is 10.66 m² (-4%), with 1 of 6 walls within 3%. The photo tier was also tested on one room only
+    (the bedroom stills); the video has to place four.
+- **Test: the video's frames as photos, an oracle** (`floorplan/video/rooms_as_photos.py`, `5d8e142`, `b73e3d9`;
+  `outputs/video_as_photos/`). The rooms were cut by hand at the known times (`oracle_rooms.json`: hall 0-33 s,
+  kitchen 44-55.2 s, passage 64-77 s, bedroom 86-108 s, its ceiling 108-117 s), and each room's yaw step and frame
+  count were set by hand. Per room 3-7 sharp turning frames about 50° apart (28° in the kitchen) from one spot, tilt
+  -40° to +8°, plus one bedroom ceiling frame, chosen with the camera rotations of `outputs/presentable/video_pnp_r1`.
+  Each frame carries the video's focal length (945.5 px; a centre crop to 1274 × 716 lets the integer
+  FocalLengthIn35mmFilm 28 give 945.7 px) and its time in the video. No doorway pairs: the photo tier reads a pair as
+  "same spot, turned round", while frames at a room change look the same way 1-2 m apart. Rooms were joined by feature
+  matches (all four in one block). v2 is v1 without the frames that look out of their room (time windows picked by
+  eye) and with frames tilted less than 18° down preferred: 9 of its 19 turning frames are not v1's, 6 of them within
+  0.3 s of a v1 frame (`oracle_v2_rooms.json`).
 - **Evidence** (tape, `scripts/eval_own_capture.py`; walls of 14, of 6 for the bedroom-only photo runs). A video plan
   room is paired by the keyframe cameras inside it (`outputs/presentable/label_by_walk.py`): the scorer pairs by
-  label, and every video room is labelled like the bedroom. Sources: `outputs/video_as_photos/compare.json`,
-  `outputs/presentable/summary_walk.json`.
+  label, and every video room is labelled like the bedroom. Sources: `outputs/video_as_photos/compare.json` (its
+  fix-loop rows still pair by label), `outputs/presentable/summary_walk.json` and
+  `outputs/video_as_photos/walk_rooms.json` (what each plan room of the eight video runs holds).
 
   | Run | Rooms | Footprint m² | Walls ≤3% / ≤10% | Bedroom m² (tape 11.09) | Hall m² (12.71) | Kitchen m² (4.21) |
   |---|---|---|---|---|---|---|
@@ -1725,8 +1733,8 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   | Video, today, pnp, r2 | 2 | 29.0 | 4 / 5 | 10.03 (-10%) | 18.97, with kitchen and passage | in the hall |
   | Photo, bedroom stills (lit), D-074 code | 1 | 9.2 | 1 / 3 of 6 | 9.25 (-17%) | — | — |
   | Photo, bedroom stills (lit), D-077 code | 1 | 10.7 | 1 / 3 of 6 | 10.66 (-4%) | — | — |
-  | Frames as photos v1, all turning frames | 4 | 21.7 | 0 / 2 | 2.83 (-75%) | 11.28 (-11%) | 4.69 (+11%) |
-  | Frames as photos v2, no look-out frames | 4 | 29.8 | 0 / 2 | 5.70 (-49%) | **12.81 (+1%)** | 4.93 (+17%) |
+  | Frames as photos v1 (oracle), all turning frames | 4 | 21.7 | 0 / 2 | 2.83 (-75%) | 11.28 (-11%) | 4.69 (+11%) |
+  | Frames as photos v2 (oracle), no look-out frames | 4 | 29.8 | 0 / 2 | 5.70 (-49%) | **12.81 (+1%)** | 4.93 (+17%) |
 
   - The other fix-loop runs, paired the same way: before r1 4 rooms, 22.9 m², bedroom 12.51 m² (+13%), a 4.46 m²
     hall slice; before r2 4 rooms, 37.8 m², the hall twice (17.07 and 14.36 m²; the scorer took the 14.36 as the
@@ -1736,25 +1744,29 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     rooms); v2 `outputs/video_as_photos/oracle_v2_run/plan.png` (hall 4.07 × 3.15 m, walls -9% and +9%; the passage,
     not taped, is 6.40 m², where the house leaves it about 1-3 m²; the hall is named "Bedroom 1").
 - **Why the frames fall short of the stills.**
-  - Less wall in view. A 16:9 frame is 42° tall, a 4:3 still 54°. At 27° down (v2's bedroom frames are 22-29° down), a
-    frame sees 15 cm of the 1.0-2.0 m wall band on a wall 2 m away, a still 36 cm; in the bedroom 4.6k wall points per
-    frame against 11.5k per still. The far-wall rule (D-077) needs that band to tell a wall from furniture: in v2 the
+  - Less wall in view. A 16:9 frame is 42° tall, a 4:3 still 54°. At 27° down (v2's bedroom frames are 22-29° down)
+    and 1.36 m up, a frame sees 15 cm of the 1.0-2.0 m wall band on a wall 2 m away, a still 36 cm. In that band a
+    bedroom frame gives a median 3.8k wall points (v2; 4.6k in v1), a bedroom still 10.7k (the D-077 run; `room_layouts`
+    in each run's `scene_info.json`). The far-wall rule (D-077) needs that band to tell a wall from furniture: in v2 the
     wardrobe front, 0.55 m from the camera, became the bedroom wall.
-  - The camera moves while it turns (up to 0.46 m in the bedroom); the room fit puts all turning photos at one spot.
-    With each frame at its own pose-graph position (CPU refit, `offline_layout_c.py`) the bedroom box is 7.30 m²
-    (-34%) and the hall's long side 4.48 m (tape 4.469 m).
+  - The camera moves while it turns (up to 0.46 m from the turn's centre in the bedroom); the room fit puts all turning
+    photos at one spot. With each frame at its own pose-graph position (CPU refit,
+    `outputs/video_as_photos/offline_layout_c.py`) the bedroom box is 7.30 m² (-34%) and the hall's long side 4.48 m
+    (tape 4.469 m), but the hall's area goes to 14.16 m² (+11%: its short side stays 3.16 m, tape 2.85-2.88 m).
   - Frames that look out of the room: in v1 one frame through the bedroom door put that side 6.2 m away, and the
     neighbouring rooms then cut the box to the 0.36 m strip.
   - The kitchen was filmed from its doorway: the side behind the camera is never seen, so it is a mirrored guess.
 - **Decision.** Not adopted, and the automatic room split (scene classes per keyframe, a minimum dwell, cuts at
   doorway passes) was not built: with the rooms cut by hand and the bad frames dropped by eye the bedroom is still
-  -49% (-34% with per-frame positions), against -1% on the one video run whose path held. `--video-rooms JSON`
+  -49% (-34% with per-frame positions), against -19% to +13% in the five of the eight video runs that give the
+  bedroom a room of its own (-1% in the fix loop's after r1). `--video-rooms JSON`
   (rooms given by hand) stays as an experimental switch; the video tier's default is unchanged. For my house the photo
   tier is the one to trust.
 - **What could make the video work** (leads, not tested):
   - Keep a break inside one room: cut the path where tracking breaks (the 13x drop, the ceiling sweep), scale each
     piece on its own (PnP votes where there is texture, D-075; the SfM models the focal step builds follow the scale
-    for t 8-71 s), and join the pieces at the doors they share, as the photo tier does (D-081).
+    for t 8-71 s), and join the pieces at the doors they share, as the photo tier's door stitching does (D-081, off by
+    default).
   - Filming: no turning past a blank wall or pillar at arm's length, no ceiling sweep at the end (the protocol films
     the ceiling line on a second loop tilted 25° up), and finish where you started so the path can close
     (`HOUSE_CAPTURE_GUIDE.md` section 6).

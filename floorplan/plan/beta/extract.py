@@ -44,7 +44,7 @@ from floorplan.plan.beta.lines import detect_sep_lines, header_cut_mask, separat
 from floorplan.plan.beta.levels import LevelPoints, room_levels
 from floorplan.plan.beta.measure import edge_lengths, footprint, room_measurements
 from floorplan.plan.beta.params import BetaParams
-from floorplan.plan.beta.segment import Neck, region_necks, segment_rooms
+from floorplan.plan.beta.segment import Neck, region_necks, segment_rooms, split_by_stays
 from floorplan.plan.beta import tiers as T
 from floorplan.plan.beta.walls import (Bump, Line, OpeningEvidence, RoomGeometry, choose_visit, clean_polygon,
                                        edge_normals, outline_at_openings, polygon_to_geometry, refine_lines,
@@ -124,7 +124,13 @@ def _extract_single(scene: dict, info: dict, capture_id: str, p: BetaParams):
                  if len(folder_of) > 1 and len(np.unique(labels[labels > 0])) > 1 else {})
         hints = None
     else:
-        labels, necks, _ = segment_rooms(maps["free"], maps["barrier"], p, cut, maps["traj_disc"])
+        labels, necks, seg_dt = segment_rooms(maps["free"], maps["barrier"], p, cut, maps["traj_disc"])
+        if p.stay_split and "timestamps" in scene:                         # D-079 (video): split between stays
+            labels, stay_report = split_by_stays(labels, seg_dt, maps["barrier"], scene["traj"][:, [0, 2]],
+                                                 np.asarray(scene["timestamps"], float), grid, p)
+            if stay_report["split"]:
+                necks = region_necks(labels, seg_dt, maps["barrier"], p)
+            maps["stay_split"] = stay_report
         hints = merge_by_room_hints(labels, necks, scene, grid, floor_y, p)
     tick("segmentation")
     index = PointIndex(scene["raw_points"], scene["raw_ray"], scene["raw_range"], scene.get("raw_frame"))
@@ -163,7 +169,7 @@ def _extract_single(scene: dict, info: dict, capture_id: str, p: BetaParams):
     tick("measurements")
     meta = dict(extractor="plan_beta v2 (space-first: free space + wall-line cuts -> distance-transform watershed -> "
                           "line arrangement -> canonical outline)",
-                tier_v4=tier_meta, room_hints=hints, coverage_warning=_coverage_warning(fp, maps, plan_rooms_area(rooms), p),
+                tier_v4=tier_meta, room_hints=hints, stay_split=maps.get("stay_split"), coverage_warning=_coverage_warning(fp, maps, plan_rooms_area(rooms), p),
                 opening_outline={r.rid: r.outline_notes for r in rooms if r.outline_notes},      # v6 I-011
                 params=p.to_dict(), floor_y=floor_y, ceiling_y_global=info.get("ceiling_y"),
                 dropped_regions=dropped, mirrors=[n for n in notes if n["kind"] == "mirror"],
@@ -365,23 +371,47 @@ def _build_rooms(labels, scene, floor_y, grid, maps, index, p: BetaParams):
         raster_lines[lab] = raster
         visited = bool(contains_xy(Polygon(geom.vertices()), traj[:, 0], traj[:, 1]).any())
         enclosure = _enclosure(geom)
+        dwell = dwell_s(Polygon(geom.vertices()), scene) if p.brief_entry_s > 0 else None
+        if visited and dwell is not None and dwell < p.brief_entry_s:          # D-079 (video): a step into a space
+            if not p.brief_keep_enclosed or enclosure < p.unvisited_min_enclosure:   # is not a visit of it
+                P = Polygon(geom.vertices())
+                dropped.append(dict(region=int(lab), reason=f"partially observed: the camera was inside for only "
+                                    f"{dwell:.1f} s (< {p.brief_entry_s} s); not a room, not in the footprint",
+                                    area_m2=round(float(P.area), 2), dwell_s=round(dwell, 2), partial=True,
+                                    polygon=[[round(float(x), 3), round(float(y), 3)] for x, y in P.exterior.coords]))
+                continue
         if not visited and enclosure < p.unvisited_min_enclosure:
             dropped.append(dict(region=int(lab), reason=f"never entered and only {enclosure:.0%} of its boundary "
                                 "is measured wall (space seen through an opening or glass)",
                                 area_m2=round(float(Polygon(geom.vertices()).area), 2)))
             continue
         rooms.append(RoomBuild(lab, geom, bumps[lab], visited, enclosure, floor_level=floor_y))
+    refined = {r.label: deepcopy(r.geom) for r in rooms}
     try:
         _undo_overlapping_refinements(rooms, raster_lines, p)
     except Exception as e:                      # D-058: a GEOS topology error here must never stop a live run;
         import logging                          # the rooms keep their refined lines (overlaps are pushed apart later)
         logging.getLogger(__name__).warning("undo_overlapping_refinements skipped: %s", e)
+        for r in rooms:                         # D-084: all of them, not a half-done undo (it left a room on take1
+            r.geom = refined[r.label]           # before r2 crossing itself, and GEOS stopped the plan step)
     _canonical_outlines(rooms, index, floor_y, p)
     _opening_outlines(rooms, scene, floor_y, maps, index, p)                   # v6 I-011
     rooms.sort(key=lambda r: -r.polygon.area)
     for i, r in enumerate(rooms):
         r.rid = f"R{i + 1}"
     return rooms, dropped
+
+
+def dwell_s(poly: Polygon, scene: dict, max_step_s: float = 0.5) -> float:
+    """D-079: seconds the camera spent inside `poly` (sum of the pose intervals, each capped at 0.5 s so a gap in
+    the track does not count as time spent). Without timestamps every pose counts 1/30 s."""
+    traj = scene["traj"][:, [0, 2]]
+    if "timestamps" in scene and len(scene["timestamps"]) == len(traj):
+        dt = np.diff(np.asarray(scene["timestamps"], float), append=np.nan)
+        dt = np.clip(np.nan_to_num(dt, nan=np.nanmedian(dt[:-1]) if len(dt) > 1 else 1 / 30), 0.0, max_step_s)
+    else:
+        dt = np.full(len(traj), 1 / 30)
+    return float(dt[contains_xy(poly, traj[:, 0], traj[:, 1])].sum())
 
 
 def _visit_for(geom: RoomGeometry, poly: Polygon, scene: dict, index: PointIndex, floor_y: float,

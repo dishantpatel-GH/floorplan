@@ -22,20 +22,25 @@ What a frame must carry to be read like a photo (floorplan/photo/images.py, prot
     are joined by feature matches between their frames instead (run the photo tier with doorway_pair_max_dt_s=0).
 
 The camera orientation (yaw, pitch per frame) comes from a video-tier run (its DPVO rotations, levelled): rotations
-stay usable where the path's scale broke. On take1, three of four runs agree within a few degrees over the whole walk;
-the fourth (fix loop, after r1) is about 100 deg off from t 78 s, so check the run before using it.
+stay usable where the path's scale broke, but not in every run. On take1 the oracle used presentable/video_pnp_r1;
+with the heading matched on the hall turn, four of the seven other runs on disk stay within about 8 deg of it up to
+t 107 s, default r2 within 17 deg and before r2 within 27 deg, while fix loop after r1 turns about 90 deg away from
+t 78 s (outputs/video_as_photos/rotation_check.json). Check the run before using it.
 
-Oracle test on take1 (5 Oct; rooms cut at known times; outputs/video_as_photos/; tape GT; 14 walls):
+Oracle test on take1 (5 Oct; rooms cut by hand at known times, yaw step and frame count set per room;
+outputs/video_as_photos/; tape GT; 14 walls):
   * All turning frames (v1): 4 rooms, 0 of 14 walls within 3%, 2 within 10%. Hall 11.28 m2 (tape 12.71), kitchen
     4.69 (4.21), bedroom 2.83 (11.09): one frame looking out through the bedroom door put that side 6.2 m away, and
     the neighbouring rooms then cut the box down to a 0.36 m strip.
-  * Without the frames that look out of their room (v2, picked by eye): 4 rooms, 29.8 m2, again 0 and 2 of 14. Hall
+  * Without the frames that look out of their room (v2, picked by eye; v2 also prefers frames tilted less than 18 deg
+    down, pitch_pref_deg): 4 rooms, 29.8 m2, again 0 and 2 of 14. Hall
     12.81 m2 (+1%, walls -9% and +9%). Kitchen 4.93 m2 (+17%): the camera stood in its doorway, so the side behind
     it is a mirrored guess. Bedroom 5.70 m2 (-49%): the wardrobe front, 0.55 m from the camera, is taken as the wall.
   * Why frames fall short of the stills: a 16:9 frame (42 deg tall) tilted 27 deg down sees a 15 cm strip of the
-    1.0-2.0 m wall band on a wall 2 m away, a 4:3 still (54 deg tall) 36 cm. Bedroom: 4.6k wall points per frame
-    against 11.5k per still. The camera also moved up to 0.46 m while turning. With pose-graph positions instead of
-    one centre (CPU refit) the bedroom box is 7.30 m2 and the hall's long side 4.48 m (tape 4.469 m).
+    1.0-2.0 m wall band on a wall 2 m away, a 4:3 still (54 deg tall) 36 cm (camera 1.36 m up). Bedroom: a median
+    3.8k band wall points per frame (v2; 4.6k in v1) against 10.7k per still. The camera also moved up to 0.46 m
+    while turning. With pose-graph positions instead of one centre (CPU refit) the bedroom box is 7.30 m2 and the
+    hall's long side 4.48 m (tape 4.469 m), but the hall's area is then 14.16 m2 (+11%).
   Verdict: not a replacement for the video tier's path. It would need automatic room cuts, depth-aware frame choice,
   per-frame positions in the box fit and a doorway box for rooms filmed from their door.
 """

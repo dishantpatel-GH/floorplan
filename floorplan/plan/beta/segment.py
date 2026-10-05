@@ -219,3 +219,98 @@ def _relabel(labels: np.ndarray):
     for old, new in mapping.items():
         lut[old] = new
     return lut[labels], mapping
+
+
+# ---------------------------------------------------------------- D-079 (video): camera stays split a region
+
+def camera_stays(uv: np.ndarray, ts: np.ndarray, radius_m: float, min_s: float) -> list[tuple[int, int]]:
+    """Time-contiguous stays of the camera: pose index ranges [a, b] in which every pose lies within `radius_m` of
+    the range's median position for at least `min_s` seconds. A walk-through films each room from a few places and
+    passes doors quickly, so the stays are the room visits. Greedy from the start of the walk."""
+    out, i, n = [], 0, len(uv)
+    while i < n:
+        j = i + 1
+        while j < n and np.max(np.linalg.norm(uv[i:j + 1] - np.median(uv[i:j + 1], axis=0), axis=1)) <= radius_m:
+            j += 1
+        if ts[j - 1] - ts[i] >= min_s:
+            out.append((i, j - 1))
+            i = j
+        else:
+            i += 1
+    return out
+
+
+def stay_separates(n: Neck, p: BetaParams) -> bool:
+    """Between two stays of one region: a door or a wide opening (<= stay_open_max_m) with wall evidence at both ends.
+    Jambs are needed even for a door-sized neck: the distance transform found no room there on its own, so the cut
+    must stand on walls (floor_only d066 / after run: 1.21 m necks without jambs split rooms that LiDAR keeps whole).
+    The own hall opens 1.38 m onto the passage; two places in one open room have no jambs between them."""
+    return n.jambs and n.width_m <= p.stay_open_max_m
+
+
+def split_by_stays(labels: np.ndarray, dt: np.ndarray, barrier: np.ndarray, uv: np.ndarray, ts: np.ndarray,
+                   grid, p: BetaParams):
+    """D-079 (video): a region that holds two or more camera stays is split between them where its free space
+    narrows to a door or a wide opening with jambs; everything else is merged back. The watershed only adds
+    seeds where the camera stood: free space without its own distance-transform peak (the own passage and kitchen
+    beside the hall) gets one. No cell is dropped; basins under min_room_m2 join their widest neighbour.
+    Returns (labels, report)."""
+    stays = camera_stays(uv, ts, p.stay_radius_m, p.stay_min_s)
+    marks = np.zeros(labels.shape, np.int32)
+    k_next = 0
+    R = max(int(round(p.traj_radius_m / p.cell_m)), 1)
+    for a, b in stays:
+        r, c, ok = grid.index(uv[a:b + 1])
+        disc = np.zeros(labels.shape, bool)
+        disc[r[ok], c[ok]] = True
+        disc = ndi.binary_dilation(disc, iterations=R) & (labels > 0)
+        if not disc.any():
+            continue
+        prev = marks[disc & (marks > 0)]
+        if len(prev) > 0.5 * disc.sum():                    # the same place filmed again: same stay
+            k = int(np.bincount(prev).argmax())
+        else:
+            k_next += 1
+            k = k_next
+        marks[disc & (marks == 0)] = k
+    out = labels.copy()
+    nxt = int(labels.max()) + 1
+    report = dict(stays=len(stays), split=[])
+    smooth = ndi.gaussian_filter(dt, 1.0)
+    for l in range(1, int(labels.max()) + 1):
+        m = labels == l
+        ks = np.unique(marks[m & (marks > 0)])
+        if len(ks) < 2:
+            continue
+        ws = watershed(-smooth * m, np.where(m, marks, 0), mask=m)
+        while True:
+            necks = region_necks(ws, dt, barrier, p) if len(np.unique(ws[ws > 0])) > 1 else {}
+            if not necks:
+                break
+            wide = [(n.width_m, k) for k, n in necks.items() if not stay_separates(n, p)]
+            areas = np.bincount(ws.ravel()) * p.cell_m ** 2
+            if wide:
+                keep, drop = max(wide)[1]
+            else:
+                small = sorted((areas[x], x) for k in necks for x in k if areas[x] < p.min_room_m2)
+                if not small:
+                    break
+                drop = small[0][1]
+                _, (a, b) = max((n.width_m, k) for k, n in necks.items() if drop in k)
+                keep = b if a == drop else a
+            ws[ws == drop] = keep
+        parts = np.unique(ws[ws > 0])
+        if len(parts) < 2:
+            continue
+        rep = dict(region=int(l), parts=[])
+        for j, q in enumerate(parts):
+            if j:
+                out[ws == q] = nxt
+                nxt += 1
+            rep["parts"].append(round(float((ws == q).sum() * p.cell_m ** 2), 2))
+        rep["necks"] = [dict(width_m=round(n.width_m, 2), jambs=n.jambs) for n in necks.values()]
+        report["split"].append(rep)
+    if not report["split"]:
+        return labels, report
+    out, _ = _relabel(out)
+    return out, report
