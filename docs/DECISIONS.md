@@ -1469,6 +1469,87 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
 - **Status.** In the code since `dced951`. Keeping it, or going back to the clamp until the self-check is redone, is not
   decided here.
 
+## D-076 Video scale: depth agreement is the default again; PnP votes are opt-in (fix-loop follow-up)
+
+- **Context.** A follow-up to the closed fix loop; `FIX_LOOP.md` Part 1 and its results are unchanged. D-075 made the
+  PnP scale the default and left two problems on take1. (a) The self-check's spread limit (2.0) assumed the clamp; the
+  PnP scale follows DPVO's real drift (spreads 2–107), so drifting segments were dropped. (b) On before r2's DPVO run no
+  segment was dropped, yet the plan had 1 room, with the camera 3.25 m above the plan floor.
+- **Cause (b)** (`outputs/fixloop/followup/cause_b.py`, `NOTES.md`).
+  - The camera path drops 2.2 m. 1.47 m of it is two keyframe steps, kf 135 to 137 (t 78–80 s).
+  - DPVO's step kf 136 to 137 points mostly down (0.0259 units down, 0.0078 across). The local scale there is 44.2, so
+    it becomes 1.14 m. With the old scale (5.44) it is 0.14 m.
+  - PnP solves no pair between kf 131 and 137. The one pair over the step differs from DPVO by 38° in direction and
+    16.5° in rotation: a DPVO glitch where PnP finds no matches.
+  - The floor seen after kf 137 sits about 1.7 m below the floor seen before. The pose graph anchors only floors within
+    0.15 m of the lowest ones (3 fragments). The plan takes the lowest floor and loses the hall and bedroom.
+- **What "pnp" now does** (`5fe6ae6`; "depth_agreement" is the code before D-075: window, clamp, spread test).
+  1. Self-check: no spread test. A segment needs ≥ 3 votes within ±8 keyframes on at least half of its keyframes
+     (vote coverage ≥ 0.5), plus the depth residual ≤ 0.058 and ≥ 20 keyframes as before. Set from the scale step
+     alone, before any replay (probes, `probe_stats.json`, `probe_truth.json`): the sample segments that ARKit puts
+     113–213% off had coverage 0.00–0.44; take1's segments 0.67–1.00. single_room's one segment has 0.31–0.39 although
+     ARKit puts it within +3.4%; a run whose only segment fails keeps it, with the 25% sigma floor. The vote residual
+     (0.015–0.215) did not separate good from broken segments, so it is reported, not judged.
+  2. Floor levelling before the pose graph. Each keyframe measures its camera height above the floor in its own depth
+     (lowest strong level 0.5–2.2 m below). Keyframes within 0.30 m of the run's median height count (bed tops are
+     0.5–0.8 m closer). A running median per segment (±8 keyframes) makes the floor's height in the scene one value.
+     On before r2's run the path moves −0.14 to +2.31 m, the floor's p10–p90 goes from 1.89 to 0.15 m, and the plan
+     from 1 to 3 rooms.
+  3. `VideoParams.scale_method` = "depth_agreement" | "pnp"; `run_capture.py --video-scale pnp`. `floor_level` is on
+     with "pnp" and off with "depth_agreement" unless set.
+- **Rule**, committed before any replay (`3d8b4f1`). Per run, room-count error (take1: distance from 3–4 rooms; samples:
+  from the LiDAR plan's rooms) and footprint error (take1 against 30 m²; samples against the LiDAR plan). New is worse
+  if its room-count error is larger or its footprint error more than 5 points larger. "pnp" becomes the default only if
+  (A) it is not worse on more than half of the runs and (B) on take1 it has a lower median footprint error and a lower
+  total room-count error.
+- **Replays** (each run's own cached DPVO, MoGe-2, GeoCalib and SfM arrays; CPU, one at a time;
+  `outputs/fixloop/followup/summary.json`). Walls: tape walls within 3% / within 10% / found, of 14.
+
+  | Run | Old: rooms, footprint | New: rooms, footprint | Walls, old → new | Verdict |
+  |---|---|---|---|---|
+  | take1 before r1 | 4, 24.1 m² (−20%) | 2, 29.2 m² (−3%) | 2/4/12 → 1/4/9 | worse (rooms) |
+  | take1 before r2 | 4, 40.3 m² (+34%) | 3, 31.3 m² (+4%) | 0/1/8 → 3/4/10 | better |
+  | take1 after r1 | 2, 37.8 m² (+26%) | 2, 27.4 m² (−9%) | 1/1/6 → 0/0/6 | better |
+  | take1 after r2 | 2, 18.7 m² (−38%) | 2, 30.8 m² (+3%) | 1/1/8 → 2/2/10 | better |
+  | take1 23:28 | 9, 37.6 m² (+25%) | 3, 29.8 m² (−1%) | 0/1/8 → 1/1/12 | better |
+  | single_room d069 r1 (LiDAR 3, 17.61 m²) | 3, 17.8 m² (+1%) | 3, 21.3 m² (+21%) | | worse |
+  | single_room d069 r2 | 3, 17.1 m² (−3%) | 3, 22.6 m² (+28%) | | worse |
+  | single_room d069 r3 | 3, 16.7 m² (−5%) | 2, 14.8 m² (−16%) | | worse |
+  | single_room after run | 3, 21.1 m² (+20%) | 3, 19.1 m² (+8%) | | better |
+  | floor_only after run (LiDAR 8, 61.90 m²) | 0 rooms | 3, 22.6 m² (−63%) | | better |
+  | floor_only d066 | 5, 31.4 m² (−49%) | 1, 7.4 m² (−88%) | | worse |
+  | with_ceiling after re-run (LiDAR 8, 62.50 m²) | 3, 54.3 m² (−13%) | 2, 21.0 m² (−66%) | | worse |
+
+- **Decision.** (B) holds: on take1 the median footprint error falls from 26.0% to 2.7%, and the room-count error from
+  7 to 3. (A) fails: "pnp" is not worse on 6 of 12 runs, not more than half. So "depth_agreement" is the default again
+  and "pnp" is opt-in. The rule's line in `FIX_LOOP.md` named only the floor_only after run; `NOTES.md`, written at the
+  same time, added d066 if its cache replays. It did, so it counts. Without it (A) would pass, 6 of 11; I take the
+  stricter count. with_ceiling's final run (4 Oct) cannot be replayed on CPU: its cache lacks a fresh DPVO run.
+- **Why the two sides differ** (ablations after the decision, `ablation_summary.json`, not part of the rule).
+  - take1: the PnP scale is what helps. Without the floor levelling "pnp" gives 2–4 rooms and 27.6–29.5 m² on four
+    runs, and before r2's run collapses again (1 room, 7.1 m²). The old scale with the floor levelling gives 29.5,
+    19.3, 40.2 and 18.3 m² (before r1, r2, after r1, r2; the 23:28 run crashed in the plan step, a shapely topology
+    error).
+  - Samples: SIFT finds 0–15 keypoints on many of these blurred white-wall frames, so votes are sparse (single_room 22
+    over 164 keyframes). Where they are sparse the PnP scale is interpolated: on d066 the first segment comes out
+    +200.6% against ARKit, and the coverage test drops it with most of the plan. On floor_only's after run the old
+    step's plan floor is 5.3 m below the median camera (0 rooms); "pnp" levels the floor (p10–p90 3.56 to 0.14 m).
+  - single_room follows its closet (LiDAR 1.93 m²): 1.3–1.7 m² or 4.1–7.6 m² depending on run and arm, also with the
+    old scale plus levelling (6.9 and 6.0 m² on r3 and the after run). The two main rooms stay at 8.2–11.0 and
+    5.0–7.9 m² (LiDAR 8.31 and 7.56). That is the plan step's closet (I-014, D-070), not the scale. Against ARKit
+    the PnP path is +3.0% and +1.8% (d069 r1, after run), the depth-agreement path +4.6% and +7.7%.
+  - Segment by segment against ARKit on the same DPVO runs (`probe_old_vs_arkit.json`), neither scale wins
+    everywhere. PnP is closer on single_room and on with_ceiling's segment 1 (−12.7% against −27.9%). Depth
+    agreement is closer on floor_only's first segments (+3.3% against +13.8%; d066 +18.1% against +200.6%).
+  - Noise: the same arm replayed again gave the same plan on 3 of 4 checks; before r1's old arm gave 24.1 and then
+    22.4 m² (the fused floor moved 0.08 mm; Open3D's fusion is multi-threaded). The old arm gives the same plans as
+    the fix loop's before-fix replays on 6 of 7 caches; the seventh is that before r1 run.
+- **Limits.** The thresholds were set on these runs, with no held-out set. The floor levelling assumes one floor level
+  (no stairs or split levels). The old step keeps its own take1 failure: the hidden 13× drop, a median footprint error
+  of 26%.
+- **Revisit if** "pnp" gets votes on low-texture frames (denser features, or the depth-agreement scale where votes
+  are sparse), then replay the 12 runs with the same rule.
+
 ## D-077 Photo tier: a wall seen beside furniture replaces it in the room box (far-wall rule; fix-loop follow-up)
 
 - **Context.** On my own Room the side fit took a wardrobe front (lit and dim takes) and an open door leaf (dim) as
@@ -1496,11 +1577,16 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
   |---|---|---|---|
   | Own lit: walls median / within 8% / area (outline 11.09 m²) | 9.1%, 1 of 6, 9.25 m² (−17%) | 8.3%, 2 of 6, 10.66 m² (−4%) | W1 side 1.09 -> 1.78 m (wardrobe -> wall) |
   | Own dim: the same | 22.5%, 0 of 6, 7.68 m² (−31%) | 21.7%, 1 of 6, 10.69 m² (−4%) | W6 side 0.57 -> 1.58 m (door leaf), W1 side 1.11 -> 1.73 m (wardrobe) |
-  | Own box W5–W1 × W4–W6 (tape 3.73 × 3.00 m) | lit 3.38 × 2.74, dim 3.60 × 2.13 | lit 4.07 × 2.74, dim 3.59 × 3.15 | |
+  | Own box W5–W1 × W4–W6 (tape 3.73 × 3.00 m) | lit 3.38 × 2.74, dim 3.60 × 2.13 | lit 4.07 × 2.74, dim 3.60 × 3.15 | |
   | k65 (sheet cue on): walls median / within 8% / footprint | 5.6%, 15 of 26, −9.0% (3 runs) | 5.6%, 15 of 26, −9.0% (2 runs) | none |
   | k22 | 23.5-26.0%, 5-6 of 20, −43.8 to −49.5% (3 runs) | 26.0%, 6 of 20, −44.2 and −44.5% (2 runs) | living room 2.95 -> 4.41 m (truth 4.49 m) |
-  | k38 | 5.8-6.2%, 12 of 26, +7.6% (4 runs; 2 more crashed) | 5.8-7.3%, 11-12 of 26, +7.6 to +10.4% (3 runs; 1 crashed) | none |
-  | 13 held-out sim takes (other takes of k65, k22, k38) | | same score in 10; k65v23 6 -> 10 of 26 with no side moved | k65v2_dim living 1.21 -> 2.73 m (truth 2.89 m), 11 -> 12 of 26; k65v23 take 2 bedroom 0.90 -> 1.89 m (furniture -> wall), 0 -> 2 of 6; k38_s1 bathroom 1.15 -> 2.43 m rejected (next room, overlap −0.13 m) |
+  | k38 | 5.8-6.2%, 12 of 26, +7.6% (4 runs; 1 more crashed) | 5.8-7.3%, 11-12 of 26, +7.6 to +10.4% (3 runs; 1 crashed) | none |
+  | 13 other sim takes (other takes of k65, k22, k38; k38_s1 is not held out, see below) | | same score in 10; k65v23, no side moved: 10 and 4 of 26 in two runs (off 6) | k65v2_dim living 1.21 -> 2.73 m (truth 2.89 m) in one of two runs; the rule-off run already had 2.72 m there, so its 11 -> 12 of 26 is noise; k65v23 take 2 bedroom 0.90 -> 1.89 m (furniture -> wall), 0 -> 2 of 6; k38_s1 bathroom 1.15 -> 2.43 m rejected (next room, overlap −0.13 m) |
+
+  The room-extent check was added after the first run on these 13 takes. Without it the rule moved k38_s1's
+  bathroom side 1.15 -> 2.43 m (truth 1.06 m), into the next room: k38_s1 went from 7 to 5 of 26 walls within 8%
+  (median 13.1% -> 14.8%) and its bathroom area from −9% to +43%. The final runs overwrote those files. So k38_s1 is
+  not held out for that check.
 
   Other rules on the same caches (one run each; walls median, within 8%, area or footprint):
 
@@ -1534,4 +1620,4 @@ Applied to `docs/CAPTURE_PROTOCOL.md` and `docs/HOUSE_CAPTURE_GUIDE.md`.
     0.30-0.45 m, ratios 1.51-2.78 against 1.15-1.33. Not covered: furniture standing more than 1.5 m out, a wall seen
     only in a gap between two pieces of furniture, and furniture less than 0.5 m deep.
   - k38's plan step crashes in some runs (GEOS TopologyException in `plan/beta/extract.py` `_canonical_outlines`, not
-    caught): 2 of 6 runs without the rule, 1 of 4 with it. Not this change.
+    caught): 1 of 6 runs without the rule, 1 of 4 with it. Not this change.

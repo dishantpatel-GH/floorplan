@@ -268,6 +268,21 @@ keyframe puts the floor it sees at one height. `scale_method = "pnp" | "depth_ag
   has a lower median footprint error and a lower total room-count error. Otherwise "depth_agreement" is the default
   again and "pnp" stays behind the parameter.
 
+**Result** (replays 06:13–07:28 on each run's own cache, CPU, one at a time; `outputs/fixloop/followup/summary.json`;
+the full table is in `DECISIONS.md` D-076). Old → new:
+- take1, before r1 / before r2 / after r1 / after r2 / 23:28. Footprint 24.1 / 40.3 / 37.8 / 18.7 / 37.6 m² →
+  29.2 / 31.3 / 27.4 / 30.8 / 29.8 m² (the house is about 29–31 m²). Rooms 4 / 4 / 2 / 2 / 9 → 2 / 3 / 2 / 2 / 3.
+  Walls within 3%: 2 / 0 / 1 / 1 / 0 → 1 / 3 / 0 / 2 / 1 of 14.
+- Before r2's run, which had 1 room with D-075, now has 3 rooms: the floor levelling moves the path up to 2.31 m.
+- Samples, footprint against the LiDAR plan: single_room d069 r1 / r2 / r3 +1 / −3 / −5% → +21 / +28 / −16%, its
+  after run +20 → +8%; floor_only's after run 0 → 3 rooms (−63%), d066 −49 → −88% (5 → 1 room); with_ceiling's
+  after re-run −13 → −66% (3 → 2 rooms).
+- Rule: (B) holds, take1's median footprint error 26.0% → 2.7% and room-count error 7 → 3. (A) fails: not worse on
+  6 of 12 runs. **"depth_agreement" is the default again; "pnp" is opt-in** (`--video-scale pnp`, commit `5fe6ae6`).
+  d066 is not named in the rule above but `NOTES.md` counts it when its cache replays; without it, 6 of 11 would pass.
+- On the sample videos SIFT finds few features on white walls (single_room: 22 votes over 164 keyframes), so the PnP
+  scale is interpolated there. On my own take1 it is the better scale.
+
 ---
 
 ## Part 2. Candidates, with their evidence (as of the 06:28 final benchmark)
