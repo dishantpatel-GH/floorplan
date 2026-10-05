@@ -9,7 +9,10 @@
       "bytes": 178729470,
       "sha256": "62cac742e6d7bb15662ba9ef6207edb4a8668d7764c793ab839cad6336794932",
       "files": 19,
-      "what": "own house, one room: 7 lit + 6 dim photos and a walkthrough video (OnePlus Nord, 1x lens), the hand sketch; tape ground truth in gt/ (also in git)"
+      "what": "own house, one room: 7 lit + 6 dim photos and a walkthrough video (OnePlus Nord, 1x lens), the hand sketch; tape ground truth in gt/ (also in git)",
+      "mirrors": [
+        "https://drive.google.com/file/d/1eWLv8KUZdrvwa-BB9z4Pfiz07Wz38fT7/view?usp=sharing"
+      ]
     },
     {
       "name": "k65.zip",
@@ -17,7 +20,10 @@
       "bytes": 588670861,
       "sha256": "80cfa1f3a0889a35bcb381de0f3fcce1792d6e54c093654d4361bba1f6f8451a",
       "files": 8393,
-      "what": "simulated k65 flat (Isaac Sim, iPhone 15 emulation): photos per room, video, LiDAR (Stray Scanner format), exact ground truth"
+      "what": "simulated k65 flat (Isaac Sim, iPhone 15 emulation): photos per room, video, LiDAR (Stray Scanner format), exact ground truth",
+      "mirrors": [
+        "https://drive.google.com/file/d/1-gubHzEKItvHmL-d5JuLTUNlazsNk1G9/view?usp=sharing"
+      ]
     }
   ],
   "not_in_release": [
