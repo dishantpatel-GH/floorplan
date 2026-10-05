@@ -39,7 +39,7 @@ Each run prints its output folder, `outputs/runs/<name>/<tier>/`: `plan.png` and
 |---|---|---|---|
 | `own_house/` | `own_house.zip` | own house, one room: 7 photos lit (`photos/room`) and 6 dim (`photos/room_take2`), a walkthrough video, the hand sketch; tape ground truth in `gt/` (ceiling 2.6289 m) | photo, video |
 | `k65/` | `k65.zip` | simulated k65 flat (Isaac Sim, iPhone 15 emulation): photos per room, video, LiDAR, exact ground truth in `gt/sim_gt.json` | photo (the gated benchmark), video, LiDAR |
-| `sample/` | `sample.zip` | the case study's sample captures: `single_room`, `single_scan_floor_only`, `single_scan_with_ceiling` | LiDAR, video |
+| `sample/` | not re-hosted: your copy of the case study's Sample Data | the case study's sample captures: `single_room`, `single_scan_floor_only`, `single_scan_with_ceiling`; put the three folders here as they come | LiDAR, video |
 | `cubicasa/` | in git | CubiCasa 3.14.1 (Android, Google Play) export of the own house: report PDF, plan with and without dimensions | head-to-head |
 
 `python scripts/fetch_data.py` downloads the archives from the GitHub release `data-v1` of this repo and checks

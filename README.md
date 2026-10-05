@@ -32,7 +32,7 @@ the CPU; the video and photo tiers need an NVIDIA GPU (tested on 8 GB), and the 
 ```bash
 git clone <this repo> floorplan-capture && cd floorplan-capture
 bash setup/install.sh            # envs, weights and tests; prints the time of each step (--cpu-only: LiDAR tier only)
-python3 scripts/fetch_data.py    # benchmark data into data/, checked by SHA-256 (python3 scripts/fetch_data.py sample: the sample captures only)
+python3 scripts/fetch_data.py    # own house + k65 into data/, checked by SHA-256; the case study's sample captures: your copy in data/sample/
 source .venv/bin/activate && export HF_HUB_OFFLINE=1     # runs need no network from here
 python scripts/run_capture.py data/sample/single_room/c00a170fe1 --tier lidar
 ```

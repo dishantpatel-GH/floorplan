@@ -18,14 +18,13 @@
       "sha256": "bbafe1b788cdaa1c7c21897d3f1791df8d86852c5c42248a6ecc81e8ba78db76",
       "files": 8399,
       "what": "simulated k65 flat (Isaac Sim, iPhone 15 emulation): photos per room, video, LiDAR (Stray Scanner format), exact ground truth"
-    },
+    }
+  ],
+  "not_in_release": [
     {
-      "name": "sample.zip",
+      "name": "sample",
       "unpacks_to": "data/sample",
-      "bytes": 875226893,
-      "sha256": "5bf256a093a57c76b2f1e206f32be94248ea0d1330d269764943b7279ea6249f",
-      "files": 33434,
-      "what": "the case study's sample captures: single_room, single_scan_floor_only, single_scan_with_ceiling (Stray Scanner folders)"
+      "what": "the case study's own sample captures are not re-hosted: put your copy of its Sample Data in data/sample/ (data/sample/single_room/c00a170fe1/rgb.mp4, data/sample/single_scan_floor_only/..., data/sample/single_scan_with_ceiling/...)"
     }
   ]
 }

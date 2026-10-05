@@ -4,7 +4,7 @@
 #
 #   own_house.zip  data/own_house: one room, 7 lit + 6 dim photos, a 1x walkthrough video, the hand sketch
 #   k65.zip        data/k65: the simulated k65 flat (photos per room, video, LiDAR, exact ground truth)
-#   sample.zip     data/sample: the three sample captures from the case study (Stray Scanner folders)
+#   (sample.zip    data/sample, only with WITH_SAMPLE=1: the case study's own captures are not re-hosted)
 #
 # Zip, not tar.zst, so that fetch_data.py needs nothing but Python. Photos, video and depth PNGs are stored as they
 # are (already compressed), text is deflated. Fixed timestamps and sorted entries: the same files give the same
@@ -35,9 +35,10 @@ ARCHIVES = [  # archive, folder under data/, what it holds
      "1x lens), the hand sketch; tape ground truth in gt/ (also in git)"),
     ("k65.zip", "k65", "simulated k65 flat (Isaac Sim, iPhone 15 emulation): photos per room, video, LiDAR "
      "(Stray Scanner format), exact ground truth"),
-    ("sample.zip", "sample", "the case study's sample captures: single_room, single_scan_floor_only, "
-     "single_scan_with_ceiling (Stray Scanner folders)"),
 ]
+if os.environ.get("WITH_SAMPLE") == "1":   # a private mirror only: the sample captures are the case study's data
+    ARCHIVES.append(("sample.zip", "sample", "the case study's sample captures: single_room, single_scan_floor_only, "
+                     "single_scan_with_ceiling (Stray Scanner folders)"))
 STORED = {".mp4", ".mov", ".jpg", ".jpeg", ".png", ".heic", ".npz", ".pdf", ".zip"}
 SKIP = {"__pycache__", ".DS_Store"}
 LIMIT = 2 * 1024 ** 3 - 1

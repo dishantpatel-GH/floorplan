@@ -2,8 +2,8 @@
 """Download the benchmark data into data/ and check each archive's SHA-256 against data/MANIFEST.json.
 
 The archives are assets of the GitHub release "data-v1" of this repo (built by scripts/pack_data.sh):
-own_house.zip -> data/own_house, k65.zip -> data/k65, sample.zip -> data/sample. The small ground-truth files are in
-git already (data/README.md). Standard library only, so it runs before any env exists.
+own_house.zip -> data/own_house, k65.zip -> data/k65. The case study's sample captures are not re-hosted: put
+your copy in data/sample/ (data/README.md). The small ground-truth files are in git already. Standard library only, so it runs before any env exists.
 
 Usage:
   python scripts/fetch_data.py                    # every archive in data/MANIFEST.json
@@ -84,7 +84,7 @@ def unpack(archive: Path, dest: Path) -> int:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("names", nargs="*", help="archives to fetch (own_house, k65, sample); default all")
+    ap.add_argument("names", nargs="*", help="archives to fetch (own_house, k65); default all")
     ap.add_argument("--url", help="base URL of the archives (ends with /); default: the repo's release")
     ap.add_argument("--dest", type=Path, default=REPO / "data", help="where to unpack (default data/)")
     ap.add_argument("--list", action="store_true", help="list the archives and stop")
@@ -98,7 +98,10 @@ def main() -> None:
         for k, r in rows.items():
             print(f"{k:10s} {r['bytes'] / 1e6:7.0f} MB -> {r['unpacks_to']}: {r['what']}")
         return
-    want = a.names or list(rows)
+    local = {r["name"]: r for r in man.get("not_in_release", [])}
+    for n in [n for n in a.names if n in local]:
+        print(f"{n}: {local[n]['what']}")
+    want = [n for n in a.names if n not in local] or ([] if a.names else list(rows))
     bad = [n for n in want if n not in rows]
     if bad:
         sys.exit(f"unknown archive(s) {bad}; there are {list(rows)}")
