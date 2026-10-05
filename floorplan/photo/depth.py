@@ -12,7 +12,9 @@ import math
 import numpy as np
 import torch
 
-MOGE_REPO, MOGE_FILE = "Ruicheng/moge-2-vitl-normal", "model.pt"
+# pinned like scripts/fetch_weights.py and floorplan/video/depth.py: offline (HF_HUB_OFFLINE=1) a fresh weights/hf
+# cache has this snapshot but no refs/main, so an unpinned download cannot be resolved
+MOGE_REPO, MOGE_FILE, MOGE_REV = "Ruicheng/moge-2-vitl-normal", "model.pt", "cb0e8bbd6b1e243589717c78e750b1ba4c093acf"
 
 
 class MoGeRunner:
@@ -24,7 +26,8 @@ class MoGeRunner:
             device = "cpu"                           # I-012: no CUDA -> slow but working, never a crash
         if device != "cpu":                          # a cpu run must not wait for (or even query) the GPU
             wait_for_gpu(need_gb=2.0)
-        self.model = MoGeModel.from_pretrained(hf_hub_download(MOGE_REPO, MOGE_FILE)).to(device).eval()
+        ckpt = hf_hub_download(MOGE_REPO, MOGE_FILE, revision=MOGE_REV)
+        self.model = MoGeModel.from_pretrained(ckpt).to(device).eval()
         self.device = device
 
     def close(self) -> None:
